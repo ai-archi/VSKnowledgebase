@@ -33,3 +33,5 @@ packages-bak/
 
 # ArchiTool runtime
 .architool/cache/
+out/
+**/out/
