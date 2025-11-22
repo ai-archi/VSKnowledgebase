@@ -87,11 +87,39 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   }
 
   async getArtifact(vaultId: string, artifactId: string): Promise<Result<Artifact, ArtifactError>> {
-    // TODO: Implement artifact retrieval
-    return {
-      success: false,
-      error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Artifact not found: ${artifactId}`),
-    };
+    try {
+      // artifactId 可能是 artifact ID 或 path
+      // 先尝试从 listArtifacts 中查找
+      const artifactsResult = await this.listArtifacts(vaultId);
+      if (!artifactsResult.success) {
+        return artifactsResult;
+      }
+
+      // 尝试通过 ID 或 path 匹配
+      const artifact = artifactsResult.value.find(
+        a => a.id === artifactId || a.path === artifactId
+      );
+
+      if (!artifact) {
+        return {
+          success: false,
+          error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Artifact not found: ${artifactId}`),
+        };
+      }
+
+      return { success: true, value: artifact };
+    } catch (error: any) {
+      this.logger.error('Failed to get artifact', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to get artifact: ${error.message}`,
+          { vaultId, artifactId },
+          error
+        ),
+      };
+    }
   }
 
   async updateArtifact(artifactId: string, updates: UpdateArtifactOpts): Promise<Result<Artifact, ArtifactError>> {
@@ -111,11 +139,66 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   }
 
   async deleteArtifact(vaultId: string, artifactId: string): Promise<Result<void, ArtifactError>> {
-    // TODO: Implement artifact deletion
-    return {
-      success: false,
-      error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, 'Not implemented'),
-    };
+    try {
+      // artifactId 可能是 artifact ID 或 path
+      // 先尝试通过 path 获取 artifact（如果 artifactId 是 path）
+      const artifactResult = await this.getArtifact(vaultId, artifactId);
+      
+      if (!artifactResult.success) {
+        return {
+          success: false,
+          error: artifactResult.error,
+        };
+      }
+
+      const artifact = artifactResult.value;
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success) {
+        return {
+          success: false,
+          error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
+        };
+      }
+
+      const vaultName = vaultResult.value.name;
+
+      // 删除文件系统中的文件
+      const deleteFileResult = await this.fileAdapter.deleteArtifact(vaultName, artifact.path);
+      if (!deleteFileResult.success) {
+        return deleteFileResult;
+      }
+
+      // 删除 metadata 文件（如果存在）
+      if (artifact.metadataId) {
+        const metadataResult = await this.metadataRepo.delete(artifact.metadataId);
+        if (!metadataResult.success) {
+          // metadata 删除失败不影响主流程，只记录日志
+          this.logger.warn(`Failed to delete metadata: ${artifact.metadataId}`, metadataResult.error);
+        }
+      }
+
+      // 从索引中删除
+      try {
+        await this.index.removeFromIndex(artifact.id);
+      } catch (error: any) {
+        // 索引删除失败不影响主流程，只记录日志
+        this.logger.warn(`Failed to delete artifact from index: ${artifact.id}`, error);
+      }
+
+      this.logger.info(`Artifact deleted: ${artifact.path} (${artifact.id})`);
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      this.logger.error('Failed to delete artifact', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to delete artifact: ${error.message}`,
+          { vaultId, artifactId },
+          error
+        ),
+      };
+    }
   }
 
   async listArtifacts(vaultId?: string, options?: QueryOptions): Promise<Result<Artifact[], ArtifactError>> {

@@ -9,6 +9,10 @@ import { RemoteEndpoint } from '../../../domain/shared/vault/RemoteEndpoint';
 import * as path from 'path';
 
 export class DocumentCommands {
+  // 树视图更新延迟配置
+  private static readonly TREE_UPDATE_DELAY_MS = 50;
+  private static readonly VAULT_EXPAND_DELAY_MS = 150;
+
   constructor(
     private documentService: DocumentApplicationService,
     private artifactService: ArtifactFileSystemApplicationService,
@@ -132,7 +136,10 @@ export class DocumentCommands {
 
       // 展开所有 vault 节点
       for (const vault of vaultsResult.value) {
-        const vaultItem = await this.treeViewProvider.getVaultTreeItem(vault.name);
+        const vaultItem = await this.treeViewProvider.findTreeItem(
+          undefined,
+          (item) => item.isVault(vault.name)
+        );
         if (vaultItem) {
           try {
             await this.treeView.reveal(vaultItem, { expand: true });
@@ -157,6 +164,61 @@ export class DocumentCommands {
       this.treeViewProvider.refresh();
     } catch (error: any) {
       this.logger.error('Failed to collapse all nodes', error);
+    }
+  }
+
+  /**
+   * 展开指定的节点（vault 和/或文件夹）
+   */
+  private async expandNode(vaultName: string, folderPath?: string): Promise<void> {
+    if (!vaultName) {
+      return;
+    }
+
+    // 等待树视图更新完成
+    await new Promise(resolve => setTimeout(resolve, DocumentCommands.TREE_UPDATE_DELAY_MS));
+
+    try {
+      // 从根节点开始查找 vault 节点
+      const rootChildren = await this.treeViewProvider.getChildren(undefined);
+      const vaultItem = rootChildren.find(item => item.isVault(vaultName));
+
+      if (!vaultItem) {
+        this.logger.debug(`Vault node not found in root: ${vaultName}`);
+        return;
+      }
+
+      // 展开 vault 节点
+      try {
+        await this.treeView.reveal(vaultItem, { expand: true });
+        this.logger.debug(`Vault node expanded: ${vaultName}`);
+      } catch (error: any) {
+        this.logger.warn(`Failed to reveal vault node: ${vaultName}`, error?.message || String(error));
+        return;
+      }
+
+      // 如果需要展开文件夹
+      if (folderPath !== undefined) {
+        // 等待 vault 展开完成，让子节点加载
+        await new Promise(resolve => setTimeout(resolve, DocumentCommands.VAULT_EXPAND_DELAY_MS));
+        
+        // 从 vault 的子节点中查找文件夹
+        const vaultChildren = await this.treeViewProvider.getChildren(vaultItem);
+        const folderItem = vaultChildren.find(item => item.isFolder(vaultName, folderPath));
+        
+        if (folderItem) {
+          try {
+            await this.treeView.reveal(folderItem, { expand: true });
+            this.logger.debug(`Folder node expanded: ${vaultName}/${folderPath}`);
+          } catch (error: any) {
+            this.logger.warn(`Failed to reveal folder node: ${folderPath}`, error?.message || String(error));
+          }
+        } else {
+          this.logger.debug(`Folder node not found: ${vaultName}/${folderPath}`);
+        }
+      }
+    } catch (error: any) {
+      this.logger.warn('Failed to expand node', error?.message || String(error));
     }
   }
 
@@ -234,14 +296,21 @@ export class DocumentCommands {
 
       // 确定文件路径
       let filePath: string;
-      if (item?.artifact) {
+      let targetFolderPath: string | undefined; // 用于展开文件夹
+      if (item?.folderPath !== undefined) {
+        // 如果是在文件夹节点上右键，在该文件夹下创建
+        filePath = item.folderPath === '' ? `${fileName}.md` : `${item.folderPath}/${fileName}.md`;
+        targetFolderPath = item.folderPath === '' ? undefined : item.folderPath;
+      } else if (item?.artifact) {
         // 如果是在文档节点上右键，在同一个目录下创建
         const artifactPath = item.artifact.path;
         const dir = path.dirname(artifactPath);
-        filePath = path.join(dir, `${fileName}.md`);
+        filePath = dir === '.' || dir === '' ? `${fileName}.md` : `${dir}/${fileName}.md`;
+        targetFolderPath = dir === '.' || dir === '' ? undefined : dir;
       } else {
         // 如果是在 vault 节点上右键，在根目录下创建
         filePath = `${fileName}.md`;
+        targetFolderPath = undefined;
       }
 
       const result = await this.documentService.createDocument(
@@ -253,7 +322,14 @@ export class DocumentCommands {
 
       if (result.success) {
         vscode.window.showInformationMessage(`File created: ${fileName}`);
+        
+        // 刷新视图
         this.treeViewProvider.refresh();
+        
+        // 展开相关节点
+        await this.expandNode(vaultName, targetFolderPath);
+        
+        // 打开新创建的文件
         const doc = await vscode.workspace.openTextDocument(result.value.contentLocation);
         await vscode.window.showTextDocument(doc);
       } else {
@@ -310,14 +386,21 @@ export class DocumentCommands {
 
       // 确定文件夹路径
       let folderPath: string;
-      if (item?.artifact) {
+      let parentFolderPath: string | undefined; // 用于展开父文件夹
+      if (item?.folderPath !== undefined) {
+        // 如果是在文件夹节点上右键，在该文件夹下创建
+        folderPath = item.folderPath === '' ? folderName : `${item.folderPath}/${folderName}`;
+        parentFolderPath = item.folderPath === '' ? undefined : item.folderPath;
+      } else if (item?.artifact) {
         // 如果是在文档节点上右键，在同一个目录下创建
         const artifactPath = item.artifact.path;
         const dir = path.dirname(artifactPath);
-        folderPath = path.join(dir, folderName);
+        folderPath = dir === '.' || dir === '' ? folderName : `${dir}/${folderName}`;
+        parentFolderPath = dir === '.' || dir === '' ? undefined : dir;
       } else {
         // 如果是在 vault 节点上右键，在根目录下创建
         folderPath = folderName;
+        parentFolderPath = undefined;
       }
 
       // 创建文件夹（通过创建一个占位文件）
@@ -335,10 +418,14 @@ export class DocumentCommands {
 
       if (result.success) {
         vscode.window.showInformationMessage(`Folder created: ${folderName}`);
+        
         // 刷新视图，确保文件夹显示出来
         this.treeViewProvider.refresh();
-        // 等待一小段时间让文件系统更新
-        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // 展开相关节点
+        await this.expandNode(vaultName, parentFolderPath);
+        
+        // 再次刷新以确保新文件夹显示
         this.treeViewProvider.refresh();
       } else {
         vscode.window.showErrorMessage(`Failed to create folder: ${result.error.message}`);
@@ -406,12 +493,21 @@ export class DocumentCommands {
       // 确定文件路径和扩展名
       const extension = diagramType.value === 'mermaid' ? 'mmd' : diagramType.value === 'puml' ? 'puml' : 'archimate';
       let diagramPath: string;
-      if (item?.artifact) {
+      let targetFolderPath: string | undefined; // 用于展开文件夹
+      if (item?.folderPath !== undefined) {
+        // 如果是在文件夹节点上右键，在该文件夹下创建
+        diagramPath = item.folderPath === '' ? `${diagramName}.${extension}` : `${item.folderPath}/${diagramName}.${extension}`;
+        targetFolderPath = item.folderPath === '' ? undefined : item.folderPath;
+      } else if (item?.artifact) {
+        // 如果是在文档节点上右键，在同一个目录下创建
         const artifactPath = item.artifact.path;
         const dir = path.dirname(artifactPath);
-        diagramPath = path.join(dir, `${diagramName}.${extension}`);
+        diagramPath = dir === '.' || dir === '' ? `${diagramName}.${extension}` : `${dir}/${diagramName}.${extension}`;
+        targetFolderPath = dir === '.' || dir === '' ? undefined : dir;
       } else {
+        // 如果是在 vault 节点上右键，在 diagrams 文件夹下创建
         diagramPath = `diagrams/${diagramName}.${extension}`;
+        targetFolderPath = 'diagrams';
       }
 
       // 创建设计图文件
@@ -430,7 +526,14 @@ export class DocumentCommands {
 
       if (result.success) {
         vscode.window.showInformationMessage(`Diagram created: ${diagramName}`);
+        
+        // 刷新视图
         this.treeViewProvider.refresh();
+        
+        // 展开相关节点
+        await this.expandNode(vaultName, targetFolderPath);
+        
+        // 打开新创建的图表文件
         const doc = await vscode.workspace.openTextDocument(result.value.contentLocation);
         await vscode.window.showTextDocument(doc);
       } else {

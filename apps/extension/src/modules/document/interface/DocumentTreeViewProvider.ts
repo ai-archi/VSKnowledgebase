@@ -46,6 +46,20 @@ export class DocumentTreeItem extends vscode.TreeItem {
       super('', collapsibleState);
     }
   }
+
+  /**
+   * 判断是否为指定的 vault 节点
+   */
+  isVault(vaultName: string): boolean {
+    return this.vaultName === vaultName && this.folderPath === undefined && !this.artifact;
+  }
+
+  /**
+   * 判断是否为指定的文件夹节点
+   */
+  isFolder(vaultName: string, folderPath: string): boolean {
+    return this.vaultName === vaultName && this.folderPath === folderPath;
+  }
 }
 
 export class DocumentTreeViewProvider implements vscode.TreeDataProvider<DocumentTreeItem> {
@@ -69,138 +83,54 @@ export class DocumentTreeViewProvider implements vscode.TreeDataProvider<Documen
   }
 
   /**
-   * 获取指定 vault 的 TreeItem（用于展开/折叠操作）
+   * 通过递归查找获取实际的 TreeItem 节点
    */
-  async getVaultTreeItem(vaultName: string): Promise<DocumentTreeItem | undefined> {
-    const vaultsResult = await this.vaultService.listVaults();
-    if (!vaultsResult.success) {
-      return undefined;
+  async findTreeItem(
+    element: DocumentTreeItem | undefined,
+    predicate: (item: DocumentTreeItem) => boolean
+  ): Promise<DocumentTreeItem | undefined> {
+    // 检查当前节点
+    if (element && predicate(element)) {
+      return element;
     }
 
-    const vault = vaultsResult.value.find(v => v.name === vaultName);
-    if (!vault) {
-      return undefined;
+    // 获取子节点
+    const children = await this.getChildren(element);
+    for (const child of children) {
+      if (predicate(child)) {
+        return child;
+      }
+      // 递归查找子节点
+      const found = await this.findTreeItem(child, predicate);
+      if (found) {
+        return found;
+      }
     }
 
-    return new DocumentTreeItem(
-      undefined,
-      vscode.TreeItemCollapsibleState.Collapsed,
-      vault.name,
-      'vault'
-    );
+    return undefined;
   }
 
   async getChildren(element?: DocumentTreeItem): Promise<DocumentTreeItem[]> {
     try {
-      this.logger.info(`DocumentTreeViewProvider.getChildren called, element: ${element ? (element.vaultName || element.artifact?.title) : 'root'}`);
-      
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        this.logger.warn('Failed to list vaults');
-        return [];
-      }
-      this.logger.info(`listVaults result: success=${vaultsResult.success}, count=${vaultsResult.value.length}`);
-      
-      if (vaultsResult.value.length === 0) {
-        this.logger.warn('No vaults found');
-        return [];
-      }
-
-      // 根节点：显示所有 vault
+      // 根节点：返回所有 vault
       if (!element) {
-        this.logger.info(`Returning ${vaultsResult.value.length} vaults as root items`);
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success || vaultsResult.value.length === 0) {
+          return [];
+        }
         return vaultsResult.value.map(vault =>
-          new DocumentTreeItem(
-            undefined,
-            vscode.TreeItemCollapsibleState.Collapsed,
-            vault.name,
-            'vault'
-          )
+          new DocumentTreeItem(undefined, vscode.TreeItemCollapsibleState.Collapsed, vault.name, 'vault')
         );
       }
 
-      // Vault 节点：显示该 vault 的文件夹和文档（按文件夹结构组织）
-      if (element.vaultName && element.folderPath === undefined) {
-        this.logger.info(`Getting documents for vault: ${element.vaultName}`);
-        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
-        if (!vault) {
-          this.logger.warn(`Vault not found: ${element.vaultName}`);
-          return [];
-        }
-
-        this.logger.info(`Calling documentService.listDocuments for vault: ${vault.id} (${vault.name})`);
-        const documentsResult = await this.documentService.listDocuments(vault.id);
-        
-        if (!documentsResult.success) {
-          this.logger.error(`Failed to list documents: ${documentsResult.error?.message || 'unknown error'}`);
-          return [];
-        }
-        
-        this.logger.info(`listDocuments result: success=${documentsResult.success}, count=${documentsResult.value.length}`);
-        
-        // 按文件夹结构组织文档
-        return this.organizeByFolders(documentsResult.value, element.vaultName);
+      // Vault 节点：返回该 vault 下的文件和文件夹
+      if (element.isVault(element.vaultName!)) {
+        return this.getVaultChildren(element.vaultName!);
       }
 
-      // 文件夹节点：显示该文件夹下的文件和子文件夹
+      // 文件夹节点：返回该文件夹下的文件和子文件夹
       if (element.folderPath !== undefined && element.vaultName) {
-        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
-        if (!vault) {
-          return [];
-        }
-
-        const documentsResult = await this.documentService.listDocuments(vault.id);
-        if (!documentsResult.success) {
-          return [];
-        }
-
-        // 过滤出该文件夹下的文件和子文件夹
-        const folderItems: DocumentTreeItem[] = [];
-        const folderPrefix = element.folderPath === '' ? '' : `${element.folderPath}/`;
-        const normalizedFolderPath = element.folderPath === '' ? '' : element.folderPath;
-        const subFolders = new Set<string>();
-        
-        for (const artifact of documentsResult.value) {
-          const artifactDir = path.dirname(artifact.path);
-          // 标准化路径
-          const normalizedDir = artifactDir === '.' || artifactDir === '' ? '' : artifactDir;
-          
-          // 检查是否在当前文件夹下
-          if (normalizedDir === normalizedFolderPath) {
-            // 直接在当前文件夹下的文件
-            folderItems.push(new DocumentTreeItem(artifact, vscode.TreeItemCollapsibleState.None));
-          } else if (normalizedDir.startsWith(folderPrefix)) {
-            // 在当前文件夹的子目录中
-            const relativePath = normalizedDir.substring(folderPrefix.length);
-            const parts = relativePath.split('/').filter(p => p);
-            
-            if (parts.length > 0) {
-              // 检查是否是直接子文件夹
-              const firstPart = parts[0];
-              if (parts.length === 1) {
-                // 这是直接子文件夹下的文件，需要显示子文件夹
-                subFolders.add(firstPart);
-              } else {
-                // 这是更深层的文件夹，只显示第一层
-                subFolders.add(firstPart);
-              }
-            }
-          }
-        }
-
-        // 添加直接子文件夹
-        for (const subFolderName of Array.from(subFolders).sort()) {
-          const subFolderPath = folderPrefix === '' ? subFolderName : `${folderPrefix}${subFolderName}`;
-          folderItems.push(new DocumentTreeItem(
-            undefined,
-            vscode.TreeItemCollapsibleState.Collapsed,
-            element.vaultName,
-            'folder',
-            subFolderPath
-          ));
-        }
-
-        return folderItems;
+        return this.getFolderChildren(element.vaultName, element.folderPath);
       }
 
       return [];
@@ -211,39 +141,115 @@ export class DocumentTreeViewProvider implements vscode.TreeDataProvider<Documen
   }
 
   /**
-   * 按文件夹结构组织文档
+   * 获取 vault 对象
+   */
+  private async getVaultByName(vaultName: string) {
+    const vaultsResult = await this.vaultService.listVaults();
+    return vaultsResult.success ? vaultsResult.value.find(v => v.name === vaultName) : undefined;
+  }
+
+  /**
+   * 获取 vault 的子节点（文件和文件夹）
+   */
+  private async getVaultChildren(vaultName: string): Promise<DocumentTreeItem[]> {
+    const vault = await this.getVaultByName(vaultName);
+    if (!vault) {
+      return [];
+    }
+
+    const documentsResult = await this.documentService.listDocuments(vault.id);
+    if (!documentsResult.success) {
+      return [];
+    }
+
+    return this.organizeByFolders(documentsResult.value, vaultName);
+  }
+
+  /**
+   * 获取文件夹的子节点（文件和子文件夹）
+   */
+  private async getFolderChildren(vaultName: string, folderPath: string): Promise<DocumentTreeItem[]> {
+    const vault = await this.getVaultByName(vaultName);
+    if (!vault) {
+      return [];
+    }
+
+    const documentsResult = await this.documentService.listDocuments(vault.id);
+    if (!documentsResult.success) {
+      return [];
+    }
+
+    const items: DocumentTreeItem[] = [];
+    const folderPrefix = folderPath === '' ? '' : `${folderPath}/`;
+    const subFolders = new Set<string>();
+
+    for (const artifact of documentsResult.value) {
+      const artifactDir = this.normalizePath(path.dirname(artifact.path));
+      const folderDir = this.normalizePath(folderPath);
+
+      // 直接在当前文件夹下的文件
+      if (artifactDir === folderDir) {
+        items.push(new DocumentTreeItem(artifact, vscode.TreeItemCollapsibleState.None));
+      }
+      // 在子文件夹中的文件
+      else if (artifactDir.startsWith(folderPrefix)) {
+        const relativePath = artifactDir.substring(folderPrefix.length);
+        const firstPart = relativePath.split('/').filter(p => p)[0];
+        if (firstPart) {
+          subFolders.add(firstPart);
+        }
+      }
+    }
+
+    // 添加子文件夹
+    for (const subFolderName of Array.from(subFolders).sort()) {
+      const subFolderPath = folderPrefix === '' ? subFolderName : `${folderPrefix}${subFolderName}`;
+      items.push(new DocumentTreeItem(
+        undefined,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        vaultName,
+        'folder',
+        subFolderPath
+      ));
+    }
+
+    return items;
+  }
+
+  /**
+   * 标准化路径：将 '.' 和 '' 都视为根目录
+   */
+  private normalizePath(dirPath: string): string {
+    return dirPath === '.' || dirPath === '' ? '' : dirPath;
+  }
+
+  /**
+   * 按文件夹结构组织文档（vault 根目录下的文件和文件夹）
    */
   private organizeByFolders(artifacts: Artifact[], vaultName: string): DocumentTreeItem[] {
     const items: DocumentTreeItem[] = [];
     const rootFiles: Artifact[] = [];
     const rootFolders = new Set<string>();
 
-    // 第一遍：收集根目录下的文件和第一层文件夹
     for (const artifact of artifacts) {
-      const artifactDir = path.dirname(artifact.path);
+      const artifactDir = this.normalizePath(path.dirname(artifact.path));
       
-      // 标准化路径：将 '.' 和 '' 都视为根目录
-      const normalizedDir = artifactDir === '.' || artifactDir === '' ? '' : artifactDir;
-      
-      if (normalizedDir === '') {
-        // 根目录下的文件
+      if (artifactDir === '') {
         rootFiles.push(artifact);
       } else {
-        // 有文件夹路径的文件，提取第一层文件夹
-        const parts = normalizedDir.split('/').filter(p => p);
-        if (parts.length > 0) {
-          rootFolders.add(parts[0]);
+        const firstFolder = artifactDir.split('/').filter(p => p)[0];
+        if (firstFolder) {
+          rootFolders.add(firstFolder);
         }
       }
     }
 
-    // 添加根目录下的文件
-    for (const artifact of rootFiles) {
+    // 先添加文件，再添加文件夹
+    rootFiles.forEach(artifact => {
       items.push(new DocumentTreeItem(artifact, vscode.TreeItemCollapsibleState.None));
-    }
+    });
 
-    // 添加根目录下的第一层文件夹
-    for (const folderName of Array.from(rootFolders).sort()) {
+    Array.from(rootFolders).sort().forEach(folderName => {
       items.push(new DocumentTreeItem(
         undefined,
         vscode.TreeItemCollapsibleState.Collapsed,
@@ -251,7 +257,7 @@ export class DocumentTreeViewProvider implements vscode.TreeDataProvider<Documen
         'folder',
         folderName
       ));
-    }
+    });
 
     return items;
   }
