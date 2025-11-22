@@ -1,13 +1,16 @@
+import { injectable, inject } from 'inversify';
+import { TYPES } from '../../../infrastructure/di/types';
 import { MetadataRepository } from './MetadataRepository';
 import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
 import { YamlMetadataRepository } from '../../../infrastructure/storage/yaml/YamlMetadataRepository';
 
+@injectable()
 export class MetadataRepositoryImpl implements MetadataRepository {
   private yamlRepo: YamlMetadataRepository;
   private metadataCache: Map<string, ArtifactMetadata> = new Map();
 
-  constructor(yamlRepo: YamlMetadataRepository) {
+  constructor(@inject(TYPES.YamlMetadataRepository) yamlRepo: YamlMetadataRepository) {
     this.yamlRepo = yamlRepo;
   }
 

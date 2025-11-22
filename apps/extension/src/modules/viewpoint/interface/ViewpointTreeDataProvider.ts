@@ -134,11 +134,63 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
         return [];
       }
 
-      // 视点节点：显示匹配的 Artifact
+      // 视点节点：按 vault 分组显示匹配的 Artifact
       if (element.viewpoint) {
-        const artifactsResult = await this.viewpointService.filterArtifactsByViewpoint(element.viewpoint);
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success || vaultsResult.value.length === 0) {
+          return [];
+        }
+
+        const vaultItems: ViewpointTreeItem[] = [];
+
+        // 遍历所有 vault，获取匹配的文档
+        for (const vault of vaultsResult.value) {
+          const artifactsResult = await this.viewpointService.filterArtifactsByViewpoint(
+            element.viewpoint,
+            vault.id
+          );
+
+          if (artifactsResult.success && artifactsResult.value.length > 0) {
+            // 添加 vault 分组节点
+            vaultItems.push(
+              new ViewpointTreeItem(
+                `${vault.name} (${artifactsResult.value.length})`,
+                vscode.TreeItemCollapsibleState.Collapsed,
+                element.viewpoint,
+                undefined,
+                'viewpoint.vault'
+              )
+            );
+          }
+        }
+
+        return vaultItems;
+      }
+
+      // Vault 节点（在视点下）：显示该 vault 的匹配文档
+      if (element.contextValue === 'viewpoint.vault' && element.viewpoint) {
+        // 从 label 中提取 vault 名称（格式：vaultName (count)）
+        const vaultNameMatch = element.label.match(/^(.+?)\s*\(\d+\)$/);
+        if (!vaultNameMatch) {
+          return [];
+        }
+
+        const vaultName = vaultNameMatch[1];
+        const vaultsResult = await this.vaultService.listVaults();
+        const vault = vaultsResult.success
+          ? vaultsResult.value.find(v => v.name === vaultName)
+          : undefined;
+
+        if (!vault) {
+          return [];
+        }
+
+        const artifactsResult = await this.viewpointService.filterArtifactsByViewpoint(
+          element.viewpoint!,
+          vault.id
+        );
+
         if (artifactsResult.success) {
-          // 按路径组织文档（可以进一步优化为树形结构）
           return artifactsResult.value.map(artifact =>
             new ViewpointTreeItem(
               artifact.title,
@@ -148,6 +200,7 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
             )
           );
         }
+
         return [];
       }
 

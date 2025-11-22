@@ -49,7 +49,10 @@ export function createContainer(
 
   // Core Services
   container.bind<Logger>(TYPES.Logger).toConstantValue(new Logger('ArchiTool'));
-  container.bind<ConfigManager>(TYPES.ConfigManager).to(ConfigManager).inSingletonScope();
+  const logger = container.get<Logger>(TYPES.Logger);
+  container.bind<ConfigManager>(TYPES.ConfigManager)
+    .toDynamicValue(() => new ConfigManager(architoolRoot, logger))
+    .inSingletonScope();
   container.bind<EventBus>(TYPES.EventBus).to(EventBus).inSingletonScope();
 
   // Infrastructure Adapters
@@ -58,11 +61,18 @@ export function createContainer(
   container.bind<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter)
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot));
   // DuckDbFactory is a static class, no binding needed
-  const logger = container.get<Logger>(TYPES.Logger);
   container.bind<DuckDbRuntimeIndex>(TYPES.DuckDbRuntimeIndex)
     .toConstantValue(new DuckDbRuntimeIndex(dbPath, logger));
+  // YamlMetadataRepository 需要 vaultPath，但它是每个 vault 特定的
+  // 目前先绑定一个占位符，实际使用时需要根据 vault 创建实例
+  // TODO: 重构 YamlMetadataRepository 以支持多 vault
   container.bind<YamlMetadataRepository>(TYPES.YamlMetadataRepository)
-    .to(YamlMetadataRepository).inSingletonScope();
+    .toDynamicValue(() => {
+      // 临时使用 architoolRoot，实际应该根据 vault 动态创建
+      // 这是一个临时解决方案，需要重构
+      return new YamlMetadataRepository(architoolRoot);
+    })
+    .inSingletonScope();
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
     .to(GitVaultAdapterImpl).inSingletonScope();
 

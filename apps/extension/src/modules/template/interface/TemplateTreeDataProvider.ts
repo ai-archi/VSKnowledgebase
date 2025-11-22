@@ -57,22 +57,42 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
 
   async getChildren(element?: TemplateTreeItem): Promise<TemplateTreeItem[]> {
     try {
-      // 根节点：显示所有 Vault 的模板库
+      // 根节点：显示所有 Vault
       if (!element) {
         const vaultsResult = await this.vaultService.listVaults();
         if (!vaultsResult.success || vaultsResult.value.length === 0) {
           return [];
         }
 
-        const allLibraries: TemplateLibrary[] = [];
-        for (const vault of vaultsResult.value) {
-          const librariesResult = await this.templateService.getTemplateLibraries(vault.id);
-          if (librariesResult.success) {
-            allLibraries.push(...librariesResult.value);
-          }
+        return vaultsResult.value.map(vault =>
+          new TemplateTreeItem(
+            vault.name,
+            vscode.TreeItemCollapsibleState.Collapsed,
+            undefined,
+            undefined,
+            'vault'
+          )
+        );
+      }
+
+      // Vault 节点：显示该 vault 的所有模板库
+      if (element.contextValue === 'vault') {
+        const vaultName = element.label;
+        const vaultsResult = await this.vaultService.listVaults();
+        const vault = vaultsResult.success
+          ? vaultsResult.value.find(v => v.name === vaultName)
+          : undefined;
+
+        if (!vault) {
+          return [];
         }
 
-        return allLibraries.map(library =>
+        const librariesResult = await this.templateService.getTemplateLibraries(vault.id);
+        if (!librariesResult.success || librariesResult.value.length === 0) {
+          return [];
+        }
+
+        return librariesResult.value.map(library =>
           new TemplateTreeItem(
             library.name,
             vscode.TreeItemCollapsibleState.Collapsed,

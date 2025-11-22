@@ -17,6 +17,7 @@ export interface GitVaultAdapter {
   getCurrentBranch(vaultPath: string): Promise<Result<string, VaultError>>;
   isGitRepository(vaultPath: string): Promise<boolean>;
   checkoutBranch(vaultPath: string, branch: string): Promise<Result<void, VaultError>>;
+  listRemoteBranches(remoteUrl: string): Promise<Result<string[], VaultError>>;
 }
 
 export class GitVaultAdapterImpl implements GitVaultAdapter {
@@ -192,6 +193,47 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
       return fs.existsSync(gitDir) && fs.statSync(gitDir).isDirectory();
     } catch {
       return false;
+    }
+  }
+
+  async listRemoteBranches(remoteUrl: string): Promise<Result<string[], VaultError>> {
+    try {
+      // 使用 git ls-remote 获取远程分支列表
+      const git = simpleGit();
+      const result = await git.listRemote(['--heads', remoteUrl]);
+      
+      // 解析输出，提取分支名称
+      // 输出格式: <commit-hash>	refs/heads/branch-name
+      const branches: string[] = [];
+      const lines = result.trim().split('\n');
+      
+      for (const line of lines) {
+        if (line.trim()) {
+          const match = line.match(/refs\/heads\/(.+)$/);
+          if (match && match[1]) {
+            branches.push(match[1]);
+          }
+        }
+      }
+      
+      // 如果没有找到分支，返回默认分支列表
+      if (branches.length === 0) {
+        return { success: true, value: ['main', 'master', 'develop'] };
+      }
+      
+      // 排序：main 和 master 优先
+      branches.sort((a, b) => {
+        if (a === 'main') return -1;
+        if (b === 'main') return 1;
+        if (a === 'master') return -1;
+        if (b === 'master') return 1;
+        return a.localeCompare(b);
+      });
+      
+      return { success: true, value: branches };
+    } catch (error: any) {
+      // 如果获取失败，返回默认分支列表
+      return { success: true, value: ['main', 'master', 'develop'] };
     }
   }
 

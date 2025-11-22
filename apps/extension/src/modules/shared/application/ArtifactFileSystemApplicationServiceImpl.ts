@@ -8,9 +8,12 @@ import { ArtifactValidator } from '../../../domain/shared/artifact/ArtifactValid
 import { ArtifactFileSystemAdapter } from '../../../infrastructure/storage/file/ArtifactFileSystemAdapter';
 import { DuckDbRuntimeIndex } from '../../../infrastructure/storage/duckdb/DuckDbRuntimeIndex';
 import { MetadataRepository } from '../infrastructure/MetadataRepository';
+import { VaultApplicationService } from './VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as yaml from 'js-yaml';
 
 @injectable()
 export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSystemApplicationService {
@@ -18,6 +21,7 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
     @inject(TYPES.ArtifactFileSystemAdapter) private fileAdapter: ArtifactFileSystemAdapter,
     @inject(TYPES.DuckDbRuntimeIndex) private index: DuckDbRuntimeIndex,
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
+    @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
@@ -115,8 +119,235 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   }
 
   async listArtifacts(vaultId?: string, options?: QueryOptions): Promise<Result<Artifact[], ArtifactError>> {
-    // TODO: Implement artifact listing
-    return { success: true, value: [] };
+    try {
+      this.logger.info(`listArtifacts called with vaultId: ${vaultId || 'undefined'}`);
+      const artifacts: Artifact[] = [];
+      
+      // 获取要扫描的 vault 列表
+      let vaultsToScan: Array<{ id: string; name: string }> = [];
+      
+      if (vaultId) {
+        // 只扫描指定的 vault
+        this.logger.info(`Getting vault by id: ${vaultId}`);
+        const vaultResult = await this.vaultService.getVault(vaultId);
+        if (!vaultResult.success || !vaultResult.value) {
+          this.logger.warn(`Vault not found: ${vaultId}`);
+          return { success: true, value: [] };
+        }
+        this.logger.info(`Found vault: ${vaultResult.value.name} (${vaultResult.value.id})`);
+        vaultsToScan = [{ id: vaultResult.value.id, name: vaultResult.value.name }];
+      } else {
+        // 扫描所有 vault
+        this.logger.info('Listing all vaults');
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          this.logger.warn('Failed to list vaults');
+          return { success: true, value: [] };
+        }
+        this.logger.info(`Found ${vaultsResult.value.length} vaults`);
+        vaultsToScan = vaultsResult.value.map(v => ({ id: v.id, name: v.name }));
+      }
+
+      // 扫描每个 vault 的 artifacts 目录
+      for (const vault of vaultsToScan) {
+        this.logger.info(`Scanning artifacts for vault: ${vault.name} (${vault.id})`);
+        const vaultArtifacts = await this.scanVaultArtifacts(vault.id, vault.name);
+        this.logger.info(`Found ${vaultArtifacts.length} artifacts in vault ${vault.name}`);
+        artifacts.push(...vaultArtifacts);
+      }
+
+      // 应用查询选项（如果有）
+      if (options) {
+        // TODO: 实现查询选项过滤（category, tags, viewType 等）
+      }
+
+      this.logger.info(`Total artifacts found: ${artifacts.length}`);
+      return { success: true, value: artifacts };
+    } catch (error: any) {
+      this.logger.error('Failed to list artifacts', error);
+      return {
+        success: false,
+        error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, `Failed to list artifacts: ${error.message}`, {}, error),
+      };
+    }
+  }
+
+  /**
+   * 扫描指定 vault 的 artifacts 目录
+   */
+  private async scanVaultArtifacts(vaultId: string, vaultName: string): Promise<Artifact[]> {
+    const artifacts: Artifact[] = [];
+    // getArtifactPath 会返回 {architoolRoot}/{vaultName}/artifacts/{artifactPath}
+    // 如果 artifactPath 为空，我们需要直接获取 artifacts 目录
+    // 但是 getArtifactPath 会添加 'artifacts' 子目录，所以传入空字符串应该可以
+    const artifactsDir = this.fileAdapter.getArtifactPath(vaultName, '');
+    this.logger.info(`Scanning artifacts directory: ${artifactsDir}`);
+    this.logger.info(`Artifacts directory exists: ${fs.existsSync(artifactsDir)}`);
+    
+    if (!fs.existsSync(artifactsDir)) {
+      this.logger.warn(`Artifacts directory does not exist: ${artifactsDir}`);
+      return artifacts;
+    }
+
+    // 递归扫描 artifacts 目录
+    const scanDirectory = (dir: string, basePath: string = ''): void => {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        this.logger.info(`Scanning directory: ${dir}, found ${entries.length} entries`);
+        
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          const relativePath = basePath ? path.join(basePath, entry.name) : entry.name;
+          
+          if (entry.isDirectory()) {
+            // 递归扫描子目录
+            this.logger.info(`Found subdirectory: ${entry.name}`);
+            scanDirectory(fullPath, relativePath);
+          } else if (entry.isFile()) {
+            // 处理文件
+            const ext = path.extname(entry.name).slice(1); // 去掉点号
+            this.logger.info(`Found file: ${entry.name}, extension: ${ext}`);
+            if (!ext || ext === 'md' || ext === 'yml' || ext === 'yaml') {
+              // 只处理支持的格式
+              this.logger.info(`Processing artifact file: ${relativePath}`);
+              const artifact = this.buildArtifactFromFile(
+                vaultId,
+                vaultName,
+                relativePath,
+                fullPath,
+                ext
+              );
+              if (artifact) {
+                this.logger.info(`Built artifact: ${artifact.title} (${artifact.id})`);
+                artifacts.push(artifact);
+              } else {
+                this.logger.warn(`Failed to build artifact from file: ${relativePath}`);
+              }
+            } else {
+              this.logger.info(`Skipping file with unsupported extension: ${entry.name}`);
+            }
+          }
+        }
+      } catch (error: any) {
+        this.logger.error(`Error scanning directory ${dir}:`, error);
+      }
+    };
+
+    scanDirectory(artifactsDir);
+    this.logger.info(`Finished scanning vault ${vaultName}, found ${artifacts.length} artifacts`);
+    return artifacts;
+  }
+
+  /**
+   * 从文件构建 Artifact 对象
+   */
+  private buildArtifactFromFile(
+    vaultId: string,
+    vaultName: string,
+    artifactPath: string,
+    fullPath: string,
+    format: string
+  ): Artifact | null {
+    try {
+      // 尝试读取 metadata
+      const metadataId = this.guessMetadataId(artifactPath);
+      let metadata: ArtifactMetadata | null = null;
+      let metadataRaw: any = null;
+      
+      try {
+        const metadataResult = this.readMetadataFile(vaultName, metadataId);
+        if (metadataResult) {
+          metadata = metadataResult;
+          // 读取原始 metadata 以获取额外字段（如 title, path, viewType, description）
+          metadataRaw = this.readMetadataFileRaw(vaultName, metadataId);
+        }
+      } catch (error) {
+        // metadata 文件不存在，使用默认值
+      }
+
+      // 读取文件统计信息
+      const stats = fs.statSync(fullPath);
+      const name = path.basename(artifactPath, path.extname(artifactPath));
+      
+      // 构建 Artifact 对象
+      // metadata 文件中的 id 可能是 artifact ID，也可能是 metadata ID
+      // 如果 metadata 有 artifactId 字段，使用它；否则使用 metadata 的 id 或 metadataId
+      const artifactId = metadata?.artifactId || metadataRaw?.id || metadataId;
+      const metadataIdValue = metadata?.id || metadataId;
+      
+      const artifact: Artifact = {
+        id: artifactId,
+        vault: {
+          id: vaultId,
+          name: vaultName,
+        },
+        nodeType: 'FILE',
+        path: artifactPath,
+        name: name,
+        format: format || 'md',
+        contentLocation: fullPath,
+        viewType: (metadataRaw?.viewType || metadata?.type as any) || 'document',
+        category: metadata?.category || metadataRaw?.category,
+        title: metadataRaw?.title || metadata?.id || name, // 优先使用 metadata 的 title
+        description: metadataRaw?.description,
+        status: 'draft',
+        createdAt: metadata?.createdAt || metadataRaw?.createdAt || stats.birthtime.toISOString(),
+        updatedAt: metadata?.updatedAt || metadataRaw?.updatedAt || stats.mtime.toISOString(),
+        metadataId: metadataIdValue,
+        tags: metadata?.tags || metadataRaw?.tags,
+      };
+
+      return artifact;
+    } catch (error: any) {
+      this.logger.warn(`Failed to build artifact from file: ${fullPath}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 猜测 metadata ID（基于 artifact 路径）
+   */
+  private guessMetadataId(artifactPath: string): string {
+    // 使用文件路径的 basename（去掉扩展名）作为 metadata ID
+    return path.basename(artifactPath, path.extname(artifactPath));
+  }
+
+  /**
+   * 读取 metadata 文件（返回 ArtifactMetadata 类型）
+   */
+  private readMetadataFile(vaultName: string, metadataId: string): ArtifactMetadata | null {
+    try {
+      const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadataId);
+      if (!fs.existsSync(metadataPath)) {
+        return null;
+      }
+
+      const content = fs.readFileSync(metadataPath, 'utf-8');
+      const metadata = yaml.load(content) as ArtifactMetadata;
+      return metadata;
+    } catch (error: any) {
+      this.logger.warn(`Failed to read metadata file: ${metadataId}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 读取 metadata 文件（返回原始对象，包含所有字段）
+   */
+  private readMetadataFileRaw(vaultName: string, metadataId: string): any | null {
+    try {
+      const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadataId);
+      if (!fs.existsSync(metadataPath)) {
+        return null;
+      }
+
+      const content = fs.readFileSync(metadataPath, 'utf-8');
+      const metadata = yaml.load(content) as any;
+      return metadata;
+    } catch (error: any) {
+      this.logger.warn(`Failed to read metadata file raw: ${metadataId}`, error);
+      return null;
+    }
   }
 
   async updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>> {

@@ -46,11 +46,13 @@
       },
       {
         "command": "archi.vault.add",
-        "title": "Add Local Vault"
+        "title": "Add Local Vault",
+        "icon": "$(add)"
       },
       {
         "command": "archi.vault.addFromGit",
-        "title": "Add Vault from Git"
+        "title": "Add Vault from Git",
+        "icon": "$(git-branch)"
       },
       {
         "command": "archi.vault.list",
@@ -87,8 +89,124 @@
       {
         "command": "archi.ai.generatePrompt",
         "title": "Generate Prompt"
+      },
+      {
+        "command": "archi.document.expandAll",
+        "title": "Expand All",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "archi.document.collapseAll",
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "archi.document.addFile",
+        "title": "Add File",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "archi.document.addFolder",
+        "title": "Add Folder",
+        "icon": "$(folder-create)"
+      },
+      {
+        "command": "archi.document.addDiagram",
+        "title": "Add Diagram",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "archi.document.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "archi.vault.add",
+          "when": "view == architool.documentView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archi.vault.addFromGit",
+          "when": "view == architool.documentView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "archi.document.expandAll",
+          "when": "view == architool.documentView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archi.document.collapseAll",
+          "when": "view == architool.documentView",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "archi.document.addFile",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addFolder",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addDiagram",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.delete",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.document.addFile",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addFolder",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addDiagram",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.delete",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.document.addFile",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addFolder",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addDiagram",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.delete",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "2_actions"
+        }
+      ]
+    }
   },
   "scripts": {
     "compile": "tsc -p tsconfig.json",

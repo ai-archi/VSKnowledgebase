@@ -26,18 +26,57 @@ import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { RemoteEndpoint } from './domain/shared/vault/RemoteEndpoint';
+import { GitVaultAdapter } from './modules/vault/infrastructure/GitVaultAdapter';
 import * as path from 'path';
 import * as os from 'os';
 
 export async function activate(context: vscode.ExtensionContext) {
-  // 1. 初始化 .architool 目录
-  const architoolRoot = path.join(os.homedir(), '.architool');
-  const architoolManager = new ArchitoolDirectoryManager(architoolRoot);
-  await architoolManager.initialize();
-
-  // 2. 初始化日志
+  // 1. 初始化日志（需要在创建 ArchitoolDirectoryManager 之前）
   const logger = new Logger('ArchiTool');
   logger.info('ArchiTool extension activating...');
+
+  // 2. 初始化 .architool 目录（在工作区根目录下）
+  // 获取当前工作区路径
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  let workspaceRoot: string;
+  let architoolRoot: string;
+  
+  if (!workspaceFolder) {
+    // 如果没有打开工作区，使用用户主目录作为后备
+    workspaceRoot = os.homedir();
+    architoolRoot = path.join(workspaceRoot, '.architool');
+    logger.warn('No workspace folder found, using home directory as fallback');
+  } else {
+    workspaceRoot = workspaceFolder.uri.fsPath;
+    architoolRoot = path.join(workspaceRoot, '.architool');
+  }
+  
+  const architoolManager = new ArchitoolDirectoryManager(architoolRoot, logger);
+  await architoolManager.initialize();
+
+  // 2.1. 如果 .architool 目录没有 vault，则初始化 demo-vault
+  // 获取扩展根目录（通常是项目根目录，demo-vault 在项目根目录下）
+  // 注意：在开发环境中，context.extensionPath 指向 apps/extension
+  // 我们需要找到项目根目录（包含 demo-vault 的目录）
+  const extensionPath = context.extensionPath;
+  // 从 apps/extension 向上两级到项目根目录
+  const projectRoot = path.resolve(extensionPath, '..', '..');
+  const demoVaultSourcePath = path.join(projectRoot, 'demo-vault');
+  
+  logger.info(`Workspace root: ${workspaceRoot}`);
+  logger.info(`Architool root: ${architoolRoot}`);
+  logger.info(`Extension path: ${extensionPath}`);
+  logger.info(`Project root: ${projectRoot}`);
+  logger.info(`Demo vault source path: ${demoVaultSourcePath}`);
+  logger.info(`Demo vault source exists: ${require('fs').existsSync(demoVaultSourcePath)}`);
+  
+  try {
+    await architoolManager.initializeDemoVaultIfEmpty(demoVaultSourcePath);
+    logger.info('Demo vault initialization completed');
+  } catch (error: any) {
+    // 如果复制失败，记录错误但不阻止激活
+    logger.error('Failed to initialize demo-vault:', error);
+  }
 
   // 3. 初始化 DuckDB
   const dbPath = path.join(architoolRoot, 'cache', 'runtime.db');
@@ -69,12 +108,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 7. 初始化文档视图
   const documentTreeViewProvider = new DocumentTreeViewProvider(documentService, vaultService, logger);
-  vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
-  const documentCommands = new DocumentCommands(documentService, artifactService, vaultService, logger, context, documentTreeViewProvider);
+  const documentTreeView = vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
+  const documentCommands = new DocumentCommands(documentService, artifactService, vaultService, logger, context, documentTreeViewProvider, documentTreeView);
   documentCommands.register(commandAdapter);
 
   // 8. 初始化任务视图
-  const taskTreeDataProvider = new TaskTreeDataProvider(taskService, logger);
+  const taskTreeDataProvider = new TaskTreeDataProvider(taskService, vaultService, logger);
   vscode.window.createTreeView('architool.taskView', { treeDataProvider: taskTreeDataProvider });
   const taskCommands = new TaskCommands(taskService, logger, context, taskTreeDataProvider, vaultService);
   taskCommands.register(commandAdapter);
@@ -155,11 +194,31 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       command: 'archi.vault.add',
       callback: async () => {
-        const vaultName = await vscode.window.showInputBox({ prompt: 'Enter vault name' });
+        // 获取当前工作区路径
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage('Please open a workspace first.');
+          return;
+        }
+
+        const vaultName = await vscode.window.showInputBox({ 
+          prompt: 'Enter vault name',
+          validateInput: (value) => {
+            if (!value || value.trim().length === 0) {
+              return 'Vault name cannot be empty';
+            }
+            // 检查名称是否包含非法字符
+            if (/[<>:"/\\|?*]/.test(value)) {
+              return 'Vault name contains invalid characters';
+            }
+            return null;
+          }
+        });
         if (!vaultName) return;
 
-        const vaultPath = await vscode.window.showInputBox({ prompt: 'Enter vault path (absolute path)' });
-        if (!vaultPath) return;
+        // 自动使用 <workspace>/.architool/{vaultName} 作为路径
+        const workspaceRoot = workspaceFolder.uri.fsPath;
+        const vaultPath = path.join(workspaceRoot, '.architool', vaultName);
 
         const result = await vaultService.addLocalVault({
           name: vaultName,
@@ -168,7 +227,12 @@ export async function activate(context: vscode.ExtensionContext) {
         });
 
         if (result.success) {
-          vscode.window.showInformationMessage(`Vault '${vaultName}' added.`);
+          vscode.window.showInformationMessage(`Vault '${vaultName}' added at ${vaultPath}`);
+          // 刷新所有视图
+          documentTreeViewProvider.refresh();
+          taskTreeDataProvider.refresh();
+          viewpointTreeDataProvider.refresh();
+          templateTreeDataProvider.refresh();
         } else {
           vscode.window.showErrorMessage(`Failed to add vault: ${result.error.message}`);
         }
@@ -177,16 +241,93 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       command: 'archi.vault.addFromGit',
       callback: async () => {
-        const remoteUrl = await vscode.window.showInputBox({ prompt: 'Enter Git repository URL' });
+        // 获取当前工作区路径
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage('Please open a workspace first.');
+          return;
+        }
+
+        const remoteUrl = await vscode.window.showInputBox({ 
+          prompt: 'Enter Git repository URL',
+          validateInput: (value) => {
+            if (!value || value.trim().length === 0) {
+              return 'Git repository URL cannot be empty';
+            }
+            // 简单的 URL 验证
+            if (!/^https?:\/\/.+/.test(value) && !/^git@.+/.test(value)) {
+              return 'Please enter a valid Git repository URL';
+            }
+            return null;
+          }
+        });
         if (!remoteUrl) return;
 
-        const vaultName = await vscode.window.showInputBox({ prompt: 'Enter vault name' });
-        if (!vaultName) return;
+        // 从 Git URL 中提取仓库名称
+        const extractRepoName = (url: string): string => {
+          // 移除 .git 后缀
+          let repoName = url.replace(/\.git$/, '');
+          
+          // 处理 HTTPS/HTTP URL: https://github.com/user/repo
+          if (repoName.includes('://')) {
+            const parts = repoName.split('/');
+            repoName = parts[parts.length - 1];
+          }
+          // 处理 SSH URL: git@github.com:user/repo
+          else if (repoName.includes('@') && repoName.includes(':')) {
+            const parts = repoName.split(':');
+            const lastPart = parts[parts.length - 1];
+            const nameParts = lastPart.split('/');
+            repoName = nameParts[nameParts.length - 1];
+          }
+          
+          return repoName;
+        };
+
+        const vaultName = extractRepoName(remoteUrl.trim());
+        
+        if (!vaultName || vaultName.length === 0) {
+          vscode.window.showErrorMessage('Failed to extract repository name from URL');
+          return;
+        }
+
+        // 获取远程分支列表
+        const gitAdapter = container.get<GitVaultAdapter>(TYPES.GitVaultAdapter);
+        const branchesResult = await gitAdapter.listRemoteBranches(remoteUrl.trim());
+        
+        let branchOptions: vscode.QuickPickItem[] = [];
+        if (branchesResult.success && branchesResult.value.length > 0) {
+          branchOptions = branchesResult.value.map((branchName: string) => ({
+            label: branchName,
+            description: branchName === 'main' || branchName === 'master' ? 'Default branch' : undefined,
+          }));
+        } else {
+          // 如果获取失败，提供默认选项
+          branchOptions = [
+            { label: 'main', description: 'Default branch' },
+            { label: 'master', description: 'Default branch' },
+            { label: 'develop', description: 'Development branch' },
+          ];
+        }
+
+        // 使用下拉框选择分支，支持搜索
+        const selectedBranch = await vscode.window.showQuickPick(branchOptions, {
+          placeHolder: 'Select a branch',
+          canPickMany: false,
+          ignoreFocusOut: false,
+        });
+        
+        if (!selectedBranch) return; // 用户取消了选择
+        
+        const branch = selectedBranch.label;
 
         const remote: RemoteEndpoint = {
-          url: remoteUrl,
-          branch: 'main',
+          url: remoteUrl.trim(),
+          branch: branch || 'main',
         };
+
+        // 显示进度提示
+        vscode.window.showInformationMessage(`Cloning vault '${vaultName}' from Git...`);
 
         const result = await vaultService.addVaultFromGit({
           name: vaultName,
@@ -195,9 +336,16 @@ export async function activate(context: vscode.ExtensionContext) {
         });
 
         if (result.success) {
-          vscode.window.showInformationMessage(`Vault '${vaultName}' added from Git.`);
+          const workspaceRoot = workspaceFolder.uri.fsPath;
+          const vaultPath = path.join(workspaceRoot, '.architool', vaultName);
+          vscode.window.showInformationMessage(`Vault '${vaultName}' cloned from Git to ${vaultPath}`);
+          // 刷新所有视图
+          documentTreeViewProvider.refresh();
+          taskTreeDataProvider.refresh();
+          viewpointTreeDataProvider.refresh();
+          templateTreeDataProvider.refresh();
         } else {
-          vscode.window.showErrorMessage(`Failed to add vault from Git: ${result.error.message}`);
+          vscode.window.showErrorMessage(`Failed to clone vault from Git: ${result.error.message}`);
         }
       },
     },
