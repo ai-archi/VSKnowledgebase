@@ -2,7 +2,10 @@
   <div class="document-view">
     <div class="header">
       <h2>文档视图</h2>
-      <button @click="refresh">刷新</button>
+      <div class="header-actions">
+        <el-button type="primary" :icon="Plus" @click="showCreateDialog">创建文件</el-button>
+        <el-button :icon="Refresh" @click="refresh">刷新</el-button>
+      </div>
     </div>
     <div class="content">
       <div v-if="loading" class="loading">加载中...</div>
@@ -22,12 +25,21 @@
         </div>
       </div>
     </div>
+    
+    <!-- 创建文件弹窗 -->
+    <CreateFileDialog
+      v-model="createDialogVisible"
+      @created="handleFileCreated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { ElButton } from 'element-plus';
+import { Plus, Refresh } from '@element-plus/icons-vue';
 import { extensionService } from '../../services/ExtensionService';
+import CreateFileDialog from '../../components/CreateFileDialog.vue';
 
 interface Document {
   id: string;
@@ -44,6 +56,7 @@ interface Document {
 const documents = ref<Document[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const createDialogVisible = ref(false);
 
 const loadDocuments = async () => {
   loading.value = true;
@@ -74,6 +87,15 @@ const openDocument = async (document: Document) => {
   }
 };
 
+const showCreateDialog = () => {
+  createDialogVisible.value = true;
+};
+
+const handleFileCreated = (artifact: any) => {
+  // 刷新文档列表
+  loadDocuments();
+};
+
 onMounted(() => {
   loadDocuments();
 });
@@ -95,17 +117,9 @@ onMounted(() => {
   margin: 0;
 }
 
-.header button {
-  padding: 8px 16px;
-  background: #007acc;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.header button:hover {
-  background: #005a9e;
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .loading,

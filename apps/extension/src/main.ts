@@ -24,6 +24,7 @@ import { AICommands } from './modules/ai/interface/Commands';
 import { DuckDbRuntimeIndex } from './infrastructure/storage/duckdb/DuckDbRuntimeIndex';
 import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
+import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { RemoteEndpoint } from './domain/shared/vault/RemoteEndpoint';
 import { GitVaultAdapter } from './modules/vault/infrastructure/GitVaultAdapter';
@@ -109,7 +110,14 @@ export async function activate(context: vscode.ExtensionContext) {
   // 7. 初始化文档视图
   const documentTreeViewProvider = new DocumentTreeViewProvider(documentService, vaultService, logger);
   const documentTreeView = vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
-  const documentCommands = new DocumentCommands(documentService, artifactService, vaultService, logger, context, documentTreeViewProvider, documentTreeView);
+  const webviewRPC = new WebviewRPC(
+    logger,
+    vaultService,
+    documentService,
+    templateService,
+    artifactService
+  );
+  const documentCommands = new DocumentCommands(documentService, artifactService, vaultService, logger, context, documentTreeViewProvider, documentTreeView, webviewRPC.getAdapter());
   documentCommands.register(commandAdapter);
 
   // 8. 初始化任务视图
@@ -134,7 +142,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const aiCommands = new AICommands(aiService, artifactService, vaultService, logger);
   aiCommands.registerCommands(context);
 
-  // 12. 注册所有命令
+  // 12. Webview RPC 服务已在步骤 7 中初始化
+  logger.info('Webview RPC service initialized');
+
+  // 13. 注册所有命令
   commandAdapter.registerCommands([
     // Lookup 命令
     {

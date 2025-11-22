@@ -30,9 +30,29 @@ export class WebviewAdapter {
   private webviewPanel: vscode.WebviewPanel | null = null;
   private messageHandlers: Map<string, (params: any) => Promise<any>> = new Map();
   private logger: Logger;
+  private static globalInstance: WebviewAdapter | null = null;
 
   constructor(logger: Logger) {
     this.logger = logger;
+    // 设置为全局实例，以便从任何地方访问
+    WebviewAdapter.globalInstance = this;
+  }
+
+  /**
+   * 获取全局实例
+   */
+  static getGlobalInstance(): WebviewAdapter | null {
+    return WebviewAdapter.globalInstance;
+  }
+
+  /**
+   * 处理来自任何 webview 的消息（全局消息处理器）
+   */
+  static async handleGlobalMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
+    const instance = WebviewAdapter.getGlobalInstance();
+    if (instance) {
+      await instance.handleMessage(webview, message);
+    }
   }
 
   /**
@@ -101,7 +121,7 @@ export class WebviewAdapter {
   /**
    * 处理来自 Webview 的消息
    */
-  private async handleMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
+  async handleMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
     try {
       const handler = this.messageHandlers.get(message.method);
       if (!handler) {

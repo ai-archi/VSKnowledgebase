@@ -12,6 +12,14 @@ watch:
 	echo "Watching for changes..."
 	cd apps/extension && pnpm run watch
 
+build-webview:
+	echo "Building webview..."
+	cd apps/webview && pnpm run build
+
+build-all: build-webview
+	echo "Building extension..."
+	cd apps/extension && pnpm run compile
+
 cleanBuild:
 	echo "Clean building..."
 	make clean

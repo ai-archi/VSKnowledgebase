@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { DocumentApplicationService } from '../application/DocumentApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
@@ -6,12 +8,13 @@ import { Logger } from '../../../core/logger/Logger';
 import { CommandAdapter } from '../../../core/vscode-api/CommandAdapter';
 import { DocumentTreeViewProvider, DocumentTreeItem } from './DocumentTreeViewProvider';
 import { RemoteEndpoint } from '../../../domain/shared/vault/RemoteEndpoint';
-import * as path from 'path';
+import { WebviewAdapter } from '../../../core/vscode-api/WebviewAdapter';
 
 export class DocumentCommands {
   // 树视图更新延迟配置
   private static readonly TREE_UPDATE_DELAY_MS = 50;
   private static readonly VAULT_EXPAND_DELAY_MS = 150;
+  private createFileWebviewPanel: vscode.WebviewPanel | null = null;
 
   constructor(
     private documentService: DocumentApplicationService,
@@ -20,7 +23,8 @@ export class DocumentCommands {
     private logger: Logger,
     private context: vscode.ExtensionContext,
     private treeViewProvider: DocumentTreeViewProvider,
-    private treeView: vscode.TreeView<vscode.TreeItem>
+    private treeView: vscode.TreeView<vscode.TreeItem>,
+    private webviewAdapter: WebviewAdapter
   ) {}
 
   register(commandAdapter: CommandAdapter): void {
@@ -94,7 +98,7 @@ export class DocumentCommands {
       {
         command: 'archi.document.addFile',
         callback: async (item?: DocumentTreeItem) => {
-          await this.addFile(item);
+          await this.showCreateFileDialog(item);
         },
       },
       {
@@ -643,6 +647,152 @@ export class DocumentCommands {
       this.logger.error('Failed to delete item', error);
       vscode.window.showErrorMessage(`Failed to delete: ${error.message}`);
     }
+  }
+
+  /**
+   * 显示创建文件对话框（Webview）
+   */
+  private async showCreateFileDialog(item?: DocumentTreeItem): Promise<void> {
+    // 如果已经打开，直接显示
+    if (this.createFileWebviewPanel) {
+      this.createFileWebviewPanel.reveal();
+      return;
+    }
+
+    // 获取当前选中的 vault 信息
+    let initialVaultId: string | undefined;
+    let initialFolderPath: string | undefined;
+    
+    if (item) {
+      if (item.vaultName) {
+        // 从 vaultName 获取 vaultId
+        const vaultsResult = await this.vaultService.listVaults();
+        if (vaultsResult.success) {
+          const vault = vaultsResult.value.find(v => v.name === item.vaultName);
+          if (vault) {
+            initialVaultId = vault.id;
+          }
+        }
+      }
+      if (item.folderPath) {
+        initialFolderPath = item.folderPath;
+      }
+    }
+
+    // 创建新的 webview panel（弹窗模式）
+    const extensionPath = this.context.extensionPath;
+    const webviewDistPath = path.join(extensionPath, '..', 'webview', 'dist');
+    
+    // 创建标准表单页面（不使用弹窗，直接全屏显示）
+    // 注意：VSCode 的 webview panel 只能在编辑区显示，所以我们使用标准表单页面
+    const panel = vscode.window.createWebviewPanel(
+      'createFileDialog',
+      '创建文件',
+      vscode.ViewColumn.Beside, // 在侧边打开，不替换当前编辑器
+      {
+        enableScripts: true,
+        retainContextWhenHidden: false, // 关闭时释放资源
+        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+      }
+    );
+
+    // 设置 webview 消息处理器
+    panel.webview.onDidReceiveMessage(
+      async (message) => {
+        // 处理关闭请求
+        if (message.method === 'close') {
+          panel.dispose();
+          return;
+        }
+        // 处理其他 RPC 消息
+        await this.webviewAdapter.handleMessage(panel.webview, message);
+      },
+      null,
+      this.context.subscriptions
+    );
+
+    // 加载 webview 内容，并传递初始数据
+    const htmlContent = await this.getWebviewContent(panel.webview, initialVaultId, initialFolderPath);
+    panel.webview.html = htmlContent;
+
+    // 监听面板关闭事件
+    panel.onDidDispose(() => {
+      this.createFileWebviewPanel = null;
+    });
+
+    this.createFileWebviewPanel = panel;
+  }
+
+  /**
+   * 获取 Webview HTML 内容
+   */
+  private async getWebviewContent(webview: vscode.Webview, initialVaultId?: string, initialFolderPath?: string): Promise<string> {
+    // 获取扩展路径
+    const extensionPath = this.context.extensionPath;
+    const webviewDistPath = path.join(extensionPath, '..', 'webview', 'dist');
+
+    this.logger.info(`Webview dist path: ${webviewDistPath}`);
+    this.logger.info(`Webview dist exists: ${fs.existsSync(webviewDistPath)}`);
+
+    // 检查构建后的文件是否存在
+    // 优先尝试加载 create-file-dialog.html，如果不存在则使用 index.html
+    let htmlPath = path.join(webviewDistPath, 'create-file-dialog.html');
+    if (!fs.existsSync(htmlPath)) {
+      this.logger.warn(`create-file-dialog.html not found, trying index.html`);
+      htmlPath = path.join(webviewDistPath, 'index.html');
+    }
+
+    this.logger.info(`HTML path: ${htmlPath}`);
+    this.logger.info(`HTML file exists: ${fs.existsSync(htmlPath)}`);
+
+    if (fs.existsSync(htmlPath)) {
+      // 读取构建后的 HTML
+      let html = fs.readFileSync(htmlPath, 'utf-8');
+      
+      // 替换资源路径为 webview URI
+      // 匹配所有 src 和 href 属性中的相对路径（以 / 开头）
+      html = html.replace(/(src|href)="\/([^"]+)"/g, (match, attr, resourcePath) => {
+        // 构建资源文件的完整路径
+        const resourceFile = path.join(webviewDistPath, resourcePath);
+        // 转换为 webview URI
+        const resourceUri = webview.asWebviewUri(vscode.Uri.file(resourceFile));
+        return `${attr}="${resourceUri}"`;
+      });
+      
+      // 注入 VSCode API 和初始数据
+      const initialData = {
+        vaultId: initialVaultId,
+        folderPath: initialFolderPath,
+      };
+      const vscodeScript = `
+        <script>
+          const vscode = acquireVsCodeApi();
+          window.acquireVsCodeApi = () => vscode;
+          window.initialData = ${JSON.stringify(initialData)};
+        </script>
+      `;
+      html = html.replace('</head>', `${vscodeScript}</head>`);
+      
+      return html;
+    }
+
+    // 如果构建文件不存在，返回一个简单的 HTML，提示需要构建
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Create File</title>
+        </head>
+        <body>
+          <div style="padding: 20px; text-align: center;">
+            <h2>Webview 未构建</h2>
+            <p>请先运行 <code>cd apps/webview && pnpm build</code> 构建 webview</p>
+          </div>
+        </body>
+      </html>
+    `;
   }
 }
 

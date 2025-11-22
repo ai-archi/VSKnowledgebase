@@ -24,7 +24,7 @@
         "VSCODE_DEBUGGING_EXTENSION": "architool",
         "LOG_LEVEL": "debug"
       },
-      "preLaunchTask": "Compile Extension"
+      "preLaunchTask": "Build All"
     },
     {
       "name": "Run Extension (with extensions)",
@@ -46,7 +46,7 @@
         "VSCODE_DEBUGGING_EXTENSION": "architool",
         "LOG_LEVEL": "debug"
       },
-      "preLaunchTask": "Compile Extension"
+      "preLaunchTask": "Build All"
     },
     {
       "name": "Run Extension (reuse window)",
@@ -72,7 +72,7 @@
         "VSCODE_DEBUGGING_EXTENSION": "architool",
         "LOG_LEVEL": "debug"
       },
-      "preLaunchTask": "Compile Extension"
+      "preLaunchTask": "Build All"
     },
     {
       "name": "Run Web Extension",
@@ -87,7 +87,7 @@
       "outFiles": [
         "${workspaceFolder}/apps/extension/out/**/*.js"
       ],
-      "preLaunchTask": "Watch Extension"
+      "preLaunchTask": "Build All"
     },
     {
       "name": "Extension Tests",
@@ -109,7 +109,7 @@
       "outFiles": [
         "${workspaceFolder}/apps/extension/out/test/**/*.js"
       ],
-      "preLaunchTask": "Compile Extension"
+      "preLaunchTask": "Build All"
     },
     {
       "name": "Extension Tests - Current File",
@@ -133,7 +133,7 @@
 			"outFiles": [
         "${workspaceFolder}/apps/extension/out/test/**/*.js"
       ],
-      "preLaunchTask": "Compile Extension"
+      "preLaunchTask": "Build All"
 		}
 	]
 }

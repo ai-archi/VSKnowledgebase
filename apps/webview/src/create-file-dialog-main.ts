@@ -3,9 +3,9 @@ import { createPinia } from 'pinia';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
-import App from './App.vue';
+import CreateFileDialogPage from './CreateFileDialogPage.vue';
 
-const app = createApp(App);
+const app = createApp(CreateFileDialogPage);
 const pinia = createPinia();
 
 // 注册 Element Plus

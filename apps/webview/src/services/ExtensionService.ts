@@ -6,11 +6,13 @@
 export interface ExtensionMessage {
   method: string;
   params?: any;
-  id?: string;
+  id?: string | number;
 }
 
 export interface ExtensionResponse {
-  id?: string;
+  id?: string | number;
+  method?: string;
+  params?: any;
   result?: any;
   error?: {
     code: number;
@@ -89,16 +91,19 @@ export class ExtensionService {
    */
   private handleMessage(message: ExtensionResponse): void {
     // 处理请求响应
-    if (message.id && this.pendingRequests.has(message.id)) {
-      const { resolve, reject } = this.pendingRequests.get(message.id)!;
-      this.pendingRequests.delete(message.id);
+    if (message.id !== undefined) {
+      const id = typeof message.id === 'string' ? parseInt(message.id, 10) : message.id;
+      if (!isNaN(id) && this.pendingRequests.has(id)) {
+        const { resolve, reject } = this.pendingRequests.get(id)!;
+        this.pendingRequests.delete(id);
 
-      if (message.error) {
-        reject(new Error(message.error.message));
-      } else {
-        resolve(message.result);
+        if (message.error) {
+          reject(new Error(message.error.message));
+        } else {
+          resolve(message.result);
+        }
+        return;
       }
-      return;
     }
 
     // 处理事件
