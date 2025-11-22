@@ -1,0 +1,116 @@
+{
+  "name": "root",
+  "private": true,
+  "engines": {
+    "node": ">=0.14"
+  },
+  "workspaces": {
+    "packages": [
+      "packages/common-all",
+      "packages/common-assets",
+      "packages/common-server",
+      "packages/common-test-utils",
+      "packages/dendron-viz",
+      "packages/engine-server",
+      "packages/engine-test-utils",
+      "packages/plugin-core",
+      "packages/common-frontend",
+      "packages/dendron-plugin-views",
+      "packages/unified"
+    ],
+    "nohoist": [
+      "**/@types/mocha",
+      "**/@types/eslint"
+    ]
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.39.0",
+    "@typescript-eslint/parser": "^5.39.0",
+    "chalk": "^4.1.1",
+    "eslint": "^7.32.0",
+    "eslint-config-airbnb": "^18.1.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-jest": "^26.1.5",
+    "eslint-plugin-jsx-a11y": "^6.2.3",
+    "eslint-plugin-prettier": "^3.1.4",
+    "eslint-plugin-react": "^7.24.0",
+    "eslint-plugin-react-hooks": "^4.2.0",
+    "execa": "^5.0.0",
+    "husky": "^4.2.5",
+    "jest": "^28.1.0",
+    "lerna": "^3.19.0",
+    "lint-staged": ">=10",
+    "lodash": "^4.17.15",
+    "madge": "^5.0.1",
+    "prettier": "^2.0.4",
+    "standard-version": "^8.0.0",
+    "typedoc": "^0.23.14",
+    "typedoc-plugin-markdown": "^3.13.6",
+    "verdaccio": "^5.1.3",
+    "verdaccio-auth-memory": "^10.0.1",
+    "vsce": "^2.15.0"
+  },
+  "scripts": {
+    "setup": "pnpm install && pnpm build",
+    "setup:sqlite": "npx node-pre-gyp install --directory=node_modules/sqlite3 || echo 'SQLite3 binary installation skipped'",
+    "gen:data": "yarn dendron dev generate_json_schema_from_config",
+    "cleanup": "rm -rf apps/*/out apps/*/dist packages/*/lib packages/*/out packages/*/dist",
+    "release": "standard-version",
+    "format": "lerna exec --parallel -- yarn format",
+    "format:pkg": "prettier --write",
+    "lint": "eslint . --ext ts,tsx",
+    "lerna:typecheck": "lerna exec --parallel --ignore @dendronhq/common-assets --ignore @dendronhq/dendron-plugin-views -- tsc -p tsconfig.build.json --noEmit",
+    "build": "cd apps/extension && npm run compile",
+    "build:extension": "cd apps/extension && npm run compile",
+    "build:ci": "cd apps/extension && npm run compile",
+    "watch": "cd apps/extension && npm run watch",
+    "ci:init": "pnpm install && pnpm build",
+    "ci:test:cli": "yarn test:cli",
+    "ci:test:plugin": "npx lerna run test --scope @dendronhq/plugin-core --stream",
+    "ci:test:plugin-web": "npx lerna run compile-web --scope @dendronhq/plugin-core && npx lerna run test-in-browser --scope @dendronhq/plugin-core",
+    "ci:test:plugin-perf": "npx lerna run perf-test --scope @dendronhq/plugin-core",
+    "stash:unstaged": "git stash save -k 'pre-linting-stash'",
+    "stash:pop": "git stash && git stash pop stash@{1} && git read-tree stash && git stash drop",
+    "test": "cross-env LOG_LEVEL=error yarn jest",
+    "test:cli": "cross-env LOG_LEVEL=error npx jest --selectProjects non-plugin-tests --forceExit",
+    "test:cli:update-snapshots": "yarn test:cli -u"
+  },
+  "packages": [
+    "packages/*",
+    "vendor/*"
+  ],
+  "useWorkspaces": false,
+  "husky": {
+    "hooks": {
+      "pre-commit": "yarn stash:unstaged && lint-staged && yarn stash:pop"
+    }
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --config prettier.config.js --loglevel debug --write",
+      "eslint"
+    ]
+  },
+  "dependencies": {
+    "@babel/preset-typescript": "7.16.7",
+    "@babel/types": "7.17.10",
+    "@dendronhq/conventional-changelog-dendron": "^5.0.11",
+    "chalk": "^4.1.1",
+    "cross-env": "^7.0.3",
+    "execa": "^5.0.0",
+    "github-slugger": "^1.3.0",
+    "jest-serializer-path": "^0.1.15",
+    "typescript": "4.6",
+    "verdaccio-memory": "^10.0.1",
+    "webpack": "^5.74.0"
+  },
+  "resolutions": {
+    "trim": "0.0.3",
+    "d3-color": "3.1.0"
+  },
+  "overrides": {
+    "trim": "0.0.3",
+    "d3-color": "3.1.0"
+  }
+}

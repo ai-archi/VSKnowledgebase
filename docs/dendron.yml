@@ -1,0 +1,128 @@
+version: 5
+dev:
+    enablePreviewV2: true
+commands:
+    lookup:
+        note:
+            selectionMode: extract
+            confirmVaultOnCreate: true
+            leaveTrace: false
+            bubbleUpCreateNew: true
+            fuzzThreshold: 0.2
+            vaultSelectionModeOnCreate: smart
+    randomNote: {}
+    insertNote:
+        initialValue: templates
+    insertNoteLink:
+        aliasMode: none
+        enableMultiSelect: false
+    insertNoteIndex:
+        enableMarker: false
+    copyNoteLink:
+        aliasMode: title
+    templateHierarchy: template
+workspace:
+    dendronVersion: 0.83.0
+    workspaces: {}
+    seeds:
+        dendron.dendron-site:
+            branch: dev
+            site:
+                url: https://wiki.dendron.so
+                index: dendron
+        dendron.templates: {}
+    vaults:
+        -
+            fsPath: dendron-docs
+            name: dendron.docs
+            selfContained: true
+            siteUrl: https://docs.dendron.so
+            remote:
+                type: git
+                url: https://github.com/dendronhq/dendron-docs.git
+        -
+            fsPath: vault
+            seed: dendron.dendron-site
+            name: dendron.dendron-site
+    journal:
+        dailyDomain: daily
+        name: journal
+        dateFormat: y.MM.dd
+        addBehavior: childOfDomainNamespace
+    scratch:
+        name: scratch
+        dateFormat: y.MM.dd.HHmmss
+        addBehavior: asOwnDomain
+    graph:
+        zoomSpeed: 1
+        createStub: false
+    enableAutoCreateOnDefinition: false
+    enableXVaultWikiLink: true
+    enableRemoteVaultInit: true
+    workspaceVaultSyncMode: noCommit
+    enableAutoFoldFrontmatter: false
+    maxPreviewsCached: 10
+    maxNoteLength: 204800
+    enableUserTags: true
+    enableHashTags: true
+    task:
+        name: ''
+        dateFormat: ''
+        addBehavior: childOfCurrent
+        statusSymbols:
+            '': ' '
+            wip: w
+            done: x
+            assigned: a
+            moved: m
+            blocked: b
+            delegated: l
+            dropped: d
+            pending: 'y'
+        prioritySymbols:
+            H: high
+            M: medium
+            L: low
+        todoIntegration: false
+        createTaskSelectionType: selection2link
+        taskCompleteStatus:
+            - done
+            - x
+    enableEditorDecorations: true
+    enableFullHierarchyNoteTitle: false
+    enableSmartRefs: false
+preview:
+    enableFMTitle: true
+    enableNoteTitleForLink: true
+    enableMermaid: true
+    enablePrettyRefs: false
+    enableKatex: false
+    automaticallyShowPreview: false
+    enableFrontmatterTags: true
+    enableHashesForFMTags: false
+publishing:
+    enableFMTitle: true
+    enableNoteTitleForLink: true
+    enableMermaid: true
+    enablePrettyRefs: true
+    enableKatex: false
+    copyAssets: true
+    siteHierarchies:
+        - handbook
+    enableSiteLastModified: true
+    siteRootDir: docs
+    siteUrl: https://wiki.dendron.so
+    enableFrontmatterTags: true
+    enableHashesForFMTags: false
+    enableRandomlyColoredTags: true
+    writeStubs: false
+    seo:
+        title: Dendron
+        description: Personal knowledge space
+    github:
+        enableEditLink: true
+        editLinkText: Edit this page on GitHub
+        editBranch: main
+        editViewMode: tree
+    enablePrettyLinks: true
+    enableTaskNotes: true

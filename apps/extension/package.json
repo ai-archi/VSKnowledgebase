@@ -1,0 +1,38 @@
+{
+  "name": "@architool/extension",
+  "displayName": "ArchiTool",
+  "description": "Architecture Management Tool for VSCode",
+  "version": "0.1.0",
+  "publisher": "architool",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/main.js",
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@xenova/transformers": "^2.0.0",
+    "duckdb": "^1.4.2",
+    "inversify": "^6.0.2",
+    "js-yaml": "^4.1.0",
+    "knex": "^3.1.0",
+    "reflect-metadata": "^0.2.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.6",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.3.0"
+  }
+}
