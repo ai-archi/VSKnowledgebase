@@ -14,6 +14,7 @@ export declare class VaultApplicationServiceImpl implements VaultApplicationServ
     addLocalVault(opts: AddLocalVaultOpts): Promise<Result<Vault, VaultError>>;
     addVaultFromGit(opts: AddVaultFromGitOpts): Promise<Result<Vault, VaultError>>;
     forkGitVault(sourceVaultId: string, newVaultName: string): Promise<Result<Vault, VaultError>>;
+    private copyDirectory;
     syncVault(vaultId: string): Promise<Result<void, VaultError>>;
     removeVault(vaultId: string): Promise<Result<void, VaultError>>;
     listVaults(): Promise<Result<Vault[], VaultError>>;

@@ -12,6 +12,11 @@ export interface ArtifactChange {
   timestamp: string; // ISO 8601 格式
   diffSummary?: string; // 差异摘要
   author?: string; // 作者
+  impactedArtifacts?: string[]; // 受影响的 Artifact ID 列表
+  gitCommitHash?: string; // Git 提交哈希（如果适用）
 }
+
+// 导出 ChangeType 以便其他模块使用
+export type { ChangeType };
 
 

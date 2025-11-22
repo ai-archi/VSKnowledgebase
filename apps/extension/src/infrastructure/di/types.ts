@@ -22,6 +22,7 @@ export const TYPES = {
   ArtifactLinkRepository: Symbol.for('ArtifactLinkRepository'),
   VaultRepository: Symbol.for('VaultRepository'),
   ChangeRepository: Symbol.for('ChangeRepository'),
+  ChangeDetector: Symbol.for('ChangeDetector'),
 
   // Application Services
   ArtifactFileSystemApplicationService: Symbol.for('ArtifactFileSystemApplicationService'),
@@ -40,6 +41,7 @@ export const TYPES = {
   // MCP
   MCPServerStarter: Symbol.for('MCPServerStarter'),
   MCPTools: Symbol.for('MCPTools'),
+  MCPResources: Symbol.for('MCPResources'),
 
   // View Providers
   DocumentTreeViewProvider: Symbol.for('DocumentTreeViewProvider'),

@@ -1,22 +1,39 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
 
-# compiled 
+# Build outputs
 .next
 lib
-node_modules
 out
 dist
+*.tsbuildinfo
+
+# Generated files
+launch.json
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Public assets
+public
 assets
 raw-assets
-# generated
-launch.json
-package.json
-public 
-# config
-*.lock
-# tests
+
+# Tests
 __snapshots__
-# text
-LICENSE
+coverage
+
+# Documentation (optional - remove if you want to format markdown)
 *.md
-# scripts
+LICENSE
+
+# Scripts
 *.sh
+
+# Old packages (backup)
+packages-bak
+
+# ArchiTool runtime cache
+.architool/cache

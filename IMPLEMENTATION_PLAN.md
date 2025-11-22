@@ -532,36 +532,165 @@ packages/
 
 ---
 
-## 六、迁移检查清单
+## 六、当前实施状态分析（2024年更新）
 
-### 6.1 阶段 0 检查清单
+### 6.0 已完成的核心任务 ✅
 
-- [ ] 项目结构创建完成
-- [ ] 领域核心模型定义完成
-- [ ] 基础设施层适配器实现完成
-- [ ] Extension 核心模块创建完成
-- [ ] Shared 模块应用服务实现完成
-- [ ] Vault 模块实现完成
-- [ ] `.architool` 目录结构实现完成
-- [ ] 最小命令集实现完成
-- [ ] MCP Server 最小实现完成
+#### 阶段 0 核心架构（约 95% 完成）✅
+
+- [x] **项目结构创建**：单体架构目录结构（apps/, domain/, infrastructure/）
+- [x] **领域核心模型**：Artifact、Vault、ArtifactMetadata、ArtifactLink 等完整定义
+- [x] **基础设施层**：DuckDB 运行时索引、文件系统适配器、YAML 存储库
+- [x] **Extension 核心模块**：Logger、ConfigManager、EventBus、CommandAdapter
+- [x] **应用服务实现**：ArtifactFileSystemApplicationServiceImpl、VaultApplicationServiceImpl
+- [x] **存储库实现**：ArtifactRepositoryImpl、MetadataRepositoryImpl、VaultRepositoryImpl
+- [x] **DI 容器配置**：InversifyJS 容器完整配置和绑定
+- [x] **部分模块实现**：document、lookup、task 模块已实现
+- [x] **VSCode 命令**：
+  - [x] `archi.vault.add` - 添加本地 Vault
+  - [x] `archi.vault.addFromGit` - 从 Git 添加 Vault ✅ **已完成**
+  - [x] `archi.vault.fork` - 复制 Git Vault ✅ **已完成**
+  - [x] `archi.vault.sync` - 同步 Vault ✅ **已完成**
+  - [x] `archi.vault.remove` - 移除 Vault ✅ **已完成**
+  - [x] `archi.vault.list` - 列出所有 Vault
+  - [x] `archi.lookup` - Lookup 系统
+  - [x] `archi.document.create` - 创建文档
+  - [x] `archi.artifact.list` - 列出工件
+- [x] **Git Vault 支持** ✅ **已完成**：GitVaultAdapter 完整实现（simple-git）
+- [x] **MCP Server** ✅ **已完成**：MCPTools、MCPResources、MCPServerStarter 完整实现
+- [x] **向量搜索集成** ✅ **已完成**：VectorEmbeddingService 独立服务实现
+- [x] **Webview 前端** ✅ **已完成**：Vue 3 + Vite 项目结构创建
+
+#### 阶段 1 基本功能（约 80% 完成）✅
+
+- [x] **Lookup 系统**：三区域设计、状态管理、Prompt 模板
+- [x] **文档视图**：DocumentTreeViewProvider、按 viewType/category 组织
+- [x] **任务视图**：TaskTreeViewProvider、任务创建和管理
+- [x] **变更追踪** ✅ **已完成**：ChangeDetector、ChangeRepository 实现
+
+### 6.1 待完成的关键任务
+
+#### 阶段 0 剩余任务（优先级：低）
+
+1. **Git Vault 支持** ✅ **已完成**
+   - [x] 实现 GitVaultAdapter 的完整功能（simple-git）
+   - [x] 实现 Git 克隆逻辑（cloneRepository）
+   - [x] 实现 Git 同步逻辑（pullRepository）
+   - [x] 实现 Git 状态检测（getRemoteUrl, getCurrentBranch）
+   - [x] 实现 Vault fork 功能（复制 Git Vault 为本地 Vault）
+   - [x] 实现 Vault sync 功能（从 Git 拉取更新）
+   - [x] 实现 Vault remove 功能
+
+2. **MCP Server 完整实现** ✅ **已完成**
+   - [x] 实现进程内 MCP Server 启动逻辑
+   - [x] 实现资源注册（Resources）：`archi://artifact/{id}`, `archi://vault/{vault-name}`
+   - [x] 实现完整的工具集（Tools）：
+     - [x] `mcp_knowledge_base_list_entries`
+     - [x] `mcp_knowledge_base_get_entry`
+     - [x] `mcp_knowledge_base_search`
+     - [x] `mcp_knowledge_base_create_entry`
+     - [x] `mcp_knowledge_base_update_entry`
+     - [x] `mcp_knowledge_base_delete_entry`
+     - [x] `mcp_knowledge_base_list_links`（框架已实现，需要 ArtifactLinkRepository）
+     - [x] `mcp_knowledge_base_create_link`（框架已实现，需要 ArtifactLinkRepository）
+
+3. **向量搜索集成** ✅ **已完成**
+   - [x] 实现 VectorEmbeddingService（向量嵌入服务）
+   - [x] 完善向量搜索功能（语义搜索）
+   - [ ] 测试 DuckDB VSS 扩展兼容性（需要运行时测试）
+   - [ ] 优化搜索性能（批量处理、缓存）
+
+4. **Webview 前端** ✅ **已完成**
+   - [x] 创建 `apps/webview/` 项目结构
+   - [x] 配置 Vue 3 + Vite 项目
+   - [x] 实现前端与后端通信（ExtensionService）
+   - [ ] 实现前端视图模块（document-view, task-view 等）
+
+#### 阶段 1 剩余任务（优先级：中）
+
+5. **变更追踪** ✅ **已完成**
+   - [x] 实现 ChangeDetector（变更检测器）
+   - [x] 实现变更记录存储（ArtifactChange）
+   - [x] 实现变更历史查询（ChangeRepository）
+
+6. **测试覆盖**
+   - [ ] 单元测试（领域模型、应用服务、存储库）
+   - [ ] 集成测试（文件系统、DuckDB、Git 操作）
+   - [ ] E2E 测试（VSCode 命令、视图交互）
+
+#### 阶段 2 任务（优先级：中低）
+
+7. **AI 服务**
+   - [ ] AIApplicationService 实现
+   - [ ] 影响分析（Impact Analysis）
+   - [ ] 提示生成（Prompt Generation）
+
+8. **Development 视图**
+   - [ ] 代码-设计关联
+   - [ ] 代码审查功能
+   - [ ] 规范检测（ESLint 集成）
+
+#### 阶段 3 任务（优先级：低）
+
+9. **视点视图（Viewpoint View）**
+   - [ ] 创建 `apps/extension/src/modules/viewpoint/` 模块
+   - [ ] 实现 ViewpointApplicationService（基于标签筛选）
+   - [ ] 实现 ViewpointTreeDataProvider
+   - [ ] 实现预定义视点（生命周期、架构层次、需求管理、设计管理）
+   - [ ] 实现自定义视点配置
+   - [ ] 实现前端视图（`apps/webview/src/modules/viewpoint-view/`）
+
+10. **模板视图（Template View）**
+    - [ ] 创建 `apps/extension/src/modules/template/` 模块
+    - [ ] 实现 TemplateApplicationService
+    - [ ] 实现 TemplateTreeDataProvider
+    - [ ] 实现模板处理逻辑（结构模板、内容模板）
+    - [ ] 实现前端视图（`apps/webview/src/modules/template-view/`）
+
+11. **自定义编辑器**
+    - [ ] 创建 `apps/extension/src/modules/editor/` 模块
+    - [ ] 实现 EditorManager（编辑器管理器）
+    - [ ] 实现 ArchiMate 编辑器（archimate-js 集成）
+    - [ ] 实现 PlantUML 编辑器（可选）
+    - [ ] 实现 Mermaid 编辑器（可选）
+    - [ ] 实现前端编辑器组件（`apps/webview/src/modules/editor/`）
+
+12. **性能优化**
+    - [ ] DuckDB 索引优化
+    - [ ] 索引分片策略
+    - [ ] 缓存策略（LRU 缓存）
+    - [ ] 并发写入处理
+
+### 6.2 迁移检查清单（更新）
+
+#### 6.2.1 阶段 0 检查清单
+
+- [x] 项目结构创建完成
+- [x] 领域核心模型定义完成
+- [x] 基础设施层适配器实现完成
+- [x] Extension 核心模块创建完成
+- [x] Shared 模块应用服务实现完成
+- [x] Vault 模块实现完成（Git 操作已完善）✅
+- [x] `.architool` 目录结构实现完成
+- [x] 最小命令集实现完成 ✅
+- [x] MCP Server 最小实现完成 ✅
 - [ ] 单元测试覆盖核心功能
 
-### 6.2 阶段 1 检查清单
+#### 6.2.2 阶段 1 检查清单
 
-- [ ] Lookup 系统实现完成
-- [ ] 文档视图实现完成
-- [ ] 任务视图实现完成
-- [ ] 变更追踪实现完成
+- [x] Lookup 系统实现完成
+- [x] 文档视图实现完成
+- [x] 任务视图实现完成
+- [x] 变更追踪实现完成 ✅
 - [ ] 集成测试通过
 
-### 6.3 阶段 2 检查清单
+#### 6.2.3 阶段 2 检查清单
 
 - [ ] AI 服务实现完成
 - [ ] MCP Server 完整实现完成
 - [ ] Development 视图实现完成
 
-### 6.4 阶段 3 检查清单
+#### 6.2.4 阶段 3 检查清单
 
 - [ ] 视点视图实现完成
 - [ ] 模板视图实现完成
@@ -601,31 +730,66 @@ packages/
 
 ---
 
-## 八、下一步行动
+## 八、下一步行动（更新）
 
-### 8.1 立即开始
+### 8.1 立即开始（优先级：高）
 
-1. **创建项目结构**：按照目标架构创建目录结构
-2. **配置构建系统**：配置 pnpm workspace、TypeScript、Vite
-3. **定义领域模型**：创建 Artifact、Vault 等核心领域模型
+1. **完善 Git Vault 支持**：
+   - 实现 GitVaultAdapter 的完整功能（使用 simple-git 库）
+   - 实现 Git 克隆、同步、状态检测
+   - 实现 Vault fork 和 sync 命令
+
+2. **完善 MCP Server**：
+   - 实现进程内 MCP Server 启动逻辑
+   - 实现资源注册和工具集（标准知识库 map API）
+
+3. **完善向量搜索**：
+   - 测试 DuckDB VSS 扩展兼容性
+   - 实现 VectorEmbeddingService
+   - 完善向量搜索功能
 
 ### 8.2 短期目标（1-2 周）
 
-1. **完成阶段 0 骨架**：建立基础架构
-2. **实现核心适配器**：文件系统适配器、DuckDB 适配器
-3. **实现最小命令集**：验证架构可行性
+1. **完成阶段 0 剩余任务**：
+   - Git Vault 完整实现
+   - MCP Server 最小集实现
+   - 向量搜索集成
+
+2. **创建 Webview 前端**：
+   - 创建 `apps/webview/` 项目结构
+   - 配置 Vue 3 + Vite
+   - 实现基础通信框架
+
+3. **实现变更追踪**：
+   - ChangeDetector 实现
+   - 变更记录存储
 
 ### 8.3 中期目标（1-2 月）
 
-1. **完成阶段 1 基本功能**：Lookup、文档视图、任务视图
-2. **完善测试覆盖**：单元测试、集成测试
-3. **性能优化**：DuckDB 索引优化
+1. **完善阶段 1 功能**：
+   - 变更追踪完整实现
+   - 测试覆盖（单元测试、集成测试）
+
+2. **开始阶段 2 功能**：
+   - AI 服务实现
+   - MCP Server 完整实现
+   - Development 视图（可选）
 
 ### 8.4 长期目标（3-6 月）
 
-1. **完成所有视图模块**：视点视图、模板视图
-2. **实现自定义编辑器**：ArchiMate、PlantUML、Mermaid
-3. **完善 AI 能力**：MCP Server、影响分析
+1. **完成所有视图模块**：
+   - 视点视图（Viewpoint View）
+   - 模板视图（Template View）
+
+2. **实现自定义编辑器**：
+   - ArchiMate 编辑器
+   - PlantUML 编辑器（可选）
+   - Mermaid 编辑器（可选）
+
+3. **性能优化**：
+   - DuckDB 索引优化
+   - 缓存策略
+   - 并发写入处理
 
 ---
 

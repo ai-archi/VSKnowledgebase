@@ -1,12 +1,21 @@
 const commonConfig = {
   clearMocks: true,
   moduleFileExtensions: ["ts", "tsx", "js", "json"],
-  modulePathIgnorePatterns: ["lib", "build", "docs"],
+  modulePathIgnorePatterns: ["lib", "build", "docs", "packages-bak"],
   notify: true,
   notifyMode: "always",
   snapshotSerializers: ["jest-serializer-path"],
   testEnvironment: "node",
   testPathIgnorePatterns: ["utils.ts"],
+  preset: "ts-jest",
+  transform: {
+    "^.+\\.tsx?$": ["ts-jest", {
+      tsconfig: {
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
+    }],
+  },
   transformIgnorePatterns: [
     // These are ESM modules that need to be transpiled before Jest can run them
     "/node_modules/(?!(d3.*|internmap|delaunator|robust-predicates)/)",
@@ -27,12 +36,26 @@ module.exports = {
   ...commonConfig,
   projects: [
     {
-      displayName: "non-plugin-tests",
+      displayName: "extension-tests",
       testMatch: [
-        "<rootDir>/packages/engine-test-utils/**/?(*.)+(spec|test).[jt]s?(x)",
-        // see https://github.com/facebook/jest/issues/7914
-        "<rootDir>/packages/engine-test-utils/**/__tests__/**/*.[jt]s?(x)",
-        "<rootDir>/packages/engine-test-utils/**/*(*.)@(spec|test).[tj]s?(x)",
+        "<rootDir>/apps/extension/**/?(*.)+(spec|test).[jt]s?(x)",
+        "<rootDir>/apps/extension/**/__tests__/**/*.[jt]s?(x)",
+      ],
+      ...commonConfig,
+    },
+    {
+      displayName: "domain-tests",
+      testMatch: [
+        "<rootDir>/domain/**/?(*.)+(spec|test).[jt]s?(x)",
+        "<rootDir>/domain/**/__tests__/**/*.[jt]s?(x)",
+      ],
+      ...commonConfig,
+    },
+    {
+      displayName: "infrastructure-tests",
+      testMatch: [
+        "<rootDir>/infrastructure/**/?(*.)+(spec|test).[jt]s?(x)",
+        "<rootDir>/infrastructure/**/__tests__/**/*.[jt]s?(x)",
       ],
       ...commonConfig,
     },

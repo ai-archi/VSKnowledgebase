@@ -7,11 +7,9 @@ module.exports = {
     jasmine: true,
   },
   extends: [
-    "plugin:react/recommended",
-    "airbnb",
-    "airbnb/hooks",
     "prettier",
     "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended",
   ],
   globals: {
     Atomics: "readonly",
@@ -23,7 +21,7 @@ module.exports = {
     // tsconfigRootDir: __dirname,
     // project: ["./tsconfig.json"], // diabled because we run into OOM. see https://github.com/typescript-eslint/typescript-eslint/issues/1192#issuecomment-1153418862 for why
   },
-  plugins: ["@typescript-eslint", "jest"],
+  plugins: ["@typescript-eslint", "jest", "import"],
   rules: {
     // don't care
     "comma-dangle": "off",
@@ -86,39 +84,6 @@ module.exports = {
     "@typescript-eslint/no-shadow": "off", // TODO should be turned on
     "import/order": "off",
     "import/no-cycle": "off",
-    // --- React
-    "react/prop-types": "off",
-    // we use 'logger' inside of hooks, gets flagged
-    "react-hooks/exhaustive-deps": "off",
-    // suppress errors for missing 'import React' in files
-    "react/react-in-jsx-scope": "off",
-    "react/jsx-filename-extension": [
-      1,
-      { extensions: [".js", ".jsx", ".ts", ".tsx"] },
-    ],
-    "react/destructuring-assignment": "off",
-    "react/jsx-curly-newline": "off",
-    "react/jsx-props-no-spreading": "off",
-    "react/jsx-indent": "off",
-    "react/jsx-indent-props": "off",
-    "react/static-property-placement": "off",
-    "react/prefer-stateless-function": "off",
-    "react/no-did-update-set-state": "off",
-    "react/sort-comp": [
-      1,
-      {
-        order: [
-          "static-methods",
-          "instance-variables",
-          "lifecycle",
-          "/^on.+$/",
-          "everything-else",
-          "render",
-        ],
-      },
-    ],
-    "react/require-default-props": "off", // sometimes the default value is undefined so that's fine..."
-    "react/no-array-index-key": "off", // sometimes you don't care about the issues or they don't apply
     // used for redux toolkit
     "no-param-reassign": "off",
     "max-classes-per-file": "off",

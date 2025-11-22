@@ -51,6 +51,7 @@ const types_1 = require("../../../infrastructure/di/types");
 const errors_1 = require("../../../domain/shared/artifact/errors");
 const VaultFileSystemAdapter_1 = require("../../../infrastructure/storage/file/VaultFileSystemAdapter");
 const Logger_1 = require("../../../core/logger/Logger");
+const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 let VaultApplicationServiceImpl = class VaultApplicationServiceImpl {
     constructor(vaultRepo, fileAdapter, gitAdapter, logger) {
@@ -100,11 +101,83 @@ let VaultApplicationServiceImpl = class VaultApplicationServiceImpl {
         return { success: true, value: vault };
     }
     async forkGitVault(sourceVaultId, newVaultName) {
-        // TODO: Implement fork logic
-        return {
-            success: false,
-            error: new errors_1.VaultError(errors_1.VaultErrorCode.OPERATION_FAILED, 'Not implemented'),
-        };
+        // Get source vault
+        const sourceVaultResult = await this.vaultRepo.findById(sourceVaultId);
+        if (!sourceVaultResult.success || !sourceVaultResult.value) {
+            return {
+                success: false,
+                error: new errors_1.VaultError(errors_1.VaultErrorCode.NOT_FOUND, `Source vault not found: ${sourceVaultId}`),
+            };
+        }
+        const sourceVault = sourceVaultResult.value;
+        if (!sourceVault.remote) {
+            return {
+                success: false,
+                error: new errors_1.VaultError(errors_1.VaultErrorCode.OPERATION_FAILED, 'Source vault is not a Git vault'),
+            };
+        }
+        // Create new local vault by copying source vault
+        const sourcePath = path.join(this.fileAdapter.getVaultsRoot(), sourceVault.name);
+        const targetPath = path.join(this.fileAdapter.getVaultsRoot(), newVaultName);
+        try {
+            // Copy directory recursively
+            await this.copyDirectory(sourcePath, targetPath);
+            // Remove .git directory to make it a local vault
+            const gitDir = path.join(targetPath, '.git');
+            if (fs.existsSync(gitDir)) {
+                fs.rmSync(gitDir, { recursive: true, force: true });
+            }
+            // Create new vault object (local, writable)
+            const newVault = {
+                id: newVaultName,
+                name: newVaultName,
+                description: `Forked from ${sourceVault.name}`,
+                selfContained: true,
+                readOnly: false,
+            };
+            // Save new vault
+            const saveResult = await this.vaultRepo.save(newVault);
+            if (!saveResult.success) {
+                // Cleanup on failure
+                if (fs.existsSync(targetPath)) {
+                    fs.rmSync(targetPath, { recursive: true, force: true });
+                }
+                return saveResult;
+            }
+            this.logger.info(`Vault forked: ${sourceVault.name} -> ${newVaultName}`);
+            return { success: true, value: newVault };
+        }
+        catch (error) {
+            // Cleanup on failure
+            if (fs.existsSync(targetPath)) {
+                fs.rmSync(targetPath, { recursive: true, force: true });
+            }
+            return {
+                success: false,
+                error: new errors_1.VaultError(errors_1.VaultErrorCode.OPERATION_FAILED, `Failed to fork vault: ${error.message}`),
+            };
+        }
+    }
+    async copyDirectory(src, dest) {
+        // Create destination directory
+        if (!fs.existsSync(dest)) {
+            fs.mkdirSync(dest, { recursive: true });
+        }
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            if (entry.isDirectory()) {
+                // Skip .git directory when forking
+                if (entry.name === '.git') {
+                    continue;
+                }
+                await this.copyDirectory(srcPath, destPath);
+            }
+            else {
+                fs.copyFileSync(srcPath, destPath);
+            }
+        }
     }
     async syncVault(vaultId) {
         const vaultResult = await this.vaultRepo.findById(vaultId);

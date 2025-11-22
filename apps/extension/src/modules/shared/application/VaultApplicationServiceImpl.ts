@@ -69,11 +69,92 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
   }
 
   async forkGitVault(sourceVaultId: string, newVaultName: string): Promise<Result<Vault, VaultError>> {
-    // TODO: Implement fork logic
-    return {
-      success: false,
-      error: new VaultError(VaultErrorCode.OPERATION_FAILED, 'Not implemented'),
-    };
+    // Get source vault
+    const sourceVaultResult = await this.vaultRepo.findById(sourceVaultId);
+    if (!sourceVaultResult.success || !sourceVaultResult.value) {
+      return {
+        success: false,
+        error: new VaultError(VaultErrorCode.NOT_FOUND, `Source vault not found: ${sourceVaultId}`),
+      };
+    }
+
+    const sourceVault = sourceVaultResult.value;
+    if (!sourceVault.remote) {
+      return {
+        success: false,
+        error: new VaultError(VaultErrorCode.OPERATION_FAILED, 'Source vault is not a Git vault'),
+      };
+    }
+
+    // Create new local vault by copying source vault
+    const sourcePath = path.join(this.fileAdapter.getVaultsRoot(), sourceVault.name);
+    const targetPath = path.join(this.fileAdapter.getVaultsRoot(), newVaultName);
+
+    try {
+      // Copy directory recursively
+      await this.copyDirectory(sourcePath, targetPath);
+
+      // Remove .git directory to make it a local vault
+      const gitDir = path.join(targetPath, '.git');
+      if (fs.existsSync(gitDir)) {
+        fs.rmSync(gitDir, { recursive: true, force: true });
+      }
+
+      // Create new vault object (local, writable)
+      const newVault: Vault = {
+        id: newVaultName,
+        name: newVaultName,
+        description: `Forked from ${sourceVault.name}`,
+        selfContained: true,
+        readOnly: false,
+      };
+
+      // Save new vault
+      const saveResult = await this.vaultRepo.save(newVault);
+      if (!saveResult.success) {
+        // Cleanup on failure
+        if (fs.existsSync(targetPath)) {
+          fs.rmSync(targetPath, { recursive: true, force: true });
+        }
+        return saveResult;
+      }
+
+      this.logger.info(`Vault forked: ${sourceVault.name} -> ${newVaultName}`);
+      return { success: true, value: newVault };
+    } catch (error: any) {
+      // Cleanup on failure
+      if (fs.existsSync(targetPath)) {
+        fs.rmSync(targetPath, { recursive: true, force: true });
+      }
+      return {
+        success: false,
+        error: new VaultError(VaultErrorCode.OPERATION_FAILED, `Failed to fork vault: ${error.message}`),
+      };
+    }
+  }
+
+  private async copyDirectory(src: string, dest: string): Promise<void> {
+    // Create destination directory
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(dest, { recursive: true });
+    }
+
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+
+      if (entry.isDirectory()) {
+        // Skip .git directory when forking
+        if (entry.name === '.git') {
+          continue;
+        }
+        await this.copyDirectory(srcPath, destPath);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
   }
 
   async syncVault(vaultId: string): Promise<Result<void, VaultError>> {

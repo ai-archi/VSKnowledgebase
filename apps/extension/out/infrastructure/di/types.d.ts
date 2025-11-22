@@ -17,6 +17,7 @@ export declare const TYPES: {
     ArtifactLinkRepository: symbol;
     VaultRepository: symbol;
     ChangeRepository: symbol;
+    ChangeDetector: symbol;
     ArtifactFileSystemApplicationService: symbol;
     VaultApplicationService: symbol;
     LookupApplicationService: symbol;
@@ -29,6 +30,7 @@ export declare const TYPES: {
     TreeViewAdapter: symbol;
     MCPServerStarter: symbol;
     MCPTools: symbol;
+    MCPResources: symbol;
     DocumentTreeViewProvider: symbol;
     TaskTreeDataProvider: symbol;
 };

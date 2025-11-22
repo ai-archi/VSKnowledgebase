@@ -11,5 +11,8 @@ export interface ArtifactChange {
     timestamp: string;
     diffSummary?: string;
     author?: string;
+    impactedArtifacts?: string[];
+    gitCommitHash?: string;
 }
+export type { ChangeType };
 //# sourceMappingURL=ArtifactChange.d.ts.map

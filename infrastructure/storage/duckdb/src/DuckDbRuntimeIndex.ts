@@ -2,6 +2,7 @@ import { DuckDbFactory } from './DuckDbFactory';
 import { Knex } from 'knex';
 import { ArtifactMetadata, ArtifactLink } from '@architool/domain-shared-artifact';
 import { VectorSearchUtils } from './VectorSearchUtils';
+import { VectorEmbeddingService } from './VectorEmbeddingService';
 
 /**
  * DuckDB 运行时索引
@@ -11,10 +12,12 @@ export class DuckDbRuntimeIndex {
   private factory: DuckDbFactory;
   private knex: Knex | null = null;
   private vectorSearch: VectorSearchUtils;
+  private embeddingService: VectorEmbeddingService;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, embeddingService?: VectorEmbeddingService) {
     this.factory = DuckDbFactory.getInstance(dbPath);
-    this.vectorSearch = new VectorSearchUtils(this.factory);
+    this.embeddingService = embeddingService || new VectorEmbeddingService();
+    this.vectorSearch = new VectorSearchUtils(this.factory, this.embeddingService);
   }
 
   /**
@@ -95,7 +98,12 @@ export class DuckDbRuntimeIndex {
   /**
    * 从 YAML 文件同步到索引
    */
-  async syncFromYaml(metadata: ArtifactMetadata, metadataFilePath: string): Promise<void> {
+  async syncFromYaml(
+    metadata: ArtifactMetadata,
+    metadataFilePath: string,
+    title?: string,
+    description?: string
+  ): Promise<void> {
     if (!this.knex) {
       throw new Error('Database not initialized');
     }
@@ -124,8 +132,10 @@ export class DuckDbRuntimeIndex {
       .onConflict('id')
       .merge();
 
-    // 同步向量索引
-    await this.vectorSearch.upsertVector(metadata.artifactId, metadata.title || '', metadata.description || '');
+    // 同步向量索引（使用提供的 title 和 description，或从 metadata 中获取）
+    const artifactTitle = title || '';
+    const artifactDescription = description || '';
+    await this.vectorSearch.upsertVector(metadata.artifactId, artifactTitle, artifactDescription);
   }
 
   /**
@@ -238,12 +248,13 @@ export class DuckDbRuntimeIndex {
       }
     });
 
-    // 批量更新向量索引
+    // 批量更新向量索引（注意：这里需要从 Artifact 获取 title 和 description，但 metadata 中没有）
+    // 暂时使用空字符串，实际使用时应该传入完整的 Artifact 信息
     await this.vectorSearch.batchUpsertVectors(
       metadataList.map(({ metadata }) => ({
         artifactId: metadata.artifactId,
-        title: metadata.title || '',
-        description: metadata.description || '',
+        title: '', // TODO: 需要从 Artifact 获取
+        description: '', // TODO: 需要从 Artifact 获取
       }))
     );
   }

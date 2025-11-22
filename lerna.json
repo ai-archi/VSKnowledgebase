@@ -1,17 +1,17 @@
 {
   "packages": [
-    "packages/*",
-    "bootstrap/scripts"
+    "apps/*",
+    "domain/*",
+    "infrastructure/*"
   ],
-  "npmClient": "yarn",
+  "npmClient": "pnpm",
   "useWorkspaces": true,
   "command": {
     "version": {
       "conventionalCommits": true,
       "message": "chore(release): publish",
-      "changelogPreset": "@dendronhq/conventional-changelog-dendron",
       "yes": true
     }
   },
-  "version": "0.122.0"
+  "version": "0.1.0"
 }

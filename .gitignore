@@ -1,43 +1,35 @@
-packages-bak
+# Dependencies
 node_modules
-.next
-/out/
-/logs/
-/build
+.pnp
+.pnp.js
+
+# Build outputs
+out/
+dist/
+lib/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+*.log.old
 lerna-debug.log
-local
-vendor
-dendron.code-workspace
-_site
-shell.code-snippets
-packages/pods-core/lib/index.d.ts
-**/stdout.old
-.DS_Store
-packages/common-server/src/proto.ts
-.dendron.*
-meta.json
-yarn-error.*
-proto.ts
-packages/common-server/proto/amplify.ts
-unpublish.sh
-workspaces
-tmp
-storage/.verdaccio-db.json
-*.js.map
-**/*.log
-**/*.log.old
-dendron.server.log.old
-test-workspace-*-profile
-dendron-main.code-workspace
-pkgjson.code-search
-packages/nextjs-template/public
-.npmrc
+
+# Environment
+.env
+.env.local
 .env.production
-packages/dendron-viz/lib
-generated-prisma-client
-packages/engine-server/prisma/dev.db
-dev.db-journal
-builds
-packages/nextjs-template/styles/scss/
-packages/nextjs-template/next-env.d.ts
-**/*.tsbuildinfo
+
+# IDE
+.vscode-test/
+.DS_Store
+
+# Temporary files
+tmp/
+*.tmp
+
+# Old packages (backup)
+packages-bak/
+
+# ArchiTool runtime
+.architool/cache/

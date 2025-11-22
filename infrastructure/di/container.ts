@@ -20,14 +20,28 @@ import {
   VaultRepository,
   VaultRepositoryImpl,
 } from '../../apps/extension/src/modules/shared/infrastructure/VaultRepository';
+import {
+  ChangeRepository,
+  ChangeRepositoryImpl,
+} from '../../apps/extension/src/modules/shared/infrastructure/ChangeRepository';
+import {
+  ChangeDetector,
+  ChangeDetectorImpl,
+} from '../../apps/extension/src/modules/shared/infrastructure/ChangeDetector';
 
 // 基础设施
 import {
   ArtifactFileSystemAdapter,
   VaultFileSystemAdapter,
 } from '@architool/infrastructure-storage-file';
-import { DuckDbRuntimeIndex } from '@architool/infrastructure-storage-duckdb';
+import { DuckDbRuntimeIndex, VectorEmbeddingService } from '@architool/infrastructure-storage-duckdb';
 import { YamlMetadataRepository } from '@architool/infrastructure-storage-yaml';
+import { GitVaultAdapter, GitVaultAdapterImpl } from '../../apps/extension/src/modules/vault/infrastructure/GitVaultAdapter';
+
+// MCP 模块
+import { MCPServerStarter } from '../../apps/extension/src/modules/mcp/MCPServerStarter';
+import { MCPTools, MCPToolsImpl } from '../../apps/extension/src/modules/mcp/MCPTools';
+import { MCPResources, MCPResourcesImpl } from '../../apps/extension/src/modules/mcp/MCPResources';
 
 // 核心服务
 import { Logger } from '../../apps/extension/src/core/logger/Logger';
@@ -65,8 +79,18 @@ export function createContainer(
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot))
     .inSingletonScope();
 
+  container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
+    .to(GitVaultAdapterImpl)
+    .inSingletonScope();
+
+  // 向量嵌入服务
+  const embeddingService = new VectorEmbeddingService();
+  container.bind<VectorEmbeddingService>(TYPES.VectorEmbeddingService)
+    .toConstantValue(embeddingService)
+    .inSingletonScope();
+
   container.bind<DuckDbRuntimeIndex>(TYPES.DuckDbRuntimeIndex)
-    .toConstantValue(new DuckDbRuntimeIndex(dbPath))
+    .toConstantValue(new DuckDbRuntimeIndex(dbPath, embeddingService))
     .inSingletonScope();
 
   // YAML 存储库工厂（需要为每个 Vault 创建实例）
@@ -95,6 +119,17 @@ export function createContainer(
     })
     .inSingletonScope();
 
+  container.bind<ChangeRepository>(TYPES.ChangeRepository)
+    .toDynamicValue((context) => {
+      const vaultAdapter = context.container.get<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
+      return new ChangeRepositoryImpl(vaultAdapter);
+    })
+    .inSingletonScope();
+
+  container.bind<ChangeDetector>(TYPES.ChangeDetector)
+    .to(ChangeDetectorImpl)
+    .inSingletonScope();
+
   // 应用服务
   container.bind<ArtifactFileSystemApplicationService>(TYPES.ArtifactFileSystemApplicationService)
     .to(ArtifactFileSystemApplicationServiceImpl)
@@ -102,6 +137,19 @@ export function createContainer(
 
   container.bind<VaultApplicationService>(TYPES.VaultApplicationService)
     .to(VaultApplicationServiceImpl)
+    .inSingletonScope();
+
+  // MCP 模块
+  container.bind<MCPTools>(TYPES.MCPTools)
+    .to(MCPToolsImpl)
+    .inSingletonScope();
+
+  container.bind<MCPResources>(TYPES.MCPResources)
+    .to(MCPResourcesImpl)
+    .inSingletonScope();
+
+  container.bind<MCPServerStarter>(TYPES.MCPServerStarter)
+    .to(MCPServerStarter)
     .inSingletonScope();
 
   return container;

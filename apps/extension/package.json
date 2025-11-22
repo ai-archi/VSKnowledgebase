@@ -26,6 +26,7 @@
     "js-yaml": "^4.1.0",
     "knex": "^3.1.0",
     "reflect-metadata": "^0.2.2",
+    "simple-git": "^3.22.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

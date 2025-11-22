@@ -211,6 +211,128 @@ async function activate(context) {
             },
         },
         {
+            command: 'archi.vault.fork',
+            callback: async () => {
+                const vaultsResult = await vaultService.listVaults();
+                if (!vaultsResult.success || vaultsResult.value.length === 0) {
+                    vscode.window.showErrorMessage('No vaults available.');
+                    return;
+                }
+                // Filter to only Git vaults (read-only)
+                const gitVaults = vaultsResult.value.filter(v => v.readOnly && v.remote);
+                if (gitVaults.length === 0) {
+                    vscode.window.showErrorMessage('No Git vaults available to fork.');
+                    return;
+                }
+                const vaultItems = gitVaults.map(v => ({
+                    label: v.name,
+                    description: v.description || `Git vault: ${v.remote?.url}`,
+                    id: v.id,
+                }));
+                const selectedVault = await vscode.window.showQuickPick(vaultItems, {
+                    placeHolder: 'Select a Git vault to fork',
+                });
+                if (!selectedVault)
+                    return;
+                const newVaultName = await vscode.window.showInputBox({
+                    prompt: 'Enter name for the new local vault',
+                    validateInput: (value) => {
+                        if (!value || value.trim().length === 0) {
+                            return 'Vault name cannot be empty';
+                        }
+                        // Check if vault name already exists
+                        const existing = vaultsResult.value.find(v => v.name === value.trim());
+                        if (existing) {
+                            return 'Vault name already exists';
+                        }
+                        return null;
+                    },
+                });
+                if (!newVaultName)
+                    return;
+                const result = await vaultService.forkGitVault(selectedVault.id, newVaultName.trim());
+                if (result.success) {
+                    vscode.window.showInformationMessage(`Vault '${newVaultName}' forked from '${selectedVault.label}'.`);
+                }
+                else {
+                    vscode.window.showErrorMessage(`Failed to fork vault: ${result.error.message}`);
+                }
+            },
+        },
+        {
+            command: 'archi.vault.sync',
+            callback: async () => {
+                const vaultsResult = await vaultService.listVaults();
+                if (!vaultsResult.success || vaultsResult.value.length === 0) {
+                    vscode.window.showErrorMessage('No vaults available.');
+                    return;
+                }
+                // Filter to only Git vaults
+                const gitVaults = vaultsResult.value.filter(v => v.readOnly && v.remote);
+                if (gitVaults.length === 0) {
+                    vscode.window.showErrorMessage('No Git vaults available to sync.');
+                    return;
+                }
+                const vaultItems = gitVaults.map(v => ({
+                    label: v.name,
+                    description: v.description || `Git vault: ${v.remote?.url}`,
+                    id: v.id,
+                }));
+                const selectedVault = await vscode.window.showQuickPick(vaultItems, {
+                    placeHolder: 'Select a Git vault to sync',
+                });
+                if (!selectedVault)
+                    return;
+                vscode.window.showInformationMessage(`Syncing vault '${selectedVault.label}'...`);
+                const result = await vaultService.syncVault(selectedVault.id);
+                if (result.success) {
+                    vscode.window.showInformationMessage(`Vault '${selectedVault.label}' synced successfully.`);
+                }
+                else {
+                    vscode.window.showErrorMessage(`Failed to sync vault: ${result.error.message}`);
+                }
+            },
+        },
+        {
+            command: 'archi.vault.remove',
+            callback: async () => {
+                const vaultsResult = await vaultService.listVaults();
+                if (!vaultsResult.success || vaultsResult.value.length === 0) {
+                    vscode.window.showErrorMessage('No vaults available.');
+                    return;
+                }
+                const vaultItems = vaultsResult.value.map(v => ({
+                    label: v.name,
+                    description: v.description || (v.readOnly ? 'Git vault' : 'Local vault'),
+                    id: v.id,
+                }));
+                const selectedVault = await vscode.window.showQuickPick(vaultItems, {
+                    placeHolder: 'Select a vault to remove',
+                });
+                if (!selectedVault)
+                    return;
+                const confirm = await vscode.window.showWarningMessage(`Are you sure you want to remove vault '${selectedVault.label}'?`, { modal: true }, 'Yes', 'No');
+                if (confirm !== 'Yes')
+                    return;
+                const deleteFiles = await vscode.window.showQuickPick(['Yes', 'No'], {
+                    placeHolder: 'Delete vault files from disk?',
+                });
+                const result = await vaultService.removeVault(selectedVault.id);
+                if (result.success) {
+                    if (deleteFiles === 'Yes') {
+                        // TODO: Implement file deletion
+                        vscode.window.showInformationMessage(`Vault '${selectedVault.label}' removed. Files deletion not yet implemented.`);
+                    }
+                    else {
+                        vscode.window.showInformationMessage(`Vault '${selectedVault.label}' removed from configuration.`);
+                    }
+                }
+                else {
+                    vscode.window.showErrorMessage(`Failed to remove vault: ${result.error.message}`);
+                }
+            },
+        },
+        {
             command: 'archi.artifact.list',
             callback: async () => {
                 const vaultsResult = await vaultService.listVaults();

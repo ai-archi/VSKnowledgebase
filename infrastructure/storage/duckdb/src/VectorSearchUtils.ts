@@ -1,6 +1,6 @@
 import { DuckDbFactory } from './DuckDbFactory';
 import { Database } from 'duckdb';
-import { pipeline } from '@xenova/transformers';
+import { VectorEmbeddingService } from './VectorEmbeddingService';
 
 /**
  * 向量搜索工具类
@@ -9,12 +9,13 @@ import { pipeline } from '@xenova/transformers';
 export class VectorSearchUtils {
   private factory: DuckDbFactory;
   private db: Database | null = null;
-  private embedder: any = null;
+  private embeddingService: VectorEmbeddingService;
   private initialized: boolean = false;
   private readonly dimension = 384; // all-MiniLM-L6-v2 模型维度
 
-  constructor(factory: DuckDbFactory) {
+  constructor(factory: DuckDbFactory, embeddingService?: VectorEmbeddingService) {
     this.factory = factory;
+    this.embeddingService = embeddingService || new VectorEmbeddingService();
   }
 
   /**
@@ -56,51 +57,8 @@ export class VectorSearchUtils {
       console.warn('Failed to create HNSW index, using default index:', error);
     }
 
-    // 初始化嵌入模型（懒加载）
+    // 初始化嵌入服务（懒加载）
     this.initialized = true;
-  }
-
-  /**
-   * 初始化嵌入模型
-   */
-  private async initializeEmbedder(): Promise<void> {
-    if (this.embedder) {
-      return;
-    }
-
-    // 使用 @xenova/transformers 加载模型
-    this.embedder = await pipeline(
-      'feature-extraction',
-      'Xenova/all-MiniLM-L6-v2',
-      { quantized: true } // 使用量化模型以减少内存占用
-    );
-  }
-
-  /**
-   * 将文本转换为向量
-   */
-  private async embed(text: string): Promise<number[]> {
-    await this.initializeEmbedder();
-
-    const output = await this.embedder(text, {
-      pooling: 'mean',
-      normalize: true,
-    });
-
-    return Array.from(output.data);
-  }
-
-  /**
-   * 批量嵌入
-   */
-  private async embedBatch(texts: string[]): Promise<number[][]> {
-    await this.initializeEmbedder();
-
-    const outputs = await Promise.all(
-      texts.map(text => this.embed(text))
-    );
-
-    return outputs;
   }
 
   /**
@@ -114,7 +72,7 @@ export class VectorSearchUtils {
     await this.initialize();
 
     // 将查询文本转换为向量
-    const queryVector = await this.embed(query);
+    const queryVector = await this.embeddingService.embed(query);
 
     // 执行向量搜索
     // 注意：DuckDB VSS 扩展的语法可能需要根据实际版本调整
@@ -149,8 +107,11 @@ export class VectorSearchUtils {
     await this.initialize();
 
     // 生成文本嵌入
-    const text = `${title} ${description}`.trim();
-    const embedding = await this.embed(text);
+    const text = `${title} ${description || ''}`.trim();
+    if (!text) {
+      throw new Error('Cannot embed empty text');
+    }
+    const embedding = await this.embeddingService.embed(text);
 
     // 插入或更新向量
     await this.runQuery(`
@@ -185,8 +146,11 @@ export class VectorSearchUtils {
     await this.initialize();
 
     // 批量生成嵌入
-    const texts = items.map(item => `${item.title} ${item.description}`.trim());
-    const embeddings = await this.embedBatch(texts);
+    const texts = items.map(item => `${item.title} ${item.description || ''}`.trim()).filter(t => t.length > 0);
+    if (texts.length === 0) {
+      return;
+    }
+    const embeddings = await this.embeddingService.embedBatch(texts);
 
     // 批量插入（使用事务）
     await this.runQuery('BEGIN TRANSACTION');
