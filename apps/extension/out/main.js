@@ -45,6 +45,11 @@ const Commands_1 = require("./modules/document/interface/Commands");
 const DocumentTreeViewProvider_1 = require("./modules/document/interface/DocumentTreeViewProvider");
 const Commands_2 = require("./modules/task/interface/Commands");
 const TaskTreeDataProvider_1 = require("./modules/task/interface/TaskTreeDataProvider");
+const ViewpointTreeDataProvider_1 = require("./modules/viewpoint/interface/ViewpointTreeDataProvider");
+const Commands_3 = require("./modules/viewpoint/interface/Commands");
+const TemplateTreeDataProvider_1 = require("./modules/template/interface/TemplateTreeDataProvider");
+const Commands_4 = require("./modules/template/interface/Commands");
+const Commands_5 = require("./modules/ai/interface/Commands");
 const CommandAdapter_1 = require("./core/vscode-api/CommandAdapter");
 const ArchitoolDirectoryManager_1 = require("./core/storage/ArchitoolDirectoryManager");
 const path = __importStar(require("path"));
@@ -74,6 +79,9 @@ async function activate(context) {
     const lookupService = container.get(types_1.TYPES.LookupApplicationService);
     const documentService = container.get(types_1.TYPES.DocumentApplicationService);
     const taskService = container.get(types_1.TYPES.TaskApplicationService);
+    const viewpointService = container.get(types_1.TYPES.ViewpointApplicationService);
+    const templateService = container.get(types_1.TYPES.TemplateApplicationService);
+    const aiService = container.get(types_1.TYPES.AIApplicationService);
     // 5. 创建命令适配器
     const commandAdapter = new CommandAdapter_1.CommandAdapter(context);
     // 6. 创建 Lookup Provider
@@ -88,7 +96,20 @@ async function activate(context) {
     vscode.window.createTreeView('architool.taskView', { treeDataProvider: taskTreeDataProvider });
     const taskCommands = new Commands_2.TaskCommands(taskService, logger, context, taskTreeDataProvider, vaultService);
     taskCommands.register(commandAdapter);
-    // 9. 注册所有命令
+    // 9. 初始化视点视图
+    const viewpointTreeDataProvider = new ViewpointTreeDataProvider_1.ViewpointTreeDataProvider(viewpointService, vaultService, logger);
+    vscode.window.createTreeView('architool.viewpointView', { treeDataProvider: viewpointTreeDataProvider });
+    const viewpointCommands = new Commands_3.ViewpointCommands(viewpointService, logger);
+    viewpointCommands.registerCommands(context);
+    // 10. 初始化模板视图
+    const templateTreeDataProvider = new TemplateTreeDataProvider_1.TemplateTreeDataProvider(templateService, vaultService, logger);
+    vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
+    const templateCommands = new Commands_4.TemplateCommands(templateService, vaultService, logger);
+    templateCommands.registerCommands(context);
+    // 11. 初始化 AI 服务命令
+    const aiCommands = new Commands_5.AICommands(aiService, artifactService, vaultService, logger);
+    aiCommands.registerCommands(context);
+    // 12. 注册所有命令
     commandAdapter.registerCommands([
         // Lookup 命令
         {

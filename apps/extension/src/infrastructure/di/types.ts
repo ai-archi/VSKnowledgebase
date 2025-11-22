@@ -32,6 +32,7 @@ export const TYPES = {
   ViewpointApplicationService: Symbol.for('ViewpointApplicationService'),
   TaskApplicationService: Symbol.for('TaskApplicationService'),
   TemplateApplicationService: Symbol.for('TemplateApplicationService'),
+  AIApplicationService: Symbol.for('AIApplicationService'),
   MCPApplicationService: Symbol.for('MCPApplicationService'),
 
   // VSCode API Adapters
@@ -46,5 +47,7 @@ export const TYPES = {
   // View Providers
   DocumentTreeViewProvider: Symbol.for('DocumentTreeViewProvider'),
   TaskTreeDataProvider: Symbol.for('TaskTreeDataProvider'),
+  ViewpointTreeDataProvider: Symbol.for('ViewpointTreeDataProvider'),
+  TemplateTreeDataProvider: Symbol.for('TemplateTreeDataProvider'),
 };
 

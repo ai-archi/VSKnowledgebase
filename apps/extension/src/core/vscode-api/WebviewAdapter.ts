@@ -1,0 +1,145 @@
+import * as vscode from 'vscode';
+import { Logger } from '../logger/Logger';
+
+/**
+ * Webview RPC 消息接口
+ */
+export interface WebviewMessage {
+  method: string;
+  params?: any;
+  id?: number | string;
+}
+
+/**
+ * Webview RPC 响应接口
+ */
+export interface WebviewResponse {
+  id?: number | string;
+  result?: any;
+  error?: {
+    code: number;
+    message: string;
+  };
+}
+
+/**
+ * Webview 适配器
+ * 处理 Webview 与 Extension 后端的 RPC 通信
+ */
+export class WebviewAdapter {
+  private webviewPanel: vscode.WebviewPanel | null = null;
+  private messageHandlers: Map<string, (params: any) => Promise<any>> = new Map();
+  private logger: Logger;
+
+  constructor(logger: Logger) {
+    this.logger = logger;
+  }
+
+  /**
+   * 创建或获取 Webview Panel
+   */
+  createWebviewPanel(
+    viewType: string,
+    title: string,
+    viewColumn: vscode.ViewColumn = vscode.ViewColumn.One
+  ): vscode.WebviewPanel {
+    if (this.webviewPanel) {
+      this.webviewPanel.reveal(viewColumn);
+      return this.webviewPanel;
+    }
+
+    const panel = vscode.window.createWebviewPanel(
+      viewType,
+      title,
+      viewColumn,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [],
+      }
+    );
+
+    // 监听来自 Webview 的消息
+    panel.webview.onDidReceiveMessage(
+      async (message: WebviewMessage) => {
+        await this.handleMessage(panel.webview, message);
+      },
+      null,
+      []
+    );
+
+    // 监听面板关闭事件
+    panel.onDidDispose(() => {
+      this.webviewPanel = null;
+    });
+
+    this.webviewPanel = panel;
+    return panel;
+  }
+
+  /**
+   * 注册 RPC 方法处理器
+   */
+  registerMethod(method: string, handler: (params: any) => Promise<any>): void {
+    this.messageHandlers.set(method, handler);
+  }
+
+  /**
+   * 取消注册方法处理器
+   */
+  unregisterMethod(method: string): void {
+    this.messageHandlers.delete(method);
+  }
+
+  /**
+   * 向 Webview 发送消息
+   */
+  postMessage(webview: vscode.Webview, message: WebviewResponse): void {
+    webview.postMessage(message);
+  }
+
+  /**
+   * 处理来自 Webview 的消息
+   */
+  private async handleMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
+    try {
+      const handler = this.messageHandlers.get(message.method);
+      if (!handler) {
+        this.logger.warn(`No handler found for method: ${message.method}`);
+        this.postMessage(webview, {
+          id: message.id,
+          error: {
+            code: -32601,
+            message: `Method not found: ${message.method}`,
+          },
+        });
+        return;
+      }
+
+      const result = await handler(message.params);
+      this.postMessage(webview, {
+        id: message.id,
+        result,
+      });
+    } catch (error: any) {
+      this.logger.error(`Error handling message: ${message.method}`, error);
+      this.postMessage(webview, {
+        id: message.id,
+        error: {
+          code: -32603,
+          message: error.message || 'Internal error',
+        },
+      });
+    }
+  }
+
+  /**
+   * 获取 Webview HTML 内容
+   */
+  getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, htmlContent: string): string {
+    // 将相对路径转换为 Webview URI
+    // 这里简化处理，实际应该处理资源文件路径
+    return htmlContent;
+  }
+}
+

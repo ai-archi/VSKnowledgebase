@@ -9,6 +9,7 @@ export const TYPES = {
   ViewpointApplicationService: Symbol.for('ViewpointApplicationService'),
   TaskApplicationService: Symbol.for('TaskApplicationService'),
   TemplateApplicationService: Symbol.for('TemplateApplicationService'),
+  AIApplicationService: Symbol.for('AIApplicationService'),
   MCPApplicationService: Symbol.for('MCPApplicationService'),
   
   // 存储库

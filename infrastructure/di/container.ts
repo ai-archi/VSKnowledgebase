@@ -6,6 +6,9 @@ import { ArtifactFileSystemApplicationService } from '../../apps/extension/src/m
 import { ArtifactFileSystemApplicationServiceImpl } from '../../apps/extension/src/modules/shared/application/ArtifactFileSystemApplicationServiceImpl';
 import { VaultApplicationService } from '../../apps/extension/src/modules/shared/application/VaultApplicationService';
 import { VaultApplicationServiceImpl } from '../../apps/extension/src/modules/shared/application/VaultApplicationServiceImpl';
+import { ViewpointApplicationService, ViewpointApplicationServiceImpl } from '../../apps/extension/src/modules/viewpoint/application/ViewpointApplicationService';
+import { TemplateApplicationService, TemplateApplicationServiceImpl } from '../../apps/extension/src/modules/template/application/TemplateApplicationService';
+import { AIApplicationService, AIApplicationServiceImpl } from '../../apps/extension/src/modules/ai/application/AIApplicationService';
 
 // 存储库
 import {
@@ -28,6 +31,10 @@ import {
   ChangeDetector,
   ChangeDetectorImpl,
 } from '../../apps/extension/src/modules/shared/infrastructure/ChangeDetector';
+import {
+  ArtifactLinkRepository,
+  ArtifactLinkRepositoryImpl,
+} from '../../apps/extension/src/modules/shared/infrastructure/ArtifactLinkRepository';
 
 // 基础设施
 import {
@@ -130,6 +137,13 @@ export function createContainer(
     .to(ChangeDetectorImpl)
     .inSingletonScope();
 
+  container.bind<ArtifactLinkRepository>(TYPES.ArtifactLinkRepository)
+    .toDynamicValue((context) => {
+      const vaultAdapter = context.container.get<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
+      return new ArtifactLinkRepositoryImpl(vaultAdapter);
+    })
+    .inSingletonScope();
+
   // 应用服务
   container.bind<ArtifactFileSystemApplicationService>(TYPES.ArtifactFileSystemApplicationService)
     .to(ArtifactFileSystemApplicationServiceImpl)
@@ -137,6 +151,18 @@ export function createContainer(
 
   container.bind<VaultApplicationService>(TYPES.VaultApplicationService)
     .to(VaultApplicationServiceImpl)
+    .inSingletonScope();
+
+  container.bind<ViewpointApplicationService>(TYPES.ViewpointApplicationService)
+    .to(ViewpointApplicationServiceImpl)
+    .inSingletonScope();
+
+  container.bind<TemplateApplicationService>(TYPES.TemplateApplicationService)
+    .to(TemplateApplicationServiceImpl)
+    .inSingletonScope();
+
+  container.bind<AIApplicationService>(TYPES.AIApplicationService)
+    .to(AIApplicationServiceImpl)
     .inSingletonScope();
 
   // MCP 模块

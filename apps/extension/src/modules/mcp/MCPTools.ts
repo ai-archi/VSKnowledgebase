@@ -2,6 +2,7 @@ import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types';
 import { ArtifactFileSystemApplicationService } from '../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
+import { ArtifactLinkRepository } from '../shared/infrastructure/ArtifactLinkRepository';
 import { Artifact } from '../../domain/shared/artifact/Artifact';
 import { ArtifactLink } from '../../domain/shared/artifact/ArtifactLink';
 import { Logger } from '../../core/logger/Logger';
@@ -82,8 +83,11 @@ export interface MCPTools {
     targetType: string;
     targetId?: string;
     targetPath?: string;
+    targetUrl?: string;
     linkType: string;
     description?: string;
+    strength?: string;
+    codeLocation?: any;
   }): Promise<ArtifactLink>;
 }
 
@@ -94,6 +98,8 @@ export class MCPToolsImpl implements MCPTools {
     private artifactService: ArtifactFileSystemApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
+    @inject(TYPES.ArtifactLinkRepository)
+    private linkRepository: ArtifactLinkRepository,
     @inject(TYPES.Logger)
     private logger: Logger
   ) {}
@@ -343,10 +349,22 @@ export class MCPToolsImpl implements MCPTools {
 
   async listLinks(params: { artifactId: string }): Promise<ArtifactLink[]> {
     try {
-      // TODO: Implement ArtifactLinkRepository query
-      // For now, return empty array
-      this.logger.warn('listLinks not yet fully implemented');
-      return [];
+      // Find the artifact to get vaultId
+      const artifact = await this.findArtifactById(params.artifactId);
+      if (!artifact) {
+        this.logger.warn(`Artifact not found: ${params.artifactId}`);
+        return [];
+      }
+
+      const vaultName = artifact.vault.name;
+      const result = await this.linkRepository.findBySourceArtifact(params.artifactId, vaultName);
+      
+      if (result.success) {
+        return result.value;
+      } else {
+        this.logger.error('Error querying links', result.error);
+        return [];
+      }
     } catch (error: any) {
       this.logger.error('Error listing links', error);
       return [];
@@ -358,16 +376,69 @@ export class MCPToolsImpl implements MCPTools {
     targetType: string;
     targetId?: string;
     targetPath?: string;
+    targetUrl?: string;
     linkType: string;
     description?: string;
+    strength?: string;
+    codeLocation?: any;
   }): Promise<ArtifactLink> {
     try {
-      // TODO: Implement ArtifactLinkRepository create
-      // For now, throw error
-      throw new Error('createLink not yet fully implemented');
+      // Find the source artifact to get vaultId
+      const sourceArtifact = await this.findArtifactById(params.sourceArtifactId);
+      if (!sourceArtifact) {
+        throw new Error(`Source artifact not found: ${params.sourceArtifactId}`);
+      }
+
+      const vaultId = sourceArtifact.vault.id;
+      const vaultName = sourceArtifact.vault.name;
+
+      const linkData = {
+        sourceArtifactId: params.sourceArtifactId,
+        targetType: params.targetType as any,
+        targetId: params.targetId,
+        targetPath: params.targetPath,
+        targetUrl: params.targetUrl,
+        linkType: params.linkType as any,
+        description: params.description,
+        strength: params.strength as any,
+        codeLocation: params.codeLocation,
+        vaultId,
+      };
+
+      const result = await this.linkRepository.create(linkData);
+      
+      if (result.success) {
+        return result.value;
+      } else {
+        throw new Error(`Failed to create link: ${result.error.message}`);
+      }
     } catch (error: any) {
       this.logger.error('Error creating link', error);
       throw error;
+    }
+  }
+
+  /**
+   * 辅助方法：通过 artifactId 查找 Artifact（遍历所有 Vault）
+   */
+  private async findArtifactById(artifactId: string): Promise<Artifact | null> {
+    try {
+      const vaultsResult = await this.vaultService.listVaults();
+      if (!vaultsResult.success) {
+        return null;
+      }
+
+      for (const vault of vaultsResult.value) {
+        const artifactResult = await this.artifactService.getArtifact(vault.id, artifactId);
+        if (artifactResult.success && artifactResult.value) {
+          return artifactResult.value;
+        }
+      }
+
+      return null;
+    } catch (error: any) {
+      this.logger.error('Error finding artifact by ID', error);
+      return null;
     }
   }
 

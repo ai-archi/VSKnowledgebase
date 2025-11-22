@@ -16,4 +16,5 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./CommandAdapter"), exports);
 __exportStar(require("./TreeViewAdapter"), exports);
+__exportStar(require("./WebviewAdapter"), exports);
 //# sourceMappingURL=index.js.map

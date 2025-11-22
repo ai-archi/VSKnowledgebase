@@ -25,6 +25,7 @@ export declare const TYPES: {
     ViewpointApplicationService: symbol;
     TaskApplicationService: symbol;
     TemplateApplicationService: symbol;
+    AIApplicationService: symbol;
     MCPApplicationService: symbol;
     CommandAdapter: symbol;
     TreeViewAdapter: symbol;
@@ -33,5 +34,7 @@ export declare const TYPES: {
     MCPResources: symbol;
     DocumentTreeViewProvider: symbol;
     TaskTreeDataProvider: symbol;
+    ViewpointTreeDataProvider: symbol;
+    TemplateTreeDataProvider: symbol;
 };
 //# sourceMappingURL=types.d.ts.map

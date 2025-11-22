@@ -13,6 +13,14 @@ import { DocumentCommands } from './modules/document/interface/Commands';
 import { DocumentTreeViewProvider } from './modules/document/interface/DocumentTreeViewProvider';
 import { TaskCommands } from './modules/task/interface/Commands';
 import { TaskTreeDataProvider } from './modules/task/interface/TaskTreeDataProvider';
+import { ViewpointApplicationService } from './modules/viewpoint/application/ViewpointApplicationService';
+import { ViewpointTreeDataProvider } from './modules/viewpoint/interface/ViewpointTreeDataProvider';
+import { ViewpointCommands } from './modules/viewpoint/interface/Commands';
+import { TemplateApplicationService } from './modules/template/application/TemplateApplicationService';
+import { TemplateTreeDataProvider } from './modules/template/interface/TemplateTreeDataProvider';
+import { TemplateCommands } from './modules/template/interface/Commands';
+import { AIApplicationService } from './modules/ai/application/AIApplicationService';
+import { AICommands } from './modules/ai/interface/Commands';
 import { DuckDbRuntimeIndex } from './infrastructure/storage/duckdb/DuckDbRuntimeIndex';
 import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
@@ -49,6 +57,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const lookupService = container.get<LookupApplicationService>(TYPES.LookupApplicationService);
   const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
   const taskService = container.get<TaskApplicationService>(TYPES.TaskApplicationService);
+  const viewpointService = container.get<ViewpointApplicationService>(TYPES.ViewpointApplicationService);
+  const templateService = container.get<TemplateApplicationService>(TYPES.TemplateApplicationService);
+  const aiService = container.get<AIApplicationService>(TYPES.AIApplicationService);
 
   // 5. 创建命令适配器
   const commandAdapter = new CommandAdapter(context);
@@ -68,7 +79,23 @@ export async function activate(context: vscode.ExtensionContext) {
   const taskCommands = new TaskCommands(taskService, logger, context, taskTreeDataProvider, vaultService);
   taskCommands.register(commandAdapter);
 
-  // 9. 注册所有命令
+  // 9. 初始化视点视图
+  const viewpointTreeDataProvider = new ViewpointTreeDataProvider(viewpointService, vaultService, logger);
+  vscode.window.createTreeView('architool.viewpointView', { treeDataProvider: viewpointTreeDataProvider });
+  const viewpointCommands = new ViewpointCommands(viewpointService, logger);
+  viewpointCommands.registerCommands(context);
+
+  // 10. 初始化模板视图
+  const templateTreeDataProvider = new TemplateTreeDataProvider(templateService, vaultService, logger);
+  vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
+  const templateCommands = new TemplateCommands(templateService, vaultService, logger);
+  templateCommands.registerCommands(context);
+
+  // 11. 初始化 AI 服务命令
+  const aiCommands = new AICommands(aiService, artifactService, vaultService, logger);
+  aiCommands.registerCommands(context);
+
+  // 12. 注册所有命令
   commandAdapter.registerCommands([
     // Lookup 命令
     {

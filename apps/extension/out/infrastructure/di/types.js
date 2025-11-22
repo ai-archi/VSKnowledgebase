@@ -32,6 +32,7 @@ exports.TYPES = {
     ViewpointApplicationService: Symbol.for('ViewpointApplicationService'),
     TaskApplicationService: Symbol.for('TaskApplicationService'),
     TemplateApplicationService: Symbol.for('TemplateApplicationService'),
+    AIApplicationService: Symbol.for('AIApplicationService'),
     MCPApplicationService: Symbol.for('MCPApplicationService'),
     // VSCode API Adapters
     CommandAdapter: Symbol.for('CommandAdapter'),
@@ -43,5 +44,7 @@ exports.TYPES = {
     // View Providers
     DocumentTreeViewProvider: Symbol.for('DocumentTreeViewProvider'),
     TaskTreeDataProvider: Symbol.for('TaskTreeDataProvider'),
+    ViewpointTreeDataProvider: Symbol.for('ViewpointTreeDataProvider'),
+    TemplateTreeDataProvider: Symbol.for('TemplateTreeDataProvider'),
 };
 //# sourceMappingURL=types.js.map
