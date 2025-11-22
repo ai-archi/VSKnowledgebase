@@ -14,6 +14,82 @@
     "onStartupFinished"
   ],
   "main": "./out/main.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "architool.documentView",
+          "name": "Documents",
+          "when": "true"
+        },
+        {
+          "id": "architool.taskView",
+          "name": "Tasks",
+          "when": "true"
+        },
+        {
+          "id": "architool.viewpointView",
+          "name": "Viewpoints",
+          "when": "true"
+        },
+        {
+          "id": "architool.templateView",
+          "name": "Templates",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "archi.lookup",
+        "title": "Lookup"
+      },
+      {
+        "command": "archi.vault.add",
+        "title": "Add Local Vault"
+      },
+      {
+        "command": "archi.vault.addFromGit",
+        "title": "Add Vault from Git"
+      },
+      {
+        "command": "archi.vault.list",
+        "title": "List Vaults"
+      },
+      {
+        "command": "archi.vault.fork",
+        "title": "Fork Git Vault"
+      },
+      {
+        "command": "archi.vault.sync",
+        "title": "Sync Vault"
+      },
+      {
+        "command": "archi.vault.remove",
+        "title": "Remove Vault"
+      },
+      {
+        "command": "archi.artifact.list",
+        "title": "List Artifacts"
+      },
+      {
+        "command": "archi.viewpoint.create",
+        "title": "Create Viewpoint"
+      },
+      {
+        "command": "archi.template.createFromTemplate",
+        "title": "Create from Template"
+      },
+      {
+        "command": "archi.ai.analyzeImpact",
+        "title": "Analyze Impact"
+      },
+      {
+        "command": "archi.ai.generatePrompt",
+        "title": "Generate Prompt"
+      }
+    ]
+  },
   "scripts": {
     "compile": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",

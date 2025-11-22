@@ -11,6 +11,7 @@ import { ArtifactFileSystemAdapter } from '../../infrastructure/storage/file/Art
 import { VaultFileSystemAdapter } from '../../infrastructure/storage/file/VaultFileSystemAdapter';
 import { DuckDbRuntimeIndex } from '../../infrastructure/storage/duckdb/DuckDbRuntimeIndex';
 import { DuckDbFactory } from '../../infrastructure/storage/duckdb/DuckDbFactory';
+// VectorEmbeddingService is not used in apps/extension version of DuckDbRuntimeIndex
 import { YamlMetadataRepository } from '../../infrastructure/storage/yaml/YamlMetadataRepository';
 import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/vault/infrastructure/GitVaultAdapter';
 
@@ -18,6 +19,9 @@ import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/vault/infras
 import { ArtifactRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactRepositoryImpl';
 import { MetadataRepositoryImpl } from '../../modules/shared/infrastructure/MetadataRepositoryImpl';
 import { VaultRepositoryImpl } from '../../modules/shared/infrastructure/VaultRepositoryImpl';
+import { ChangeRepository, ChangeRepositoryImpl } from '../../modules/shared/infrastructure/ChangeRepository';
+import { ChangeDetector, ChangeDetectorImpl } from '../../modules/shared/infrastructure/ChangeDetector';
+import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactLinkRepository';
 
 // Application Services
 import { ArtifactFileSystemApplicationServiceImpl } from '../../modules/shared/application/ArtifactFileSystemApplicationServiceImpl';
@@ -25,9 +29,17 @@ import { VaultApplicationServiceImpl } from '../../modules/shared/application/Va
 import { LookupApplicationServiceImpl } from '../../modules/lookup/application/LookupApplicationServiceImpl';
 import { DocumentApplicationServiceImpl } from '../../modules/document/application/DocumentApplicationServiceImpl';
 import { TaskApplicationServiceImpl } from '../../modules/task/application/TaskApplicationServiceImpl';
+import { ViewpointApplicationService } from '../../modules/viewpoint/application/ViewpointApplicationService';
+import { ViewpointApplicationServiceImpl } from '../../modules/viewpoint/application/ViewpointApplicationServiceImpl';
+import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
+import { TemplateApplicationServiceImpl } from '../../modules/template/application/TemplateApplicationServiceImpl';
+import { AIApplicationService } from '../../modules/ai/application/AIApplicationService';
+import { AIApplicationServiceImpl } from '../../modules/ai/application/AIApplicationServiceImpl';
 
 // MCP
 import { MCPServerStarter } from '../../modules/mcp/MCPServerStarter';
+import { MCPTools, MCPToolsImpl } from '../../modules/mcp/MCPTools';
+import { MCPResources, MCPResourcesImpl } from '../../modules/mcp/MCPResources';
 
 export function createContainer(
   architoolRoot: string,
@@ -46,8 +58,9 @@ export function createContainer(
   container.bind<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter)
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot));
   // DuckDbFactory is a static class, no binding needed
+  const logger = container.get<Logger>(TYPES.Logger);
   container.bind<DuckDbRuntimeIndex>(TYPES.DuckDbRuntimeIndex)
-    .to(DuckDbRuntimeIndex).inSingletonScope();
+    .toConstantValue(new DuckDbRuntimeIndex(dbPath, logger));
   container.bind<YamlMetadataRepository>(TYPES.YamlMetadataRepository)
     .to(YamlMetadataRepository).inSingletonScope();
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
@@ -60,6 +73,21 @@ export function createContainer(
     .to(MetadataRepositoryImpl).inSingletonScope();
   container.bind(TYPES.VaultRepository)
     .to(VaultRepositoryImpl).inSingletonScope();
+  container.bind<ChangeRepository>(TYPES.ChangeRepository)
+    .toDynamicValue((context) => {
+      const vaultAdapter = context.container.get<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
+      return new ChangeRepositoryImpl(vaultAdapter);
+    })
+    .inSingletonScope();
+  container.bind<ChangeDetector>(TYPES.ChangeDetector)
+    .to(ChangeDetectorImpl)
+    .inSingletonScope();
+  container.bind<ArtifactLinkRepository>(TYPES.ArtifactLinkRepository)
+    .toDynamicValue((context) => {
+      const vaultAdapter = context.container.get<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
+      return new ArtifactLinkRepositoryImpl(vaultAdapter);
+    })
+    .inSingletonScope();
 
   // Application Services
   container.bind(TYPES.ArtifactFileSystemApplicationService)
@@ -72,8 +100,20 @@ export function createContainer(
     .to(DocumentApplicationServiceImpl).inSingletonScope();
   container.bind(TYPES.TaskApplicationService)
     .to(TaskApplicationServiceImpl).inSingletonScope();
+  container.bind<ViewpointApplicationService>(TYPES.ViewpointApplicationService)
+    .to(ViewpointApplicationServiceImpl).inSingletonScope();
+  container.bind<TemplateApplicationService>(TYPES.TemplateApplicationService)
+    .to(TemplateApplicationServiceImpl).inSingletonScope();
+  container.bind<AIApplicationService>(TYPES.AIApplicationService)
+    .to(AIApplicationServiceImpl).inSingletonScope();
 
   // MCP
+  container.bind<MCPTools>(TYPES.MCPTools)
+    .to(MCPToolsImpl)
+    .inSingletonScope();
+  container.bind<MCPResources>(TYPES.MCPResources)
+    .to(MCPResourcesImpl)
+    .inSingletonScope();
   container.bind(TYPES.MCPServerStarter)
     .to(MCPServerStarter).inSingletonScope();
 
