@@ -56,18 +56,12 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       this.context.extensionUri
     );
 
-    // 处理来自 Webview 的消息
+    // 处理来自 Webview 的消息：仅处理保存
     const changeDocumentSubscription = webviewPanel.webview.onDidReceiveMessage(
       async (e) => {
         switch (e.type) {
-          case 'ready':
-            // Webview 准备就绪，如果还没有初始化，发送初始内容
-            // 注意：ready 消息表示 webview 已准备好接收消息
-            // 但 init 消息应该在 HTML 加载后立即发送，而不是等待 ready
-            break;
-
-          case 'update':
-            // 更新文档内容
+          case 'save':
+            // 保存文档内容
             const edit = new vscode.WorkspaceEdit();
             edit.replace(
               document.uri,
@@ -76,7 +70,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
             );
             const success = await vscode.workspace.applyEdit(edit);
             if (!success) {
-              vscode.window.showErrorMessage('Failed to update document');
+              vscode.window.showErrorMessage('Failed to save document');
             }
             break;
 
@@ -87,12 +81,12 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       }
     );
 
-    // 监听文档变更
+    // 监听文档变更：发送加载消息
     const changeDocumentSubscription2 = vscode.workspace.onDidChangeTextDocument(
       (e) => {
         if (e.document.uri.toString() === document.uri.toString()) {
           webviewPanel.webview.postMessage({
-            type: 'update',
+            type: 'load',
             content: e.document.getText(),
           });
         }
@@ -105,11 +99,11 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       changeDocumentSubscription2.dispose();
     });
 
-    // 等待 webview 加载完成后发送初始内容
+    // 等待 webview 加载完成后发送初始内容（加载功能）
     // 使用 setTimeout 确保 webview 已完全加载并准备好接收消息
     setTimeout(() => {
       webviewPanel.webview.postMessage({
-        type: 'init',
+        type: 'load',
         content: document.getText(),
       });
     }, 100);

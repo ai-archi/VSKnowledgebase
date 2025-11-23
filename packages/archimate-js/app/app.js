@@ -220,36 +220,48 @@ function newModel() {
   });
 }
 
-// 在 VSCode webview 中，监听来自扩展的消息（后续处理）
+// 在 VSCode webview 中，仅保留必要的加载和保存功能
 if (isVSCodeWebview) {
-  // 监听模型变更，自动保存（后续功能）
+  // 监听来自扩展的消息：仅处理加载
+  window.addEventListener('message', (event) => {
+    const message = event.data;
+    if (message.type === 'load' && message.content && message.content.trim()) {
+      // 加载模型内容
+      openModel(message.content);
+    }
+  });
+  
+  // 自动保存功能：仅在用户停止操作后保存，避免干扰连线等操作
   let saveTimeout;
+  let isSaving = false;
+  
+  // 监听模型变更，延迟保存
   modeler.on('commandStack.changed', () => {
+    // 清除之前的保存定时器
     clearTimeout(saveTimeout);
+    
+    // 延迟保存，给连线操作足够的时间完成
+    // 使用较长的延迟时间，确保连线操作完成后再保存
     saveTimeout = setTimeout(() => {
-      try {
-        modeler.saveXML({ format: true }).then((result) => {
+      if (isSaving) return; // 如果正在保存，跳过
+      
+      isSaving = true;
+      modeler.saveXML({ format: true })
+        .then((result) => {
           if (vscode) {
             vscode.postMessage({
-              type: 'update',
+              type: 'save',
               content: result.xml
             });
           }
-        }).catch((err) => {
+        })
+        .catch((err) => {
           console.error('Failed to save model:', err);
+        })
+        .finally(() => {
+          isSaving = false;
         });
-      } catch (err) {
-        console.error('Failed to save model:', err);
-      }
-    }, 500);
-  });
-  
-  // 监听来自扩展的消息（后续功能）
-  window.addEventListener('message', (event) => {
-    const message = event.data;
-    if (message.type === 'update' && message.content && message.content.trim()) {
-      openModel(message.content);
-    }
+    }, 2000); // 2秒延迟，确保连线操作完成
   });
   
   // 隐藏文件操作按钮（在 VSCode 中不需要）
