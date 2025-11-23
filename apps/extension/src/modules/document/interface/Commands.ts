@@ -681,7 +681,12 @@ export class DocumentCommands {
 
     // 创建新的 webview panel（弹窗模式）
     const extensionPath = this.context.extensionPath;
-    const webviewDistPath = path.join(extensionPath, '..', 'webview', 'dist');
+    // 优先从 extension 目录读取（打包后的路径），否则从源码目录读取（开发环境）
+    const webviewPathInExtension = path.join(extensionPath, 'webview');
+    const webviewPathInSource = path.join(extensionPath, '..', 'webview', 'dist');
+    const webviewDistPath = fs.existsSync(webviewPathInExtension) 
+      ? webviewPathInExtension 
+      : webviewPathInSource;
     
     // 创建标准表单页面（不使用弹窗，直接全屏显示）
     // 注意：VSCode 的 webview panel 只能在编辑区显示，所以我们使用标准表单页面
@@ -729,7 +734,12 @@ export class DocumentCommands {
   private async getWebviewContent(webview: vscode.Webview, initialVaultId?: string, initialFolderPath?: string): Promise<string> {
     // 获取扩展路径
     const extensionPath = this.context.extensionPath;
-    const webviewDistPath = path.join(extensionPath, '..', 'webview', 'dist');
+    // 优先从 extension 目录读取（打包后的路径），否则从源码目录读取（开发环境）
+    const webviewPathInExtension = path.join(extensionPath, 'webview');
+    const webviewPathInSource = path.join(extensionPath, '..', 'webview', 'dist');
+    const webviewDistPath = fs.existsSync(webviewPathInExtension) 
+      ? webviewPathInExtension 
+      : webviewPathInSource;
 
     this.logger.info(`Webview dist path: ${webviewDistPath}`);
     this.logger.info(`Webview dist exists: ${fs.existsSync(webviewDistPath)}`);

@@ -35,3 +35,7 @@ packages-bak/
 .architool/cache/
 out/
 **/out/
+
+# Extension webview build artifacts (generated from apps/webview)
+apps/extension/webview/# Extension archimate-js build artifacts (generated from packages/archimate-js)
+apps/extension/archimate-js/

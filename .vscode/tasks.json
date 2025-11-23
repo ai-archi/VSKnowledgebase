@@ -24,6 +24,23 @@
       }
     },
     {
+      "label": "Build Archimate JS",
+      "type": "shell",
+      "command": "rm -rf ${workspaceFolder}/apps/extension/archimate-js && mkdir -p ${workspaceFolder}/apps/extension/archimate-js && npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/packages/archimate-js",
+        "env": {
+          "OUTPUT_PATH": "../../apps/extension/archimate-js"
+        }
+      },
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Build Webview",
       "type": "shell",
       "command": "pnpm",
@@ -45,6 +62,7 @@
       "label": "Build All",
       "dependsOrder": "sequence",
       "dependsOn": [
+        "Build Archimate JS",
         "Compile Extension",
         "Build Webview"
       ],

@@ -388,12 +388,24 @@ packages/
 
 **参考**：`EXPECTED_ARCHITECTURE_DESIGN.md` 3.4 节
 
-#### 3.2.3 Development 视图
+#### 3.2.3 Development 视图 ❌ **未实现**
 
 **任务清单**：
-- [ ] 代码-设计关联
-- [ ] 代码审查功能
-- [ ] 规范检测（ESLint 集成）
+- [ ] 创建 `apps/extension/src/modules/development/` 模块结构
+  - [ ] `application/DevelopmentApplicationService.ts` - 应用服务接口
+  - [ ] `application/DevelopmentApplicationServiceImpl.ts` - 应用服务实现
+  - [ ] `interface/DevelopmentTreeDataProvider.ts` - 树视图提供者
+  - [ ] `interface/Commands.ts` - 命令注册
+- [ ] 实现代码-设计关联功能
+  - [ ] 代码路径与 Artifact 关联
+  - [ ] 代码变更追踪
+- [ ] 实现代码审查功能
+  - [ ] 代码审查任务创建
+  - [ ] 审查状态管理
+- [ ] 实现规范检测（ESLint 集成）
+  - [ ] ESLint 规则检测
+  - [ ] 规范违规报告
+- [ ] 实现前端视图（`apps/webview/src/modules/development-view/`）
 
 ---
 
@@ -641,8 +653,12 @@ packages/
    - [x] 影响分析（Impact Analysis）✅ **已完成**
    - [x] 提示生成（Prompt Generation）✅ **已完成**
 
-8. **Development 视图**
-   - [ ] 代码-设计关联
+8. **Development 视图** ❌ **未实现**
+   - [ ] 创建 `apps/extension/src/modules/development/` 模块
+   - [ ] 实现 DevelopmentApplicationService（应用层）
+   - [ ] 实现 DevelopmentTreeDataProvider（接口层，树形展示）
+   - [ ] 实现前端视图（`apps/webview/src/modules/development-view/`）
+   - [ ] 代码-设计关联功能
    - [ ] 代码审查功能
    - [ ] 规范检测（ESLint 集成）
 
@@ -704,7 +720,7 @@ packages/
 
 - [x] AI 服务实现完成 ✅ **已完成**
 - [x] MCP Server 完整实现完成 ✅ **已完成**
-- [ ] Development 视图实现完成
+- [ ] Development 视图实现完成 ❌ **模块未创建**
 
 #### 6.2.4 阶段 3 检查清单
 
@@ -867,7 +883,7 @@ packages/
 2. **测试覆盖** - 单元测试、集成测试、E2E 测试（当前跳过，后续补充）
 
 #### 中优先级
-3. **Development 视图** - 代码-设计关联、代码审查、规范检测（ESLint 集成）
+3. **Development 视图** ❌ **模块未创建** - 需要创建完整模块结构，包括代码-设计关联、代码审查、规范检测（ESLint 集成）
 4. **向量搜索优化** - DuckDB VSS 扩展兼容性测试、性能优化（批量处理、缓存）
 
 #### 低优先级

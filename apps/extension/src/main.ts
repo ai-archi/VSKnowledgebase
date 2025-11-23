@@ -28,6 +28,7 @@ import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { RemoteEndpoint } from './domain/shared/vault/RemoteEndpoint';
 import { GitVaultAdapter } from './modules/vault/infrastructure/GitVaultAdapter';
+import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -142,10 +143,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const aiCommands = new AICommands(aiService, artifactService, vaultService, logger);
   aiCommands.registerCommands(context);
 
-  // 12. Webview RPC 服务已在步骤 7 中初始化
+  // 12. 注册自定义编辑器
+  const archimateEditorDisposable = ArchimateEditorProvider.register(context);
+  context.subscriptions.push(archimateEditorDisposable);
+  logger.info('ArchiMate editor provider registered');
+
+  // 13. Webview RPC 服务已在步骤 7 中初始化
   logger.info('Webview RPC service initialized');
 
-  // 13. 注册所有命令
+  // 14. 注册所有命令
   commandAdapter.registerCommands([
     // Lookup 命令
     {
