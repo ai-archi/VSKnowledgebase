@@ -61,11 +61,9 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       async (e) => {
         switch (e.type) {
           case 'ready':
-            // Webview 准备就绪，发送初始内容
-            webviewPanel.webview.postMessage({
-              type: 'init',
-              content: document.getText(),
-            });
+            // Webview 准备就绪，如果还没有初始化，发送初始内容
+            // 注意：ready 消息表示 webview 已准备好接收消息
+            // 但 init 消息应该在 HTML 加载后立即发送，而不是等待 ready
             break;
 
           case 'update':
@@ -107,11 +105,14 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       changeDocumentSubscription2.dispose();
     });
 
-    // 发送初始内容
-    webviewPanel.webview.postMessage({
-      type: 'init',
-      content: document.getText(),
-    });
+    // 等待 webview 加载完成后发送初始内容
+    // 使用 setTimeout 确保 webview 已完全加载并准备好接收消息
+    setTimeout(() => {
+      webviewPanel.webview.postMessage({
+        type: 'init',
+        content: document.getText(),
+      });
+    }, 100);
   }
 
   /**

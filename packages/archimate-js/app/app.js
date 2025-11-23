@@ -212,62 +212,44 @@ dropZone.addEventListener('drop', function(e) {
 });
 
 function newModel() {
-  return modeler.createNewModel().catch(function(err) {
+  modeler.createNewModel().catch(function(err) {
     if (err) {
       console.error('could not create new archimate model', err);
-      throw err;
+      return;
     }
   });
 }
 
-// 在 VSCode webview 中，监听来自扩展的消息
+// 在 VSCode webview 中，监听来自扩展的消息（后续处理）
 if (isVSCodeWebview) {
-  window.addEventListener('message', async (event) => {
-    const message = event.data;
-    
-    switch (message.type) {
-      case 'init':
-        // 初始化模型内容
-        if (message.content) {
-          await openModel(message.content);
-        } else if (window.initialContent) {
-          await openModel(window.initialContent);
-        } else {
-          await newModel();
-        }
-        // 通知扩展已准备就绪
-        vscode.postMessage({ type: 'ready' });
-        break;
-        
-      case 'update':
-        // 更新模型内容（来自外部文件变更）
-        if (message.content) {
-          await openModel(message.content);
-        }
-        break;
-    }
-  });
-  
-  // 监听模型变更，自动保存
+  // 监听模型变更，自动保存（后续功能）
   let saveTimeout;
   modeler.on('commandStack.changed', () => {
-    // 防抖：延迟保存
     clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
+    saveTimeout = setTimeout(() => {
       try {
-        const result = await modeler.saveXML({ format: true });
-        vscode.postMessage({
-          type: 'update',
-          content: result.xml
+        modeler.saveXML({ format: true }).then((result) => {
+          if (vscode) {
+            vscode.postMessage({
+              type: 'update',
+              content: result.xml
+            });
+          }
+        }).catch((err) => {
+          console.error('Failed to save model:', err);
         });
       } catch (err) {
         console.error('Failed to save model:', err);
-        vscode.postMessage({
-          type: 'error',
-          message: err.message || 'Failed to save model'
-        });
       }
-    }, 500); // 500ms 防抖
+    }, 500);
+  });
+  
+  // 监听来自扩展的消息（后续功能）
+  window.addEventListener('message', (event) => {
+    const message = event.data;
+    if (message.type === 'update' && message.content && message.content.trim()) {
+      openModel(message.content);
+    }
   });
   
   // 隐藏文件操作按钮（在 VSCode 中不需要）
@@ -278,18 +260,14 @@ if (isVSCodeWebview) {
       btn.parentElement.style.display = 'none';
     }
   });
-  
-  // 如果有初始内容，则加载；否则创建新模型
-  if (window.initialContent) {
-    openModel(window.initialContent).catch(err => {
-      console.error('Failed to open initial content:', err);
-      newModel();
-    });
-  } else {
-    newModel();
-  }
+}
+
+// Create new model to show on canvas !
+// 参考代码：直接在这里初始化模型，确保界面正常工作
+// 如果有初始内容，加载它；否则创建新模型
+if (window.initialContent && window.initialContent.trim()) {
+  openModel(window.initialContent);
 } else {
-  // 非 VSCode 环境：创建新模型
   newModel();
 }
 
@@ -316,7 +294,7 @@ function openFile(file) {
 
 function openModel(xml) {
   // import model
-  return modeler.importXML(xml)
+  modeler.importXML(xml)
     .then(function(result) {
       if (result.warnings.length) {
         console.warn(result.warnings);
@@ -324,13 +302,12 @@ function openModel(xml) {
           window.alert('Warning(s) on importing archimate model. See console log.');
         }
       }
-      return modeler.openView().catch(function(err) {
+      modeler.openView().catch(function(err) {
         if (err) {
           if (!isVSCodeWebview) {
             window.alert('Error(s) on opening archimate view. See console log.');
           }
           console.error('could not open archimate view', err);
-          throw err;
         }
       });
     })
@@ -340,7 +317,6 @@ function openModel(xml) {
           window.alert('Error(s) on importing archimate model. See console log.');
         }
         console.error('could not import archimate model', err);
-        throw err;
       }
    });
 }
