@@ -5,6 +5,7 @@ import 'archimate-js/assets/archimate-js.css';
 import Modeler from 'archimate-js/lib/Modeler';
 
 // 检测是否在 VSCode webview 环境中
+// eslint-disable-next-line no-undef
 const vscode = typeof acquireVsCodeApi !== 'undefined' ? acquireVsCodeApi() : null;
 const isVSCodeWebview = !!vscode;
 
@@ -222,6 +223,36 @@ function newModel() {
 
 // 在 VSCode webview 中，仅保留必要的加载和保存功能
 if (isVSCodeWebview) {
+  // 手动保存功能：监听 Ctrl+S (Windows/Linux) 或 Command+S (Mac)
+  let isSaving = false;
+  
+  function saveModel() {
+    if (isSaving) return; // 如果正在保存，跳过
+    
+    isSaving = true;
+    modeler.saveXML({ format: true })
+      .then((result) => {
+        if (vscode) {
+          vscode.postMessage({
+            type: 'save',
+            content: result.xml
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to save model:', err);
+        if (vscode) {
+          vscode.postMessage({
+            type: 'error',
+            message: 'Failed to save model: ' + err.message
+          });
+        }
+      })
+      .finally(() => {
+        isSaving = false;
+      });
+  }
+  
   // 监听来自扩展的消息：仅处理加载
   window.addEventListener('message', (event) => {
     const message = event.data;
@@ -231,38 +262,29 @@ if (isVSCodeWebview) {
     }
   });
   
-  // 自动保存功能：仅在用户停止操作后保存，避免干扰连线等操作
-  let saveTimeout;
-  let isSaving = false;
-  
-  // 监听模型变更，延迟保存
-  modeler.on('commandStack.changed', () => {
-    // 清除之前的保存定时器
-    clearTimeout(saveTimeout);
-    
-    // 延迟保存，给连线操作足够的时间完成
-    // 使用较长的延迟时间，确保连线操作完成后再保存
-    saveTimeout = setTimeout(() => {
-      if (isSaving) return; // 如果正在保存，跳过
-      
-      isSaving = true;
-      modeler.saveXML({ format: true })
-        .then((result) => {
-          if (vscode) {
-            vscode.postMessage({
-              type: 'save',
-              content: result.xml
-            });
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to save model:', err);
-        })
-        .finally(() => {
-          isSaving = false;
-        });
-    }, 2000); // 2秒延迟，确保连线操作完成
-  });
+  // 监听键盘快捷键：Ctrl+S (Windows/Linux) 或 Command+S (Mac)
+  // 延迟添加，确保不影响拖拽等操作
+  setTimeout(() => {
+    document.addEventListener('keydown', (event) => {
+      // Ctrl+S (Windows/Linux) 或 Command+S (Mac)
+      // 确保只在按下保存快捷键时才处理，不影响其他操作
+      if ((event.ctrlKey || event.metaKey) && event.key === 's' && !event.shiftKey && !event.altKey) {
+        // 检查是否在输入框中（如果是，不阻止默认行为）
+        const target = event.target;
+        const isInput = target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable
+        );
+        
+        if (!isInput) {
+          event.preventDefault(); // 阻止浏览器默认保存行为
+          event.stopPropagation(); // 阻止事件冒泡
+          saveModel();
+        }
+      }
+    }, false); // 使用冒泡阶段，不捕获
+  }, 500); // 延迟更长时间，确保拖拽功能完全初始化
   
   // 隐藏文件操作按钮（在 VSCode 中不需要）
   const fileButtons = ['js-export-model-svg', 'js-export-model-xml', 'js-import-model', 'js-new-model'];

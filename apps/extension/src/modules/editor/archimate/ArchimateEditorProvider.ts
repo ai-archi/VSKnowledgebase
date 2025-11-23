@@ -71,6 +71,9 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
             const success = await vscode.workspace.applyEdit(edit);
             if (!success) {
               vscode.window.showErrorMessage('Failed to save document');
+            } else {
+              // 保存成功后，标记文档为已保存
+              await document.save();
             }
             break;
 
