@@ -12,19 +12,50 @@ import * as yaml from 'js-yaml';
 
 @injectable()
 export class MetadataRepositoryImpl implements MetadataRepository {
-  private yamlRepo: YamlMetadataRepository;
+  private yamlRepos: Map<string, YamlMetadataRepository> = new Map(); // vaultName -> YamlMetadataRepository
   private vaultRepository: VaultRepository;
   private configManager: ConfigManager;
   private metadataCache: Map<string, ArtifactMetadata> = new Map();
 
   constructor(
-    @inject(TYPES.YamlMetadataRepository) yamlRepo: YamlMetadataRepository,
     @inject(TYPES.VaultRepository) vaultRepository: VaultRepository,
     @inject(TYPES.ConfigManager) configManager: ConfigManager
   ) {
-    this.yamlRepo = yamlRepo;
     this.vaultRepository = vaultRepository;
     this.configManager = configManager;
+  }
+
+  /**
+   * 获取指定 vault 的 YamlMetadataRepository 实例（带缓存）
+   */
+  private getYamlRepoForVault(vaultName: string): YamlMetadataRepository {
+    if (!this.yamlRepos.has(vaultName)) {
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      const vaultPath = path.join(architoolRoot, vaultName);
+      this.yamlRepos.set(vaultName, new YamlMetadataRepository(vaultPath));
+    }
+    return this.yamlRepos.get(vaultName)!;
+  }
+
+  /**
+   * 从 metadataId 推断 vaultName（通过扫描所有 vault）
+   */
+  private async findVaultForMetadata(metadataId: string): Promise<string | null> {
+    const vaultsResult = await this.vaultRepository.findAll();
+    if (!vaultsResult.success) {
+      return null;
+    }
+
+    const architoolRoot = this.configManager.getArchitoolRoot();
+    for (const vault of vaultsResult.value) {
+      const vaultPath = path.join(architoolRoot, vault.name);
+      const metadataPath = path.join(vaultPath, 'metadata', `${metadataId}.metadata.yml`);
+      if (fs.existsSync(metadataPath)) {
+        return vault.name;
+      }
+    }
+
+    return null;
   }
 
   async findById(metadataId: string): Promise<Result<ArtifactMetadata | null, ArtifactError>> {
@@ -32,7 +63,17 @@ export class MetadataRepositoryImpl implements MetadataRepository {
       return { success: true, value: this.metadataCache.get(metadataId)! };
     }
 
-    const result = await this.yamlRepo.readMetadata(metadataId);
+    // 查找 metadata 所在的 vault
+    const vaultName = await this.findVaultForMetadata(metadataId);
+    if (!vaultName) {
+      return {
+        success: false,
+        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Metadata not found: ${metadataId}`),
+      };
+    }
+
+    const yamlRepo = this.getYamlRepoForVault(vaultName);
+    const result = await yamlRepo.readMetadata(metadataId);
     if (result.success && result.value) {
       this.metadataCache.set(metadataId, result.value);
     }
@@ -48,19 +89,46 @@ export class MetadataRepositoryImpl implements MetadataRepository {
         }
       }
 
-      // 从文件系统扫描所有元数据文件
-      const metadataFiles = await this.yamlRepo.listMetadataFiles();
+      // 从所有 vault 扫描元数据文件
+      const vaultsResult = await this.vaultRepository.findAll();
+      if (!vaultsResult.success) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            `Failed to list vaults: ${vaultsResult.error.message}`,
+            { artifactId }
+          ),
+        };
+      }
+
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      const metadataFiles: string[] = [];
+      for (const vault of vaultsResult.value) {
+        const yamlRepo = this.getYamlRepoForVault(vault.name);
+        const vaultFiles = await yamlRepo.listMetadataFiles();
+        metadataFiles.push(...vaultFiles);
+      }
       
       for (const filePath of metadataFiles) {
         try {
-          // 从文件路径提取 metadataId
+          // 从文件路径提取 metadataId 和 vaultName
           const fileName = require('path').basename(filePath, '.metadata.yml');
-          const result = await this.yamlRepo.readMetadata(fileName);
+          // 从文件路径提取 vaultName（路径格式：{architoolRoot}/{vaultName}/metadata/{fileName}.metadata.yml）
+          const pathParts = filePath.split(path.sep);
+          const architoolRoot = this.configManager.getArchitoolRoot();
+          const architoolRootParts = architoolRoot.split(path.sep);
+          const vaultNameIndex = architoolRootParts.length;
+          if (vaultNameIndex < pathParts.length) {
+            const vaultName = pathParts[vaultNameIndex];
+            const yamlRepo = this.getYamlRepoForVault(vaultName);
+            const result = await yamlRepo.readMetadata(fileName);
           
-          if (result.success && result.value && result.value.artifactId === artifactId) {
-            // 更新缓存
-            this.metadataCache.set(result.value.id, result.value);
-            return { success: true, value: result.value };
+            if (result.success && result.value && result.value.artifactId === artifactId) {
+              // 更新缓存
+              this.metadataCache.set(result.value.id, result.value);
+              return { success: true, value: result.value };
+            }
           }
         } catch (error) {
           // 忽略单个文件的读取错误，继续处理其他文件
@@ -151,7 +219,20 @@ export class MetadataRepositoryImpl implements MetadataRepository {
   }
 
   async create(metadata: ArtifactMetadata): Promise<Result<ArtifactMetadata, ArtifactError>> {
-    const result = await this.yamlRepo.writeMetadata(metadata);
+    // 从 metadata 中获取 vaultName
+    const vaultName = metadata.vaultName;
+    if (!vaultName) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.INVALID_INPUT,
+          'Metadata must have vaultName'
+        ),
+      };
+    }
+
+    const yamlRepo = this.getYamlRepoForVault(vaultName);
+    const result = await yamlRepo.writeMetadata(metadata);
     if (result.success) {
       this.metadataCache.set(metadata.id, metadata);
       return { success: true, value: metadata };
@@ -160,7 +241,31 @@ export class MetadataRepositoryImpl implements MetadataRepository {
   }
 
   async update(metadata: ArtifactMetadata): Promise<Result<ArtifactMetadata, ArtifactError>> {
-    const result = await this.yamlRepo.writeMetadata(metadata);
+    // 从 metadata 中获取 vaultName
+    const vaultName = metadata.vaultName;
+    if (!vaultName) {
+      // 如果 metadata 中没有 vaultName，尝试查找
+      const foundVaultName = await this.findVaultForMetadata(metadata.id);
+      if (!foundVaultName) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Cannot find vault for metadata: ${metadata.id}`
+          ),
+        };
+      }
+      const yamlRepo = this.getYamlRepoForVault(foundVaultName);
+      const result = await yamlRepo.writeMetadata(metadata);
+      if (result.success) {
+        this.metadataCache.set(metadata.id, metadata);
+        return { success: true, value: metadata };
+      }
+      return { success: false, error: result.error };
+    }
+
+    const yamlRepo = this.getYamlRepoForVault(vaultName);
+    const result = await yamlRepo.writeMetadata(metadata);
     if (result.success) {
       this.metadataCache.set(metadata.id, metadata);
       return { success: true, value: metadata };
@@ -169,7 +274,17 @@ export class MetadataRepositoryImpl implements MetadataRepository {
   }
 
   async delete(metadataId: string): Promise<Result<void, ArtifactError>> {
-    const result = await this.yamlRepo.deleteMetadata(metadataId);
+    // 查找 metadata 所在的 vault
+    const vaultName = await this.findVaultForMetadata(metadataId);
+    if (!vaultName) {
+      return {
+        success: false,
+        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Metadata not found: ${metadataId}`),
+      };
+    }
+
+    const yamlRepo = this.getYamlRepoForVault(vaultName);
+    const result = await yamlRepo.deleteMetadata(metadataId);
     if (result.success) {
       this.metadataCache.delete(metadataId);
     }

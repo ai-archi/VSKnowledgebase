@@ -69,9 +69,9 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
     this.fileWatcher = new FileWatcher(viewpointService, logger);
     
     // 监听文件变更事件，自动更新视图
-    this.fileWatcher.onFileChanged((filePath) => {
+    this.fileWatcher.onFileChanged(async (filePath) => {
       // 如果当前选择的是代码关联视点，自动刷新
-      const currentViewpoint = this.getCurrentViewpoint();
+      const currentViewpoint = await this.getCurrentViewpoint();
       if (currentViewpoint && currentViewpoint.type === 'code-related') {
         this.refresh();
       }
@@ -81,14 +81,28 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
   /**
    * 获取当前选择的视点
    */
-  private getCurrentViewpoint(): Viewpoint | undefined {
+  private async getCurrentViewpoint(): Promise<Viewpoint | undefined> {
     const viewpointId = this.selectedViewpointId || this.defaultViewpointId;
-    const predefinedViewpoints = this.viewpointService.getPredefinedViewpoints();
-    const viewpoint = predefinedViewpoints.find(v => v.id === viewpointId);
-    if (viewpoint) {
-      return viewpoint;
+    if (!viewpointId) {
+      return undefined;
     }
-    // TODO: 从自定义视点中查找
+
+    // 先从预定义视点中查找
+    const predefinedViewpoints = this.viewpointService.getPredefinedViewpoints();
+    const predefinedViewpoint = predefinedViewpoints.find(v => v.id === viewpointId);
+    if (predefinedViewpoint) {
+      return predefinedViewpoint;
+    }
+
+    // 从自定义视点中查找
+    const customViewpointsResult = await this.viewpointService.getCustomViewpoints();
+    if (customViewpointsResult.success) {
+      const customViewpoint = customViewpointsResult.value.find(v => v.id === viewpointId);
+      if (customViewpoint) {
+        return customViewpoint;
+      }
+    }
+
     return undefined;
   }
 
@@ -120,7 +134,7 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
     try {
       // 根节点：显示当前选择的视点内容，或显示视点列表
       if (!element) {
-        const currentViewpoint = this.getCurrentViewpoint();
+        const currentViewpoint = await this.getCurrentViewpoint();
         
         // 如果当前视点是代码关联视点，直接显示关联的文档
         if (currentViewpoint && currentViewpoint.type === 'code-related') {

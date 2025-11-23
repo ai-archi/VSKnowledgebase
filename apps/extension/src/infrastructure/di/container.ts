@@ -63,16 +63,8 @@ export function createContainer(
   // DuckDbFactory is a static class, no binding needed
   container.bind<DuckDbRuntimeIndex>(TYPES.DuckDbRuntimeIndex)
     .toConstantValue(new DuckDbRuntimeIndex(dbPath, logger));
-  // YamlMetadataRepository 需要 vaultPath，但它是每个 vault 特定的
-  // 目前先绑定一个占位符，实际使用时需要根据 vault 创建实例
-  // TODO: 重构 YamlMetadataRepository 以支持多 vault
-  container.bind<YamlMetadataRepository>(TYPES.YamlMetadataRepository)
-    .toDynamicValue(() => {
-      // 临时使用 architoolRoot，实际应该根据 vault 动态创建
-      // 这是一个临时解决方案，需要重构
-      return new YamlMetadataRepository(architoolRoot);
-    })
-    .inSingletonScope();
+  // YamlMetadataRepository 现在由 MetadataRepositoryImpl 内部管理（每个 vault 一个实例）
+  // 不再需要在 DI 容器中绑定
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
     .to(GitVaultAdapterImpl).inSingletonScope();
 

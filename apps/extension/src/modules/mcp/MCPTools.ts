@@ -3,6 +3,7 @@ import { TYPES } from '../../infrastructure/di/types';
 import { ArtifactFileSystemApplicationService } from '../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
 import { ArtifactLinkRepository } from '../shared/infrastructure/ArtifactLinkRepository';
+import { DuckDbRuntimeIndex } from '../../infrastructure/storage/duckdb/DuckDbRuntimeIndex';
 import { Artifact } from '../../domain/shared/artifact/Artifact';
 import { ArtifactLink } from '../../domain/shared/artifact/ArtifactLink';
 import { Logger } from '../../core/logger/Logger';
@@ -100,6 +101,8 @@ export class MCPToolsImpl implements MCPTools {
     private vaultService: VaultApplicationService,
     @inject(TYPES.ArtifactLinkRepository)
     private linkRepository: ArtifactLinkRepository,
+    @inject(TYPES.DuckDbRuntimeIndex)
+    private duckDbIndex: DuckDbRuntimeIndex,
     @inject(TYPES.Logger)
     private logger: Logger
   ) {}
@@ -181,37 +184,90 @@ export class MCPToolsImpl implements MCPTools {
         }
       }
 
-      // For now, use listArtifacts and filter by query
-      // TODO: Implement proper search with vector search
-      const result = await this.artifactService.listArtifacts(
-        vaultId,
-        {
-          limit: params.limit || 50,
-        }
-      );
-
-      if (result.success) {
-        // Simple text search in title and description
-        let artifacts = result.value.filter(a => {
-          const searchLower = params.query.toLowerCase();
-          const titleMatch = a.title.toLowerCase().includes(searchLower);
-          const descMatch = a.description?.toLowerCase().includes(searchLower);
-          return titleMatch || descMatch;
+      // 首先尝试使用向量搜索
+      let artifactIds: string[] = [];
+      try {
+        artifactIds = await this.duckDbIndex.vectorSearch(params.query, {
+          limit: params.limit ? params.limit * 2 : 100, // 获取更多结果以便后续过滤
         });
+        this.logger.debug(`Vector search found ${artifactIds.length} artifacts`);
+      } catch (error: any) {
+        this.logger.warn('Vector search failed, falling back to text search', error);
+      }
 
-        // Filter by tags if provided
-        if (params.tags && params.tags.length > 0) {
-          artifacts = artifacts.filter(a => {
-            const artifactTags = a.tags || [];
-            return params.tags!.some(tag => artifactTags.includes(tag));
+      // 如果向量搜索没有结果，使用文本搜索
+      if (artifactIds.length === 0) {
+        const result = await this.artifactService.listArtifacts(
+          vaultId,
+          {
+            limit: params.limit || 50,
+          }
+        );
+
+        if (result.success) {
+          // Simple text search in title and description
+          let artifacts = result.value.filter(a => {
+            const searchLower = params.query.toLowerCase();
+            const titleMatch = a.title.toLowerCase().includes(searchLower);
+            const descMatch = a.description?.toLowerCase().includes(searchLower);
+            return titleMatch || descMatch;
           });
+
+          // Filter by tags if provided
+          if (params.tags && params.tags.length > 0) {
+            artifacts = artifacts.filter(a => {
+              const artifactTags = a.tags || [];
+              return params.tags!.some(tag => artifactTags.includes(tag));
+            });
+          }
+
+          return artifacts;
+        } else {
+          this.logger.error('Failed to search entries', result.error);
+          return [];
+        }
+      }
+
+      // 使用向量搜索的结果，获取完整的 Artifact 信息
+      const artifacts: Artifact[] = [];
+      for (const artifactId of artifactIds) {
+        // 尝试从所有 vault 中查找 Artifact
+        const vaultsResult = await this.vaultService.listVaults();
+        if (vaultsResult.success) {
+          for (const vault of vaultsResult.value) {
+            // 如果指定了 vaultName，只搜索该 vault
+            if (params.vaultName && vault.name !== params.vaultName) {
+              continue;
+            }
+            if (vaultId && vault.id !== vaultId) {
+              continue;
+            }
+
+            const artifactResult = await this.artifactService.getArtifact(vault.id, artifactId);
+            if (artifactResult.success && artifactResult.value) {
+              const artifact = artifactResult.value;
+
+              // Filter by tags if provided
+              if (params.tags && params.tags.length > 0) {
+                const artifactTags = artifact.tags || [];
+                if (!params.tags.some(tag => artifactTags.includes(tag))) {
+                  continue;
+                }
+              }
+
+              artifacts.push(artifact);
+              break; // 找到后跳出循环
+            }
+          }
         }
 
-        return artifacts;
-      } else {
-        this.logger.error('Failed to search entries', result.error);
-        return [];
+        // 如果已达到限制，停止
+        if (artifacts.length >= (params.limit || 50)) {
+          break;
+        }
       }
+
+      return artifacts;
     } catch (error: any) {
       this.logger.error('Error searching entries', error);
       return [];
