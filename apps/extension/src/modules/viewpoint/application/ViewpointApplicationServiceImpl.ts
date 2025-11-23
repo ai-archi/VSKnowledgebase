@@ -1,24 +1,55 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { ViewpointApplicationService, Viewpoint } from './ViewpointApplicationService';
+import {
+  ViewpointApplicationService,
+  Viewpoint,
+  CodePathTree,
+  CodePathTreeNode,
+  ArtifactTree,
+  ArtifactTreeNode,
+} from './ViewpointApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
+import { ArtifactRepository } from '../../shared/infrastructure/ArtifactRepository';
+import { VaultRepository } from '../../shared/infrastructure/VaultRepository';
 import { Artifact } from '../../../domain/shared/artifact/Artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
 import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';
+import { ConfigManager } from '../../../core/config/ConfigManager';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
 /**
+ * 代码文件扩展名列表
+ */
+const CODE_FILE_EXTENSIONS = [
+  '.ts', '.tsx', '.js', '.jsx', '.java', '.py', '.go', '.rs', '.cpp', '.c', '.h',
+  '.cs', '.php', '.rb', '.swift', '.kt', '.scala', '.clj', '.sh', '.bash',
+];
+
+/**
  * 预定义视点
  */
 const PREDEFINED_VIEWPOINTS: Viewpoint[] = [
   {
+    id: 'current-code-related',
+    name: '当前代码关联文档',
+    description: '显示与当前打开代码文件关联的所有文档',
+    type: 'code-related',
+    codeRelatedConfig: {
+      mode: 'reverse', // 反向关联：代码 → 文档
+    },
+    isPredefined: true,
+    isDefault: true, // 默认视点
+  },
+  {
     id: 'lifecycle',
     name: '生命周期视图',
     description: '按研发生产周期组织文档',
+    type: 'tag',
     requiredTags: ['lifecycle'],
     isPredefined: true,
   },
@@ -26,6 +57,7 @@ const PREDEFINED_VIEWPOINTS: Viewpoint[] = [
     id: 'architecture',
     name: '架构层次视图',
     description: '按架构层次组织文档',
+    type: 'tag',
     requiredTags: ['architecture'],
     isPredefined: true,
   },
@@ -33,6 +65,7 @@ const PREDEFINED_VIEWPOINTS: Viewpoint[] = [
     id: 'requirement',
     name: '需求管理视图',
     description: '聚焦需求相关的文档',
+    type: 'tag',
     requiredTags: ['type.requirement'],
     isPredefined: true,
   },
@@ -40,6 +73,7 @@ const PREDEFINED_VIEWPOINTS: Viewpoint[] = [
     id: 'design',
     name: '设计管理视图',
     description: '聚焦设计相关的文档',
+    type: 'tag',
     requiredTags: ['type.design'],
     isPredefined: true,
   },
@@ -50,8 +84,16 @@ export class ViewpointApplicationServiceImpl implements ViewpointApplicationServ
   constructor(
     @inject(TYPES.ArtifactFileSystemApplicationService)
     private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.MetadataRepository)
+    private metadataRepository: MetadataRepository,
+    @inject(TYPES.ArtifactRepository)
+    private artifactRepository: ArtifactRepository,
+    @inject(TYPES.VaultRepository)
+    private vaultRepository: VaultRepository,
     @inject(TYPES.VaultFileSystemAdapter)
     private vaultAdapter: VaultFileSystemAdapter,
+    @inject(TYPES.ConfigManager)
+    private configManager: ConfigManager,
     @inject(TYPES.Logger)
     private logger: Logger
   ) {}
@@ -132,6 +174,29 @@ export class ViewpointApplicationServiceImpl implements ViewpointApplicationServ
     vaultId?: string
   ): Promise<Result<Artifact[], ArtifactError>> {
     try {
+      // 代码关联视点特殊处理
+      if (viewpoint.type === 'code-related' && viewpoint.codeRelatedConfig) {
+        const currentFilePath = viewpoint.codeRelatedConfig.currentFilePath;
+        if (currentFilePath && viewpoint.codeRelatedConfig.mode === 'reverse') {
+          // 反向关联：代码 → 文档
+          return await this.getRelatedArtifacts(currentFilePath);
+        } else if (currentFilePath && viewpoint.codeRelatedConfig.mode === 'forward') {
+          // 正向关联：文档 → 代码（需要先判断是否为 Artifact）
+          const isArtifactResult = await this.isArtifactFile(currentFilePath);
+          if (isArtifactResult.success && isArtifactResult.value) {
+            const artifactResult = await this.getArtifactByPath(currentFilePath);
+            if (artifactResult.success && artifactResult.value) {
+              const codePathsResult = await this.getRelatedCodePaths(artifactResult.value.id);
+              // 正向关联返回空列表，因为代码路径不是 Artifact
+              return { success: true, value: [] };
+            }
+          }
+          return { success: true, value: [] };
+        }
+        return { success: true, value: [] };
+      }
+
+      // 标签视点处理
       const artifactsResult = await this.artifactService.listArtifacts(vaultId);
       if (!artifactsResult.success) {
         return artifactsResult;
@@ -159,6 +224,11 @@ export class ViewpointApplicationServiceImpl implements ViewpointApplicationServ
    * 检查 Artifact 是否匹配视点
    */
   matchesViewpoint(artifact: Artifact, viewpoint: Viewpoint): boolean {
+    // 代码关联视点不在此处匹配，由 filterArtifactsByViewpoint 处理
+    if (viewpoint.type === 'code-related') {
+      return false; // 代码关联视点需要特殊处理
+    }
+
     const artifactTags = artifact.tags || [];
 
     // 如果没有标签，直接排除
@@ -313,6 +383,267 @@ export class ViewpointApplicationServiceImpl implements ViewpointApplicationServ
         ),
       };
     }
+  }
+
+  // ========== 代码关联功能实现 ==========
+
+  /**
+   * 获取文档关联的代码路径
+   */
+  async getRelatedCodePaths(artifactId: string): Promise<Result<string[], ArtifactError>> {
+    try {
+      const metadataResult = await this.metadataRepository.findByArtifactId(artifactId);
+      if (!metadataResult.success) {
+        return {
+          success: false,
+          error: metadataResult.error,
+        };
+      }
+
+      if (!metadataResult.value) {
+        return { success: true, value: [] };
+      }
+
+      const codePaths = metadataResult.value.relatedCodePaths || [];
+      return { success: true, value: codePaths };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to get related code paths: ${error.message}`,
+          { artifactId },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 获取代码文件关联的文档
+   */
+  async getRelatedArtifacts(codePath: string): Promise<Result<Artifact[], ArtifactError>> {
+    try {
+      // 规范化代码路径（相对于工作区根目录）
+      const normalizedCodePath = this.normalizeCodePath(codePath);
+
+      // 通过 MetadataRepository 查询关联的元数据
+      const metadataResult = await this.metadataRepository.findByCodePath(normalizedCodePath);
+      if (!metadataResult.success) {
+        return {
+          success: false,
+          error: metadataResult.error,
+        };
+      }
+
+      // 根据元数据获取对应的 Artifact
+      const artifacts: Artifact[] = [];
+      for (const metadata of metadataResult.value) {
+        // 需要根据 artifactId 查找 Artifact
+        // 由于 ArtifactRepository 需要 vaultId，我们需要遍历所有 vault
+        const vaultsResult = await this.vaultRepository.findAll();
+        if (vaultsResult.success) {
+          for (const vault of vaultsResult.value) {
+            const artifactResult = await this.artifactRepository.findById(vault.id, metadata.artifactId);
+            if (artifactResult.success && artifactResult.value) {
+              artifacts.push(artifactResult.value);
+              break; // 找到后跳出循环
+            }
+          }
+        }
+      }
+
+      return { success: true, value: artifacts };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to get related artifacts: ${error.message}`,
+          { codePath },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 判断文件是否为 Artifact
+   */
+  async isArtifactFile(filePath: string): Promise<Result<boolean, ArtifactError>> {
+    try {
+      const artifactResult = await this.getArtifactByPath(filePath);
+      return { success: true, value: artifactResult.success && artifactResult.value !== null };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to check if file is artifact: ${error.message}`,
+          { filePath },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 判断文件是否为代码文件
+   */
+  isCodeFile(filePath: string): boolean {
+    const ext = path.extname(filePath).toLowerCase();
+    return CODE_FILE_EXTENSIONS.includes(ext);
+  }
+
+  /**
+   * 根据文件路径获取 Artifact
+   */
+  async getArtifactByPath(filePath: string): Promise<Result<Artifact | null, ArtifactError>> {
+    try {
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      
+      // 检查文件路径是否在 .architool 目录下
+      if (!filePath.includes(architoolRoot)) {
+        return { success: true, value: null };
+      }
+
+      // 提取相对路径（相对于 .architool 根目录）
+      const relativePath = path.relative(architoolRoot, filePath);
+      const parts = relativePath.split(path.sep);
+
+      // 路径格式：{vault-name}/artifacts/{artifact-path}
+      if (parts.length < 3 || parts[1] !== 'artifacts') {
+        return { success: true, value: null };
+      }
+
+      const vaultName = parts[0];
+      const artifactPath = parts.slice(2).join(path.sep);
+
+      // 查找 Vault
+      const vaultsResult = await this.vaultRepository.findAll();
+      if (!vaultsResult.success) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            `Failed to list vaults: ${vaultsResult.error.message}`,
+            { filePath }
+          ),
+        };
+      }
+
+      const vault = vaultsResult.value.find(v => v.name === vaultName);
+      if (!vault) {
+        return { success: true, value: null };
+      }
+
+      // 通过路径查找 Artifact
+      const artifactResult = await this.artifactRepository.findByPath(vault.id, artifactPath);
+      if (!artifactResult.success) {
+        return {
+          success: false,
+          error: artifactResult.error,
+        };
+      }
+
+      return { success: true, value: artifactResult.value };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to get artifact by path: ${error.message}`,
+          { filePath },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 组织代码路径为树形结构
+   */
+  organizeCodePathsAsTree(codePaths: string[]): CodePathTree {
+    const root: CodePathTreeNode = {
+      name: 'root',
+      path: '',
+      type: 'directory',
+      children: [],
+    };
+
+    for (const codePath of codePaths) {
+      const parts = codePath.split(path.sep).filter(p => p.length > 0);
+      let current = root;
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isLast = i === parts.length - 1;
+        const currentPath = parts.slice(0, i + 1).join(path.sep);
+
+        if (!current.children) {
+          current.children = [];
+        }
+
+        let child = current.children.find(c => c.name === part);
+        if (!child) {
+          child = {
+            name: part,
+            path: currentPath,
+            type: isLast ? 'file' : 'directory',
+            children: isLast ? undefined : [],
+          };
+          current.children.push(child);
+        }
+
+        current = child;
+      }
+    }
+
+    return { root };
+  }
+
+  /**
+   * 组织 Artifact 为树形结构（按 viewType 分类）
+   */
+  organizeArtifactsAsTree(artifacts: Artifact[]): ArtifactTree {
+    const root: ArtifactTreeNode = {
+      viewType: 'root',
+      artifacts: [],
+      children: [],
+    };
+
+    // 按 viewType 分组
+    const byViewType = new Map<string, Artifact[]>();
+    for (const artifact of artifacts) {
+      const viewType = artifact.viewType || 'document';
+      if (!byViewType.has(viewType)) {
+        byViewType.set(viewType, []);
+      }
+      byViewType.get(viewType)!.push(artifact);
+    }
+
+    // 创建树节点
+    for (const [viewType, viewTypeArtifacts] of byViewType.entries()) {
+      const node: ArtifactTreeNode = {
+        viewType,
+        artifacts: viewTypeArtifacts,
+      };
+      if (!root.children) {
+        root.children = [];
+      }
+      root.children.push(node);
+    }
+
+    return { root };
+  }
+
+  /**
+   * 规范化代码路径（相对于工作区根目录）
+   */
+  private normalizeCodePath(codePath: string): string {
+    // 如果路径是绝对路径，需要转换为相对路径
+    // 这里简化处理，假设传入的路径已经是相对路径或可以使用的路径
+    return path.normalize(codePath).replace(/\\/g, '/');
   }
 }
 

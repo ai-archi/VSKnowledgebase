@@ -101,6 +101,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const viewpointService = container.get<ViewpointApplicationService>(TYPES.ViewpointApplicationService);
   const templateService = container.get<TemplateApplicationService>(TYPES.TemplateApplicationService);
   const aiService = container.get<AIApplicationService>(TYPES.AIApplicationService);
+  const configManager = container.get<import('./core/config/ConfigManager').ConfigManager>(TYPES.ConfigManager);
 
   // 5. 创建命令适配器
   const commandAdapter = new CommandAdapter(context);
@@ -128,7 +129,12 @@ export async function activate(context: vscode.ExtensionContext) {
   taskCommands.register(commandAdapter);
 
   // 9. 初始化视点视图
-  const viewpointTreeDataProvider = new ViewpointTreeDataProvider(viewpointService, vaultService, logger);
+  const viewpointTreeDataProvider = new ViewpointTreeDataProvider(
+    viewpointService,
+    vaultService,
+    configManager,
+    logger
+  );
   vscode.window.createTreeView('architool.viewpointView', { treeDataProvider: viewpointTreeDataProvider });
   const viewpointCommands = new ViewpointCommands(viewpointService, logger);
   viewpointCommands.registerCommands(context);

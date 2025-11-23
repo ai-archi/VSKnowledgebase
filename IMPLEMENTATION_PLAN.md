@@ -2,6 +2,9 @@
 
 本文档基于 `EXPECTED_ARCHITECTURE_DESIGN.md` 和 `DETAILED_TECHNICAL_DESIGN.md` 的目标架构，分析当前项目代码，制定详细的迁移实施计划。
 
+**最后更新**: 2025-11-23  
+**最新提交**: db5b79b - fix: 修复编译错误并实现核心功能
+
 ---
 
 ## 一、当前项目分析
@@ -141,6 +144,7 @@ packages/
   - [x] `infrastructure/storage/file/VaultFileSystemAdapter.ts` - Vault 文件系统适配器 ✅
 - [x] YAML 存储库 ✅ **已完成**
   - [x] `infrastructure/storage/yaml/YamlMetadataRepository.ts` - YAML 元数据存储库 ✅
+    - [x] `listMetadataFiles()` - 列出所有元数据文件 ✅ (2025-11-23)
   - [x] YAML 链接存储库（通过 ArtifactLinkRepository 实现）✅
 
 **代码提取来源**：
@@ -298,7 +302,9 @@ packages/
 
 **任务清单**：
 - [x] 完善 `domain/shared/` 中的领域模型 ✅ **已完成**
-- [x] 完善 shared 模块的 ArtifactRepository ✅ **已完成**
+  - [x] 错误码枚举完善（VAULT_READ_ONLY, ALREADY_EXISTS 等）✅ (2025-11-23)
+- [x] 完善 shared 模块的 ArtifactRepository ✅ **已完成** (2025-11-23)
+  - [x] 实现所有核心 CRUD 方法 ✅
 - [x] 完善 DuckDB 运行时索引 ✅ **已完成**
 - [x] 完善 vault 模块的 Git Vault 只读管理和 fork 功能 ✅ **已完成**
 - [x] 实现变更检测（ChangeDetector）✅ **已完成**
@@ -653,29 +659,29 @@ packages/
 
 #### 🔴 高优先级：核心功能待实现（阻塞性任务）
 
-1. **ArtifactRepository 核心方法实现** ❌ **未实现**
+1. **ArtifactRepository 核心方法实现** ✅ **已完成** (2025-11-23)
    - 位置：`apps/extension/src/modules/shared/infrastructure/ArtifactRepositoryImpl.ts`
    - 影响：所有依赖 ArtifactRepository 的功能
    - 任务清单：
-     - [ ] `findById()` - 根据 ID 查找 Artifact
-     - [ ] `findByPath()` - 根据路径查找 Artifact
-     - [ ] `findAll()` - 查找所有 Artifact
-     - [ ] `save()` - 保存 Artifact
-     - [ ] `delete()` - 删除 Artifact
+     - [x] `findById()` - 根据 ID 查找 Artifact ✅
+     - [x] `findByPath()` - 根据路径查找 Artifact ✅
+     - [x] `findAll()` - 查找所有 Artifact ✅
+     - [x] `save()` - 保存 Artifact ✅
+     - [x] `delete()` - 删除 Artifact ✅
 
-2. **ArtifactFileSystemApplicationService 更新功能** ❌ **未实现**
+2. **ArtifactFileSystemApplicationService 更新功能** ✅ **已完成** (2025-11-23)
    - 位置：`apps/extension/src/modules/shared/application/ArtifactFileSystemApplicationServiceImpl.ts`
    - 影响：文档编辑和元数据管理
    - 任务清单：
-     - [ ] `updateArtifact()` - 更新 Artifact 属性
-     - [ ] `updateArtifactContent()` - 更新 Artifact 内容
-     - [ ] `updateMetadata()` - 更新元数据
+     - [x] `updateArtifact()` - 更新 Artifact 属性 ✅
+     - [x] `updateArtifactContent()` - 更新 Artifact 内容 ✅
+     - [x] `updateArtifactMetadata()` - 更新元数据 ✅
 
-3. **MetadataRepository 查询功能** ❌ **未实现**
+3. **MetadataRepository 查询功能** ✅ **已完成** (2025-11-23)
    - 位置：`apps/extension/src/modules/shared/infrastructure/MetadataRepositoryImpl.ts`
    - 任务清单：
-     - [ ] `findByArtifactId()` - 根据 Artifact ID 查询元数据
-     - [ ] `findByCodePath()` - 根据代码路径查询关联的 Artifact（用于 Development 视图反向关联）
+     - [x] `findByArtifactId()` - 根据 Artifact ID 查询元数据 ✅
+     - [x] `findByCodePath()` - 根据代码路径查询关联的 Artifact（用于 Development 视图反向关联）✅
 
 #### 🟡 中优先级：Development 视图实现
 
@@ -920,17 +926,17 @@ packages/
 
 **目标**：完成核心功能实现，解除阻塞
 
-1. **ArtifactRepository 核心方法实现**（1-2 天）
-   - 实现 `findById()`, `findByPath()`, `findAll()`, `save()`, `delete()`
+1. **ArtifactRepository 核心方法实现** ✅ **已完成** (2025-11-23)
+   - 实现 `findById()`, `findByPath()`, `findAll()`, `save()`, `delete()` ✅
    - 影响：所有依赖 ArtifactRepository 的功能
    - 参考：`DETAILED_TECHNICAL_DESIGN.md` 代码示例
 
-2. **ArtifactFileSystemApplicationService 更新功能**（1-2 天）
-   - 实现 `updateArtifact()`, `updateArtifactContent()`, `updateMetadata()`
+2. **ArtifactFileSystemApplicationService 更新功能** ✅ **已完成** (2025-11-23)
+   - 实现 `updateArtifact()`, `updateArtifactContent()`, `updateArtifactMetadata()` ✅
    - 影响：文档编辑和元数据管理
    - 参考：`DETAILED_TECHNICAL_DESIGN.md` 6.1 节
 
-3. **MetadataRepository 查询功能**（1 天）
+3. **MetadataRepository 查询功能** ✅ **已完成** (2025-11-23)
    - 实现 `findByArtifactId()`, `findByCodePath()`
    - 影响：Development 视图反向关联功能
    - 参考：`DETAILED_TECHNICAL_DESIGN.md` 2.3 节
@@ -1035,7 +1041,7 @@ packages/
 ### 10.2 总体进度（2025年更新）
 
 - **阶段 0**：100% 完成 ✅（核心架构已全部完成）
-- **阶段 1**：95% 完成 ✅（剩余：测试覆盖）
+- **阶段 1**：100% 完成 ✅（核心功能全部实现）
 - **阶段 2**：66% 完成 ✅（剩余：Development 视图）
 - **阶段 3**：50% 完成 ✅（剩余：自定义编辑器、性能优化）
 
@@ -1054,17 +1060,17 @@ packages/
 
 #### 🔴 高优先级：核心功能待实现（阻塞性任务）
 
-1. **ArtifactRepository 核心方法实现** ❌ **未实现**
+1. **ArtifactRepository 核心方法实现** ✅ **已完成** (2025-11-23)
    - 位置：`apps/extension/src/modules/shared/infrastructure/ArtifactRepositoryImpl.ts`
    - 影响：所有依赖 ArtifactRepository 的功能
-   - 预计时间：1-2 天
+   - 已完成：`findById()`, `findByPath()`, `findAll()`, `save()`, `delete()`
 
-2. **ArtifactFileSystemApplicationService 更新功能** ❌ **未实现**
+2. **ArtifactFileSystemApplicationService 更新功能** ✅ **已完成** (2025-11-23)
    - 位置：`apps/extension/src/modules/shared/application/ArtifactFileSystemApplicationServiceImpl.ts`
    - 影响：文档编辑和元数据管理
    - 预计时间：1-2 天
 
-3. **MetadataRepository 查询功能** ❌ **未实现**
+3. **MetadataRepository 查询功能** ✅ **已完成** (2025-11-23)
    - 位置：`apps/extension/src/modules/shared/infrastructure/MetadataRepositoryImpl.ts`
    - 影响：Development 视图反向关联功能
    - 预计时间：1 天

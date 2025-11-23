@@ -47,6 +47,7 @@ export class ViewpointCommands {
         const vaultId = 'default'; // 临时值
 
         const result = await this.viewpointService.createViewpoint(vaultId, {
+          type: 'tag', // 自定义视点默认为标签视点
           name,
           description,
           requiredTags,
