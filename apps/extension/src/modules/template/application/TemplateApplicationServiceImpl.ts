@@ -149,9 +149,37 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         }
       }
 
+      // 尝试从 README.md 读取描述
+      let description: string | undefined = undefined;
+      const readmePath = path.join(libraryPath, 'README.md');
+      if (fs.existsSync(readmePath)) {
+        try {
+          const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+          // 提取第一段作为描述（去除 Markdown 标题和空行）
+          const lines = readmeContent.split('\n').filter(line => line.trim().length > 0);
+          // 跳过 Markdown 标题（以 # 开头）
+          const descriptionLines: string[] = [];
+          for (const line of lines) {
+            if (line.trim().startsWith('#')) {
+              continue; // 跳过标题
+            }
+            descriptionLines.push(line.trim());
+            // 取第一段（遇到空行或达到一定长度停止）
+            if (descriptionLines.length >= 3 || line.trim().length === 0) {
+              break;
+            }
+          }
+          if (descriptionLines.length > 0) {
+            description = descriptionLines.join(' ').substring(0, 200); // 限制长度
+          }
+        } catch (error: any) {
+          this.logger.warn(`Failed to read README.md for template library: ${libraryName}`, error);
+        }
+      }
+
       const library: TemplateLibrary = {
         name: libraryName,
-        description: undefined, // TODO: 从 README.md 读取
+        description,
         vaultId,
         templates,
       };

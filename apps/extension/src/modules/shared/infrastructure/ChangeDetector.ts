@@ -4,6 +4,8 @@ import { Artifact } from '../../../domain/shared/artifact/Artifact';
 import { ArtifactChange, ChangeType } from '../../../domain/shared/artifact/ArtifactChange';
 import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
 import { ArtifactFileSystemAdapter } from '../../../infrastructure/storage/file/ArtifactFileSystemAdapter';
+import { ArtifactRepository } from './ArtifactRepository';
+import { VaultRepository } from './VaultRepository';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
@@ -41,6 +43,10 @@ export class ChangeDetectorImpl implements ChangeDetector {
     private vaultAdapter: VaultFileSystemAdapter,
     @inject(TYPES.ArtifactFileSystemAdapter)
     private fileAdapter: ArtifactFileSystemAdapter,
+    @inject(TYPES.ArtifactRepository)
+    private artifactRepository: ArtifactRepository,
+    @inject(TYPES.VaultRepository)
+    private vaultRepository: VaultRepository,
     @inject(TYPES.Logger)
     private logger: Logger
   ) {}
@@ -87,21 +93,68 @@ export class ChangeDetectorImpl implements ChangeDetector {
    */
   async detectFileChanges(vaultName: string, artifactPath: string): Promise<ArtifactChange | null> {
     try {
+      // 通过 vaultName 查找 Vault
+      const vaultResult = await this.vaultRepository.findByName(vaultName);
+      if (!vaultResult.success || !vaultResult.value) {
+        this.logger.warn(`Vault not found: ${vaultName}`);
+        return null;
+      }
+
+      const vaultId = vaultResult.value.id;
       const fullPath = this.fileAdapter.getArtifactPath(vaultName, artifactPath);
       
       if (!fs.existsSync(fullPath)) {
         // 文件不存在，可能是删除
-        return null; // 需要从索引中查找对应的 artifactId
+        // 尝试从 ArtifactRepository 查找对应的 Artifact
+        const artifactResult = await this.artifactRepository.findByPath(vaultId, artifactPath);
+        if (artifactResult.success && artifactResult.value) {
+          // 文件已删除，创建 DELETE 变更
+          return this.createChange(artifactResult.value.id, 'DELETE', null, artifactResult.value);
+        }
+        return null;
       }
 
       // 读取文件内容并计算哈希
       const content = fs.readFileSync(fullPath, 'utf-8');
       const currentHash = this.calculateHash(content);
 
-      // 检查是否有之前的哈希记录
-      // TODO: 需要从索引或缓存中获取 artifactId 和之前的哈希
-      // 这里简化处理，仅返回 null
-      return null;
+      // 通过路径查找 Artifact，获取之前的哈希值
+      const artifactResult = await this.artifactRepository.findByPath(vaultId, artifactPath);
+      if (!artifactResult.success) {
+        this.logger.warn(`Failed to find artifact by path: ${artifactPath}`);
+        return null;
+      }
+
+      if (!artifactResult.value) {
+        // Artifact 不存在，可能是新创建的文件
+        // 这里无法确定 artifactId，返回 null
+        // 实际应该通过其他方式（如文件监听）触发创建流程
+        return null;
+      }
+
+      const artifact = artifactResult.value;
+      const previousHash = artifact.contentHash || this.artifactHashes.get(artifact.id) || '';
+
+      // 检查哈希是否变更
+      if (previousHash && previousHash !== currentHash) {
+        // 更新缓存中的哈希值
+        this.artifactHashes.set(artifact.id, currentHash);
+        
+        // 创建 UPDATE 变更
+        const updatedArtifact: Artifact = {
+          ...artifact,
+          contentHash: currentHash,
+          updatedAt: new Date().toISOString(),
+        };
+        return this.createChange(artifact.id, 'UPDATE', updatedArtifact, artifact);
+      }
+
+      // 如果之前没有哈希记录，更新缓存
+      if (!previousHash) {
+        this.artifactHashes.set(artifact.id, currentHash);
+      }
+
+      return null; // 无变更
     } catch (error: any) {
       this.logger.error('Failed to detect file changes', error);
       return null;
@@ -113,9 +166,35 @@ export class ChangeDetectorImpl implements ChangeDetector {
    */
   async recordChange(change: ArtifactChange): Promise<void> {
     try {
-      // 获取 Vault 名称（从 artifactId 或 change 中获取）
-      // TODO: 需要从 ArtifactRepository 获取完整的 Artifact 信息
-      const vaultName = 'default'; // 临时值
+      // 通过 artifactId 查找 Artifact，获取 Vault 信息
+      // 需要遍历所有 Vault 查找 Artifact
+      const vaultsResult = await this.vaultRepository.findAll();
+      if (!vaultsResult.success) {
+        this.logger.error('Failed to list vaults for recording change');
+        throw new Error('Failed to list vaults');
+      }
+
+      let vaultName: string | undefined;
+      
+      // 遍历所有 Vault 查找 Artifact
+      for (const vault of vaultsResult.value) {
+        const artifactResult = await this.artifactRepository.findById(vault.id, change.artifactId);
+        if (artifactResult.success && artifactResult.value) {
+          vaultName = artifactResult.value.vault.name;
+          break;
+        }
+      }
+
+      if (!vaultName) {
+        // 如果找不到 Artifact，尝试从变更记录中推断（如果之前有记录）
+        // 或者使用默认值（不推荐，但为了兼容性）
+        this.logger.warn(`Cannot find vault for artifact: ${change.artifactId}, using first vault as fallback`);
+        if (vaultsResult.value.length > 0) {
+          vaultName = vaultsResult.value[0].name;
+        } else {
+          throw new Error('No vaults available to record change');
+        }
+      }
 
       // 写入变更记录文件
       const changeDir = path.join(this.vaultAdapter.getVaultsRoot(), vaultName, 'changes');
@@ -139,7 +218,7 @@ export class ChangeDetectorImpl implements ChangeDetector {
       // 使用 YAML 格式写入
       fs.writeFileSync(changeFilePath, yaml.dump(changeData), 'utf-8');
 
-      this.logger.info(`Change recorded: ${change.changeId} (${change.changeType})`);
+      this.logger.info(`Change recorded: ${change.changeId} (${change.changeType}) in vault: ${vaultName}`);
     } catch (error: any) {
       this.logger.error('Failed to record change', error);
       throw error;
