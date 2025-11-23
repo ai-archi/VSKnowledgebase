@@ -12,7 +12,7 @@ export class YamlMetadataRepository {
   }
 
   private getMetadataFilePath(metadataId: string): string {
-    return path.join(this.vaultPath, 'metadata', `${metadataId}.yml`);
+    return path.join(this.vaultPath, 'metadata', `${metadataId}.metadata.yml`);
   }
 
   async writeMetadata(metadata: ArtifactMetadata): Promise<Result<void, ArtifactError>> {
@@ -71,6 +71,22 @@ export class YamlMetadataRepository {
         error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, `Failed to delete metadata: ${error.message}`, {}, error),
       };
     }
+  }
+
+  /**
+   * 列出所有元数据文件路径
+   */
+  async listMetadataFiles(): Promise<string[]> {
+    const metadataDir = path.join(this.vaultPath, 'metadata');
+    
+    if (!fs.existsSync(metadataDir)) {
+      return [];
+    }
+
+    const files = fs.readdirSync(metadataDir);
+    return files
+      .filter((file: string) => file.endsWith('.metadata.yml'))
+      .map((file: string) => path.join(metadataDir, file));
   }
 }
 

@@ -388,24 +388,58 @@ packages/
 
 **参考**：`EXPECTED_ARCHITECTURE_DESIGN.md` 3.4 节
 
-#### 3.2.3 Development 视图 ❌ **未实现**
+#### 3.2.3 视点视图代码关联功能 ❌ **未实现**
+
+**核心设计**：将开发视图合并到视点视图中，作为"当前代码关联文档"视点（默认视点）
 
 **任务清单**：
-- [ ] 创建 `apps/extension/src/modules/development/` 模块结构
-  - [ ] `application/DevelopmentApplicationService.ts` - 应用服务接口
-  - [ ] `application/DevelopmentApplicationServiceImpl.ts` - 应用服务实现
-  - [ ] `interface/DevelopmentTreeDataProvider.ts` - 树视图提供者
-  - [ ] `interface/Commands.ts` - 命令注册
-- [ ] 实现代码-设计关联功能
-  - [ ] 代码路径与 Artifact 关联
-  - [ ] 代码变更追踪
-- [ ] 实现代码审查功能
+- [ ] 扩展 `apps/extension/src/modules/viewpoint/` 模块，添加代码关联功能
+  - [ ] 扩展 `application/ViewpointApplicationService.ts` - 添加代码关联方法（原 DevelopmentApplicationService 的方法）
+  - [ ] 扩展 `application/ViewpointApplicationServiceImpl.ts` - 实现代码关联功能
+  - [ ] 扩展 `interface/ViewpointTreeDataProvider.ts` - 支持响应式更新和代码关联视点
+  - [ ] 创建 `interface/FileWatcher.ts` - 文件打开事件监听器（监听 `onDidChangeActiveTextEditor`）
+  - [ ] 扩展 `interface/Commands.ts` - 添加视点切换命令
+- [ ] 实现响应式更新机制
+  - [ ] 监听 VSCode `onDidChangeActiveTextEditor` 事件
+  - [ ] 识别当前打开的文件类型（Artifact 或代码文件）
+  - [ ] 当打开代码文件时，自动切换到"当前代码关联文档"视点（如果用户没有选择其他视点）
+  - [ ] 根据文件类型触发相应的视图更新
+- [ ] 实现"当前代码关联文档"视点（默认视点）
+  - [ ] 创建预定义视点：`current-code-related`（代码关联视点）
+  - [ ] 实现反向关联（代码 → 文档）：
+    - [ ] 判断打开的文件是否为代码文件（通过扩展名判断）
+    - [ ] 通过 MetadataRepository 查询 `relatedCodePaths` 包含当前代码文件路径的所有 Artifact
+    - [ ] 以树形结构展示关联的文档（按 viewType 分类组织）
+    - [ ] 支持点击文档节点打开对应的文档
+  - [ ] 设置默认视点：用户没有选择视点时，自动显示"当前代码关联文档"视点
+- [ ] 实现正向关联（文档 → 代码）（可选，作为代码关联视点的另一种模式）
+  - [ ] 当打开文档（Artifact）时，可以切换到"文档关联代码"视点
+  - [ ] 判断打开的文件是否为 Artifact（通过路径判断）
+  - [ ] 获取 Artifact 的元数据（ArtifactMetadata）
+  - [ ] 从元数据中提取 `relatedCodePaths` 字段
+  - [ ] 以树形结构展示代码路径（按目录层级组织）
+  - [ ] 支持点击代码路径节点打开对应的代码文件
+- [ ] 实现代码路径树形展示
+  - [ ] 按目录结构组织代码路径
+  - [ ] 支持展开/折叠目录节点
+  - [ ] 显示文件图标和路径提示
+- [ ] 实现视点切换功能
+  - [ ] 支持在视点视图中选择不同的视点
+  - [ ] 支持在标签视点和代码关联视点之间切换
+  - [ ] 保存用户选择的视点（持久化）
+- [ ] 实现代码-设计关联功能（基于 ArtifactMetadata.relatedCodePaths）
+  - [ ] 代码路径与 Artifact 关联（通过元数据维护）
+  - [ ] 代码变更追踪（可选，未来扩展）
+- [ ] 实现代码审查功能（可选，未来扩展）
   - [ ] 代码审查任务创建
   - [ ] 审查状态管理
-- [ ] 实现规范检测（ESLint 集成）
+- [ ] 实现规范检测（ESLint 集成）（可选，未来扩展）
   - [ ] ESLint 规则检测
   - [ ] 规范违规报告
-- [ ] 实现前端视图（`apps/webview/src/modules/development-view/`）
+- [ ] 更新前端视图（`apps/webview/src/modules/viewpoint-view/`）
+  - [ ] 添加视点选择器（下拉菜单或列表）
+  - [ ] 支持代码关联视点的展示
+  - [ ] 支持响应式更新（当打开代码文件时）
 
 ---
 
@@ -413,12 +447,18 @@ packages/
 
 **目标**：完善功能，优化性能
 
-#### 3.3.1 视点视图（Viewpoint View）
+#### 3.3.1 视点视图（Viewpoint View）✅ **已完成（基础功能）**，需扩展代码关联功能
 
 **任务清单**：
-- [ ] 在 `apps/extension/src/modules/viewpoint/` 中实现
-  - [ ] `application/ViewpointApplicationService.ts`
-  - [ ] `interface/ViewpointTreeDataProvider.ts`
+- [x] 在 `apps/extension/src/modules/viewpoint/` 中实现基础功能 ✅ **已完成**
+  - [x] `application/ViewpointApplicationService.ts` ✅
+  - [x] `interface/ViewpointTreeDataProvider.ts` ✅
+- [ ] 扩展代码关联功能（合并开发视图）
+  - [ ] 添加代码关联方法到 ViewpointApplicationService
+  - [ ] 实现 FileWatcher（文件打开事件监听）
+  - [ ] 实现"当前代码关联文档"视点（默认视点）
+  - [ ] 实现响应式更新机制
+  - [ ] 实现视点切换功能
 
 **参考**：`EXPECTED_ARCHITECTURE_DESIGN.md` 3.2.2 节
 
@@ -558,11 +598,11 @@ packages/
 
 ---
 
-## 六、当前实施状态分析（2024年更新）
+## 六、当前实施状态分析（2025年更新）
 
 ### 6.0 已完成的核心任务 ✅
 
-#### 阶段 0 核心架构（约 100% 完成）✅
+#### 阶段 0 核心架构（100% 完成）✅
 
 - [x] **项目结构创建**：单体架构目录结构（apps/, domain/, infrastructure/）
 - [x] **领域核心模型**：Artifact、Vault、ArtifactMetadata、ArtifactLink 等完整定义
@@ -588,7 +628,7 @@ packages/
 - [x] **Webview 前端** ✅ **已完成**：Vue 3 + Vite 项目结构创建，前端视图模块完整实现
 - [x] **ArtifactLinkRepository** ✅ **已完成**：完整的链接 CRUD 操作和查询功能
 
-#### 阶段 1 基本功能（约 95% 完成）✅
+#### 阶段 1 基本功能（95% 完成）✅
 
 - [x] **Lookup 系统**：三区域设计、状态管理、Prompt 模板
 - [x] **文档视图**：DocumentTreeViewProvider、按 viewType/category 组织
@@ -596,7 +636,114 @@ packages/
 - [x] **变更追踪** ✅ **已完成**：ChangeDetector、ChangeRepository 实现
 - [x] **Webview 前端视图** ✅ **已完成**：DocumentView、TaskView、ViewpointView、TemplateView 组件
 
-### 6.1 待完成的关键任务
+#### 阶段 2 智能能力（66% 完成）✅
+
+- [x] **AI 服务** ✅ **已完成**：AIApplicationService、影响分析、提示生成
+- [x] **MCP Server** ✅ **已完成**：完整的标准知识库 map API
+- [ ] **视点视图代码关联功能** ❌ **未实现**：将开发视图合并到视点视图中
+
+#### 阶段 3 企业化（50% 完成）✅
+
+- [x] **视点视图** ✅ **已完成**：ViewpointApplicationService、预定义视点、自定义视点
+- [x] **模板视图** ✅ **已完成**：TemplateApplicationService、结构模板、内容模板
+- [ ] **自定义编辑器** ❌ **未实现**：ArchiMate、PlantUML、Mermaid 编辑器
+- [ ] **性能优化** ❌ **未实现**：DuckDB 索引优化、缓存策略
+
+### 6.1 待完成的关键任务（按优先级排序）
+
+#### 🔴 高优先级：核心功能待实现（阻塞性任务）
+
+1. **ArtifactRepository 核心方法实现** ❌ **未实现**
+   - 位置：`apps/extension/src/modules/shared/infrastructure/ArtifactRepositoryImpl.ts`
+   - 影响：所有依赖 ArtifactRepository 的功能
+   - 任务清单：
+     - [ ] `findById()` - 根据 ID 查找 Artifact
+     - [ ] `findByPath()` - 根据路径查找 Artifact
+     - [ ] `findAll()` - 查找所有 Artifact
+     - [ ] `save()` - 保存 Artifact
+     - [ ] `delete()` - 删除 Artifact
+
+2. **ArtifactFileSystemApplicationService 更新功能** ❌ **未实现**
+   - 位置：`apps/extension/src/modules/shared/application/ArtifactFileSystemApplicationServiceImpl.ts`
+   - 影响：文档编辑和元数据管理
+   - 任务清单：
+     - [ ] `updateArtifact()` - 更新 Artifact 属性
+     - [ ] `updateArtifactContent()` - 更新 Artifact 内容
+     - [ ] `updateMetadata()` - 更新元数据
+
+3. **MetadataRepository 查询功能** ❌ **未实现**
+   - 位置：`apps/extension/src/modules/shared/infrastructure/MetadataRepositoryImpl.ts`
+   - 任务清单：
+     - [ ] `findByArtifactId()` - 根据 Artifact ID 查询元数据
+     - [ ] `findByCodePath()` - 根据代码路径查询关联的 Artifact（用于 Development 视图反向关联）
+
+#### 🟡 中优先级：Development 视图实现
+
+4. **Development 视图模块** ❌ **未实现**
+   - 核心设计：响应式代码关联展示，根据编辑区打开的文件动态显示相关代码
+   - 任务清单：
+     - [ ] 创建 `apps/extension/src/modules/development/` 模块结构
+     - [ ] 实现 `DevelopmentApplicationService` 接口和实现
+     - [ ] 实现 `FileWatcher` - 监听 VSCode `onDidChangeActiveTextEditor` 事件
+     - [ ] 实现 `DevelopmentTreeDataProvider` - 响应式树视图提供者
+     - [ ] 实现正向关联（文档 → 代码）：
+       - [ ] 判断打开的文件是否为 Artifact
+       - [ ] 获取 Artifact 的元数据
+       - [ ] 从 `relatedCodePaths` 提取代码路径
+       - [ ] 树形展示代码路径（按目录层级组织）
+     - [ ] 实现反向关联（代码 → 文档）：
+       - [ ] 判断打开的文件是否为代码文件
+       - [ ] 查询 `relatedCodePaths` 包含当前代码路径的所有 Artifact
+       - [ ] 树形展示关联的文档（按 viewType 分类）
+     - [ ] 实现代码路径树形组织算法
+     - [ ] 实现点击节点打开文件功能
+   - 参考：`EXPECTED_ARCHITECTURE_DESIGN.md` 3.2.3 节、`DETAILED_TECHNICAL_DESIGN.md` 2.3 节
+
+#### 🟢 低优先级：功能完善和优化
+
+5. **测试覆盖** ❌ **未实现**
+   - 任务清单：
+     - [ ] 单元测试（领域模型、应用服务、存储库）
+     - [ ] 集成测试（文件系统、DuckDB、Git 操作）
+     - [ ] E2E 测试（VSCode 命令、视图交互）
+
+6. **向量搜索优化** ⚠️ **部分实现**
+   - 任务清单：
+     - [ ] 测试 DuckDB VSS 扩展兼容性（需要运行时测试）
+     - [ ] 优化搜索性能（批量处理、缓存）
+
+7. **代码中的 TODO 项完善** ⚠️ **部分实现**
+   - 任务清单：
+     - [ ] 文件删除功能（`apps/extension/src/main.ts:511`）
+     - [ ] 查询选项过滤（category, tags, viewType 等）
+     - [ ] ChangeDetector 完善（从索引获取 artifactId 和哈希值）
+     - [ ] DuckDB 索引完善（从 Artifact 获取 title 和 description）
+     - [ ] 模板描述读取（从 README.md 读取）
+     - [ ] Vault 选择功能
+     - [ ] AI 服务完善（从文件路径推断 artifactId）
+     - [ ] YamlMetadataRepository 重构（支持多 vault）
+
+8. **自定义编辑器** ❌ **未实现**
+   - 任务清单：
+     - [ ] 创建 `apps/extension/src/modules/editor/` 模块
+     - [ ] 实现 EditorManager（编辑器管理器）
+     - [ ] 实现 ArchiMate 编辑器（archimate-js 集成）
+     - [ ] 实现 PlantUML 编辑器（可选）
+     - [ ] 实现 Mermaid 编辑器（可选）
+     - [ ] 实现前端编辑器组件（`apps/webview/src/modules/editor/`）
+
+9. **性能优化** ❌ **未实现**
+   - 任务清单：
+     - [ ] DuckDB 索引优化
+     - [ ] 索引分片策略
+     - [ ] 缓存策略（LRU 缓存）
+     - [ ] 并发写入处理
+
+10. **可选功能**
+    - [ ] `archi.artifact.search` 命令（搜索功能已通过 lookup 和 MCP 提供）
+    - [ ] 团队任务支持（当前仅支持个人任务）
+
+### 6.2 待完成的关键任务（按阶段分类）
 
 #### 阶段 0 剩余任务（优先级：低）
 
@@ -622,7 +769,7 @@ packages/
      - [x] `mcp_knowledge_base_list_links` ✅ **已完成**（ArtifactLinkRepository 已实现）
      - [x] `mcp_knowledge_base_create_link` ✅ **已完成**（ArtifactLinkRepository 已实现）
 
-3. **向量搜索集成** ✅ **已完成**
+3. **向量搜索集成** ⚠️ **部分完成**
    - [x] 实现 VectorEmbeddingService（向量嵌入服务）
    - [x] 完善向量搜索功能（语义搜索）
    - [ ] 测试 DuckDB VSS 扩展兼容性（需要运行时测试）
@@ -653,14 +800,19 @@ packages/
    - [x] 影响分析（Impact Analysis）✅ **已完成**
    - [x] 提示生成（Prompt Generation）✅ **已完成**
 
-8. **Development 视图** ❌ **未实现**
-   - [ ] 创建 `apps/extension/src/modules/development/` 模块
-   - [ ] 实现 DevelopmentApplicationService（应用层）
-   - [ ] 实现 DevelopmentTreeDataProvider（接口层，树形展示）
-   - [ ] 实现前端视图（`apps/webview/src/modules/development-view/`）
-   - [ ] 代码-设计关联功能
-   - [ ] 代码审查功能
-   - [ ] 规范检测（ESLint 集成）
+8. **视点视图代码关联功能** ❌ **未实现**
+   - [ ] 扩展 `apps/extension/src/modules/viewpoint/` 模块，添加代码关联功能
+   - [ ] 扩展 ViewpointApplicationService（应用层）- 添加代码关联方法
+   - [ ] 扩展 ViewpointTreeDataProvider（接口层，响应式树形展示）
+   - [ ] 实现 FileWatcher（文件打开事件监听器）
+   - [ ] 实现"当前代码关联文档"视点（默认视点）
+   - [ ] 实现反向关联（代码 → 文档）：查询关联指定代码路径的 Artifact
+   - [ ] 实现正向关联（文档 → 代码）：从 ArtifactMetadata.relatedCodePaths 提取代码路径（可选）
+   - [ ] 实现代码路径树形展示（按目录层级组织）
+   - [ ] 实现视点切换功能
+   - [ ] 更新前端视图（`apps/webview/src/modules/viewpoint-view/`）- 支持代码关联视点
+   - [ ] 代码审查功能（可选，未来扩展）
+   - [ ] 规范检测（ESLint 集成）（可选，未来扩展）
 
 #### 阶段 3 任务（优先级：低）
 
@@ -679,7 +831,7 @@ packages/
     - [x] 实现模板处理逻辑（结构模板、内容模板）✅ **已完成**
     - [x] 实现前端视图（`apps/webview/src/modules/template-view/`）✅ **已完成**
 
-11. **自定义编辑器**
+11. **自定义编辑器** ❌ **未实现**（详见 6.1.8 节）
     - [ ] 创建 `apps/extension/src/modules/editor/` 模块
     - [ ] 实现 EditorManager（编辑器管理器）
     - [ ] 实现 ArchiMate 编辑器（archimate-js 集成）
@@ -687,7 +839,7 @@ packages/
     - [ ] 实现 Mermaid 编辑器（可选）
     - [ ] 实现前端编辑器组件（`apps/webview/src/modules/editor/`）
 
-12. **性能优化**
+12. **性能优化** ❌ **未实现**（详见 6.1.9 节）
     - [ ] DuckDB 索引优化
     - [ ] 索引分片策略
     - [ ] 缓存策略（LRU 缓存）
@@ -720,7 +872,7 @@ packages/
 
 - [x] AI 服务实现完成 ✅ **已完成**
 - [x] MCP Server 完整实现完成 ✅ **已完成**
-- [ ] Development 视图实现完成 ❌ **模块未创建**
+- [ ] 视点视图代码关联功能实现完成 ❌ **功能未实现**
 
 #### 6.2.4 阶段 3 检查清单
 
@@ -762,66 +914,83 @@ packages/
 
 ---
 
-## 八、下一步行动（更新）
+## 八、下一步行动（重新梳理）
 
-### 8.1 立即开始（优先级：高）
+### 8.1 立即开始（优先级：🔴 高 - 阻塞性任务）
 
-1. **完善 Git Vault 支持**：
-   - 实现 GitVaultAdapter 的完整功能（使用 simple-git 库）
-   - 实现 Git 克隆、同步、状态检测
-   - 实现 Vault fork 和 sync 命令
+**目标**：完成核心功能实现，解除阻塞
 
-2. **完善 MCP Server**：
-   - 实现进程内 MCP Server 启动逻辑
-   - 实现资源注册和工具集（标准知识库 map API）
+1. **ArtifactRepository 核心方法实现**（1-2 天）
+   - 实现 `findById()`, `findByPath()`, `findAll()`, `save()`, `delete()`
+   - 影响：所有依赖 ArtifactRepository 的功能
+   - 参考：`DETAILED_TECHNICAL_DESIGN.md` 代码示例
 
-3. **完善向量搜索**：
-   - 测试 DuckDB VSS 扩展兼容性
-   - 实现 VectorEmbeddingService
-   - 完善向量搜索功能
+2. **ArtifactFileSystemApplicationService 更新功能**（1-2 天）
+   - 实现 `updateArtifact()`, `updateArtifactContent()`, `updateMetadata()`
+   - 影响：文档编辑和元数据管理
+   - 参考：`DETAILED_TECHNICAL_DESIGN.md` 6.1 节
+
+3. **MetadataRepository 查询功能**（1 天）
+   - 实现 `findByArtifactId()`, `findByCodePath()`
+   - 影响：Development 视图反向关联功能
+   - 参考：`DETAILED_TECHNICAL_DESIGN.md` 2.3 节
 
 ### 8.2 短期目标（1-2 周）
 
-1. **完成阶段 0 剩余任务**：
-   - Git Vault 完整实现
-   - MCP Server 最小集实现
-   - 向量搜索集成
+**目标**：实现 Development 视图核心功能
 
-2. **创建 Webview 前端**：
-   - 创建 `apps/webview/` 项目结构
-   - 配置 Vue 3 + Vite
-   - 实现基础通信框架
+1. **视点视图代码关联功能扩展**（3-5 天）
+   - 扩展 `ViewpointApplicationService` 添加代码关联方法
+   - 实现 `FileWatcher` 监听文件打开事件
+   - 扩展 `ViewpointTreeDataProvider` 支持响应式更新
+   - 实现"当前代码关联文档"视点（默认视点）
 
-3. **实现变更追踪**：
-   - ChangeDetector 实现
-   - 变更记录存储
+2. **代码关联功能实现**（3-5 天）
+   - 实现反向关联（代码文件 → 文档）
+   - 实现正向关联（文档 → 代码路径）（可选）
+   - 实现代码路径树形组织算法
+   - 实现视点切换功能
+   - 实现点击节点打开文件功能
+
+3. **代码中的 TODO 项完善**（2-3 天）
+   - 完善 ChangeDetector
+   - 完善 DuckDB 索引
+   - 完善查询选项过滤
 
 ### 8.3 中期目标（1-2 月）
 
-1. **完善阶段 1 功能**：
-   - 变更追踪完整实现
-   - 测试覆盖（单元测试、集成测试）
+**目标**：完善功能和测试覆盖
 
-2. **开始阶段 2 功能**：
-   - AI 服务实现
-   - MCP Server 完整实现
-   - Development 视图（可选）
+1. **测试覆盖**（1-2 周）
+   - 单元测试（领域模型、应用服务、存储库）
+   - 集成测试（文件系统、DuckDB、Git 操作）
+   - E2E 测试（VSCode 命令、视图交互）
+
+2. **向量搜索优化**（3-5 天）
+   - 测试 DuckDB VSS 扩展兼容性
+   - 优化搜索性能（批量处理、缓存）
+
+3. **视点视图扩展功能**（可选，1 周）
+   - 代码审查功能
+   - 规范检测（ESLint 集成）
 
 ### 8.4 长期目标（3-6 月）
 
-1. **完成所有视图模块**：
-   - 视点视图（Viewpoint View）
-   - 模板视图（Template View）
+**目标**：完善企业级功能和性能优化
 
-2. **实现自定义编辑器**：
-   - ArchiMate 编辑器
+1. **自定义编辑器**（2-3 周）
+   - ArchiMate 编辑器（archimate-js 集成）
    - PlantUML 编辑器（可选）
    - Mermaid 编辑器（可选）
 
-3. **性能优化**：
+2. **性能优化**（1-2 周）
    - DuckDB 索引优化
-   - 缓存策略
+   - 缓存策略（LRU 缓存）
    - 并发写入处理
+
+3. **可选功能**（按需实现）
+   - `archi.artifact.search` 命令
+   - 团队任务支持
 
 ---
 
@@ -863,12 +1032,17 @@ packages/
    - 支持多种查询方式
    - 完善 MCP Tools 的链接功能
 
-### 10.2 总体进度
+### 10.2 总体进度（2025年更新）
 
-- **阶段 0**：100% 完成 ✅
+- **阶段 0**：100% 完成 ✅（核心架构已全部完成）
 - **阶段 1**：95% 完成 ✅（剩余：测试覆盖）
 - **阶段 2**：66% 完成 ✅（剩余：Development 视图）
 - **阶段 3**：50% 完成 ✅（剩余：自定义编辑器、性能优化）
+
+**关键阻塞**：
+- 🔴 ArtifactRepository 核心方法未实现（影响所有功能）
+- 🔴 ArtifactFileSystemApplicationService 更新功能未实现（影响文档编辑）
+- 🟡 Development 视图未实现（影响代码-文档关联展示）
 
 ### 10.3 代码统计
 
@@ -876,19 +1050,52 @@ packages/
 - 新增文件：32 个
 - 代码质量评分：89/100
 
-### 10.4 待完成的任务
+### 10.4 待完成的任务（重新梳理）
 
-#### 高优先级（可选）
-1. **`archi.artifact.search` 命令** - 搜索功能已通过 `archi.lookup` 和 MCP Tools 提供，可添加独立命令以提升用户体验
-2. **测试覆盖** - 单元测试、集成测试、E2E 测试（当前跳过，后续补充）
+#### 🔴 高优先级：核心功能待实现（阻塞性任务）
 
-#### 中优先级
-3. **Development 视图** ❌ **模块未创建** - 需要创建完整模块结构，包括代码-设计关联、代码审查、规范检测（ESLint 集成）
-4. **向量搜索优化** - DuckDB VSS 扩展兼容性测试、性能优化（批量处理、缓存）
+1. **ArtifactRepository 核心方法实现** ❌ **未实现**
+   - 位置：`apps/extension/src/modules/shared/infrastructure/ArtifactRepositoryImpl.ts`
+   - 影响：所有依赖 ArtifactRepository 的功能
+   - 预计时间：1-2 天
 
-#### 低优先级
-5. **自定义编辑器** - ArchiMate、PlantUML、Mermaid 编辑器
-6. **性能优化** - DuckDB 索引优化、索引分片策略、缓存策略（LRU 缓存）、并发写入处理
+2. **ArtifactFileSystemApplicationService 更新功能** ❌ **未实现**
+   - 位置：`apps/extension/src/modules/shared/application/ArtifactFileSystemApplicationServiceImpl.ts`
+   - 影响：文档编辑和元数据管理
+   - 预计时间：1-2 天
+
+3. **MetadataRepository 查询功能** ❌ **未实现**
+   - 位置：`apps/extension/src/modules/shared/infrastructure/MetadataRepositoryImpl.ts`
+   - 影响：Development 视图反向关联功能
+   - 预计时间：1 天
+
+#### 🟡 中优先级：Development 视图实现
+
+4. **视点视图代码关联功能** ❌ **未实现**
+   - 核心设计：将开发视图合并到视点视图中，作为"当前代码关联文档"视点（默认视点）
+   - 预计时间：1-2 周
+   - 详细任务清单：见 3.2.3 节
+
+#### 🟢 低优先级：功能完善和优化
+
+5. **测试覆盖** ❌ **未实现**
+   - 预计时间：1-2 周
+
+6. **向量搜索优化** ⚠️ **部分实现**
+   - 预计时间：3-5 天
+
+7. **代码中的 TODO 项完善** ⚠️ **部分实现**
+   - 预计时间：2-3 天
+
+8. **自定义编辑器** ❌ **未实现**
+   - 预计时间：2-3 周
+
+9. **性能优化** ❌ **未实现**
+   - 预计时间：1-2 周
+
+10. **可选功能**
+    - `archi.artifact.search` 命令（搜索功能已通过 lookup 和 MCP 提供）
+    - 团队任务支持（当前仅支持个人任务）
 
 ### 10.5 代码验证结果
 

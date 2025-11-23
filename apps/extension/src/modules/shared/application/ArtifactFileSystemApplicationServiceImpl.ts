@@ -54,7 +54,11 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       return validationResult;
     }
 
-    const writeResult = await this.fileAdapter.writeArtifact(artifact, opts.content);
+    const writeResult = await this.fileAdapter.writeArtifact(
+      opts.vault.name,
+      opts.path,
+      opts.content
+    );
     if (!writeResult.success) {
       return writeResult;
     }
@@ -123,19 +127,178 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   }
 
   async updateArtifact(artifactId: string, updates: UpdateArtifactOpts): Promise<Result<Artifact, ArtifactError>> {
-    // TODO: Implement artifact update
-    return {
-      success: false,
-      error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, 'Not implemented'),
-    };
+    try {
+      // 先获取 artifact（需要 vaultId）
+      // artifactId 可能是 artifact ID 或 path
+      // 需要先找到 artifact 以获取 vaultId
+      const allArtifactsResult = await this.listArtifacts();
+      if (!allArtifactsResult.success) {
+        return allArtifactsResult;
+      }
+
+      const artifact = allArtifactsResult.value.find(
+        a => a.id === artifactId || a.path === artifactId
+      );
+
+      if (!artifact) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Artifact not found: ${artifactId}`,
+            { artifactId }
+          ),
+        };
+      }
+
+      const vaultId = artifact.vault.id;
+      const vaultName = artifact.vault.name;
+
+      // 检查 Vault 是否为只读
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${vaultId}`,
+            { vaultId }
+          ),
+        };
+      }
+
+      if (vaultResult.value.readOnly) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.VAULT_READ_ONLY,
+            `Cannot update artifact in read-only vault: ${vaultName}`,
+            { vaultId, vaultName }
+          ),
+        };
+      }
+
+      // 更新 Artifact 属性
+      const updatedArtifact: Artifact = {
+        ...artifact,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 如果更新了内容，需要写入文件
+      if (updates.content !== undefined) {
+        const writeResult = await this.fileAdapter.writeArtifact(
+          vaultName,
+          artifact.path,
+          updates.content
+        );
+        if (!writeResult.success) {
+          return writeResult;
+        }
+      }
+
+      // 如果更新了元数据相关字段，需要更新元数据文件
+      if (updates.title || updates.description || updates.tags || updates.category) {
+        if (artifact.metadataId) {
+          const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+          if (metadataResult.success && metadataResult.value) {
+            const metadata = metadataResult.value;
+            const updatedMetadata: ArtifactMetadata = {
+              ...metadata,
+              ...(updates.title && { type: metadata.type }), // 保持 type
+              ...(updates.tags && { tags: updates.tags }),
+              updatedAt: new Date().toISOString(),
+            };
+            await this.metadataRepo.update(updatedMetadata);
+          }
+        }
+      }
+
+      this.logger.info('Artifact updated', { artifactId: updatedArtifact.id });
+      return { success: true, value: updatedArtifact };
+    } catch (error: any) {
+      this.logger.error('Failed to update artifact', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to update artifact: ${error.message}`,
+          { artifactId },
+          error
+        ),
+      };
+    }
   }
 
   async updateArtifactContent(vaultId: string, artifactId: string, newContent: string): Promise<Result<void, ArtifactError>> {
-    // TODO: Implement content update
-    return {
-      success: false,
-      error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, 'Not implemented'),
-    };
+    try {
+      // 获取 artifact
+      const artifactResult = await this.getArtifact(vaultId, artifactId);
+      if (!artifactResult.success) {
+        return artifactResult;
+      }
+
+      const artifact = artifactResult.value;
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${vaultId}`,
+            { vaultId }
+          ),
+        };
+      }
+
+      if (vaultResult.value.readOnly) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.VAULT_READ_ONLY,
+            `Cannot update artifact content in read-only vault: ${vaultResult.value.name}`,
+            { vaultId }
+          ),
+        };
+      }
+
+      // 写入新内容
+      const writeResult = await this.fileAdapter.writeArtifact(
+        vaultResult.value.name,
+        artifact.path,
+        newContent
+      );
+
+      if (!writeResult.success) {
+        return writeResult;
+      }
+
+      // 更新 artifact 的 updatedAt（通过更新元数据）
+      if (artifact.metadataId) {
+        const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+        if (metadataResult.success && metadataResult.value) {
+          const updatedMetadata: ArtifactMetadata = {
+            ...metadataResult.value,
+            updatedAt: new Date().toISOString(),
+          };
+          await this.metadataRepo.update(updatedMetadata);
+        }
+      }
+
+      this.logger.info('Artifact content updated', { artifactId });
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      this.logger.error('Failed to update artifact content', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to update artifact content: ${error.message}`,
+          { vaultId, artifactId },
+          error
+        ),
+      };
+    }
   }
 
   async deleteArtifact(vaultId: string, artifactId: string): Promise<Result<void, ArtifactError>> {
@@ -434,11 +597,105 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   }
 
   async updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>> {
-    // TODO: Implement metadata update
-    return {
-      success: false,
-      error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, 'Not implemented'),
-    };
+    try {
+      // 获取 artifact
+      const allArtifactsResult = await this.listArtifacts();
+      if (!allArtifactsResult.success) {
+        return {
+          success: false,
+          error: allArtifactsResult.error,
+        };
+      }
+
+      const artifact = allArtifactsResult.value.find(
+        a => a.id === artifactId || a.path === artifactId
+      );
+
+      if (!artifact) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Artifact not found: ${artifactId}`,
+            { artifactId }
+          ),
+        };
+      }
+
+      if (!artifact.metadataId) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Artifact has no metadata: ${artifactId}`,
+            { artifactId }
+          ),
+        };
+      }
+
+      // 检查 Vault 是否为只读
+      const vaultResult = await this.vaultService.getVault(artifact.vault.id);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${artifact.vault.id}`,
+            { vaultId: artifact.vault.id }
+          ),
+        };
+      }
+
+      if (vaultResult.value.readOnly) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.VAULT_READ_ONLY,
+            `Cannot update metadata in read-only vault: ${artifact.vault.name}`,
+            { vaultId: artifact.vault.id }
+          ),
+        };
+      }
+
+      // 获取现有元数据
+      const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+      if (!metadataResult.success || !metadataResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Metadata not found: ${artifact.metadataId}`,
+            { metadataId: artifact.metadataId }
+          ),
+        };
+      }
+
+      // 更新元数据
+      const updatedMetadata: ArtifactMetadata = {
+        ...metadataResult.value,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updateResult = await this.metadataRepo.update(updatedMetadata);
+      if (!updateResult.success) {
+        return updateResult;
+      }
+
+      this.logger.info('Artifact metadata updated', { artifactId, metadataId: artifact.metadataId });
+      return { success: true, value: updatedMetadata };
+    } catch (error: any) {
+      this.logger.error('Failed to update artifact metadata', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to update artifact metadata: ${error.message}`,
+          { artifactId },
+          error
+        ),
+      };
+    }
   }
 }
 

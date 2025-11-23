@@ -36,6 +36,13 @@ export class ArtifactFileSystemAdapter {
   }
 
   /**
+   * 获取 Artifact 文件的完整路径
+   */
+  getArtifactPath(vaultName: string, artifactPath: string): string {
+    return path.join(this.getVaultPath(vaultName), 'artifacts', artifactPath);
+  }
+
+  /**
    * 读取 Artifact 内容
    */
   async readArtifact(vaultName: string, artifactPath: string): Promise<Result<string, ArtifactError>> {

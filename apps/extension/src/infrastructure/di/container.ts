@@ -78,7 +78,8 @@ export function createContainer(
 
   // Repositories
   container.bind(TYPES.ArtifactRepository)
-    .to(ArtifactRepositoryImpl).inSingletonScope();
+    .to(ArtifactRepositoryImpl)
+    .inSingletonScope();
   container.bind(TYPES.MetadataRepository)
     .to(MetadataRepositoryImpl).inSingletonScope();
   container.bind(TYPES.VaultRepository)
