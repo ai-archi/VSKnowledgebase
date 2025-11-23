@@ -136,7 +136,7 @@ export async function activate(context: vscode.ExtensionContext) {
     logger
   );
   vscode.window.createTreeView('architool.viewpointView', { treeDataProvider: viewpointTreeDataProvider });
-  const viewpointCommands = new ViewpointCommands(viewpointService, logger);
+  const viewpointCommands = new ViewpointCommands(viewpointService, vaultService, logger);
   viewpointCommands.registerCommands(context);
 
   // 10. 初始化模板视图
@@ -511,11 +511,12 @@ export async function activate(context: vscode.ExtensionContext) {
           }
         );
 
-        const result = await vaultService.removeVault(selectedVault.id);
+        const result = await vaultService.removeVault(selectedVault.id, {
+          deleteFiles: deleteFiles === 'Yes',
+        });
         if (result.success) {
           if (deleteFiles === 'Yes') {
-            // TODO: Implement file deletion
-            vscode.window.showInformationMessage(`Vault '${selectedVault.label}' removed. Files deletion not yet implemented.`);
+            vscode.window.showInformationMessage(`Vault '${selectedVault.label}' and its files have been removed.`);
           } else {
             vscode.window.showInformationMessage(`Vault '${selectedVault.label}' removed from configuration.`);
           }

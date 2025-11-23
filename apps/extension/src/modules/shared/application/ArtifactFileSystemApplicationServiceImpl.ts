@@ -403,12 +403,74 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       }
 
       // 应用查询选项（如果有）
+      let filteredArtifacts = artifacts;
       if (options) {
-        // TODO: 实现查询选项过滤（category, tags, viewType 等）
+        // 按 viewType 过滤
+        if (options.viewType) {
+          filteredArtifacts = filteredArtifacts.filter(a => a.viewType === options.viewType);
+        }
+
+        // 按 category 过滤
+        if (options.category) {
+          filteredArtifacts = filteredArtifacts.filter(a => a.category === options.category);
+        }
+
+        // 按 tags 过滤（必须包含所有指定标签，AND 关系）
+        if (options.tags && options.tags.length > 0) {
+          filteredArtifacts = filteredArtifacts.filter(a => {
+            const artifactTags = a.tags || [];
+            return options.tags!.every(tag => artifactTags.includes(tag));
+          });
+        }
+
+        // 按 status 过滤
+        if (options.status) {
+          filteredArtifacts = filteredArtifacts.filter(a => a.status === options.status);
+        }
+
+        // 通用 filter 对象过滤（支持自定义过滤条件）
+        if (options.filter) {
+          for (const [key, value] of Object.entries(options.filter)) {
+            filteredArtifacts = filteredArtifacts.filter((a: any) => {
+              const artifactValue = (a as any)[key];
+              if (Array.isArray(value)) {
+                // 如果 filter 值是数组，检查 artifact 值是否在数组中
+                return Array.isArray(artifactValue)
+                  ? artifactValue.some((v: any) => value.includes(v))
+                  : value.includes(artifactValue);
+              }
+              return artifactValue === value;
+            });
+          }
+        }
+
+        // 排序
+        if (options.sortBy) {
+          const sortOrder = options.sortOrder || 'asc';
+          filteredArtifacts.sort((a, b) => {
+            const aValue = (a as any)[options.sortBy!];
+            const bValue = (b as any)[options.sortBy!];
+            
+            if (aValue === undefined && bValue === undefined) return 0;
+            if (aValue === undefined) return 1;
+            if (bValue === undefined) return -1;
+            
+            const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+            return sortOrder === 'asc' ? comparison : -comparison;
+          });
+        }
+
+        // 分页
+        if (options.offset !== undefined) {
+          filteredArtifacts = filteredArtifacts.slice(options.offset);
+        }
+        if (options.limit !== undefined) {
+          filteredArtifacts = filteredArtifacts.slice(0, options.limit);
+        }
       }
 
-      this.logger.info(`Total artifacts found: ${artifacts.length}`);
-      return { success: true, value: artifacts };
+      this.logger.info(`Total artifacts found: ${filteredArtifacts.length}`);
+      return { success: true, value: filteredArtifacts };
     } catch (error: any) {
       this.logger.error('Failed to list artifacts', error);
       return {

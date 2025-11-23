@@ -105,6 +105,11 @@ export interface QueryOptions {
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   filter?: Record<string, any>;
+  // 明确的过滤字段（便于使用）
+  viewType?: string;
+  category?: string;
+  tags?: string[]; // 必须包含所有指定标签（AND 关系）
+  status?: string;
 }
 
 

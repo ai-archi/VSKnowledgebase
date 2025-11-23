@@ -181,7 +181,41 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     return { success: true, value: undefined };
   }
 
-  async removeVault(vaultId: string): Promise<Result<void, VaultError>> {
+  async removeVault(vaultId: string, opts?: { deleteFiles?: boolean }): Promise<Result<void, VaultError>> {
+    // 获取 Vault 信息（用于删除文件）
+    const vaultResult = await this.vaultRepo.findById(vaultId);
+    if (!vaultResult.success || !vaultResult.value) {
+      return {
+        success: false,
+        error: new VaultError(VaultErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
+      };
+    }
+
+    const vault = vaultResult.value;
+
+    // 如果指定删除文件，先删除文件目录
+    if (opts?.deleteFiles) {
+      const vaultPath = this.fileAdapter.getVaultPath(vault.name);
+      if (fs.existsSync(vaultPath)) {
+        try {
+          fs.rmSync(vaultPath, { recursive: true, force: true });
+          this.logger.info(`Vault directory deleted: ${vaultPath}`);
+        } catch (error: any) {
+          this.logger.error(`Failed to delete vault directory: ${vaultPath}`, error);
+          return {
+            success: false,
+            error: new VaultError(
+              VaultErrorCode.OPERATION_FAILED,
+              `Failed to delete vault directory: ${error.message}`,
+              { vaultId, vaultPath },
+              error
+            ),
+          };
+        }
+      }
+    }
+
+    // 从配置中删除 Vault
     return this.vaultRepo.delete(vaultId);
   }
 
