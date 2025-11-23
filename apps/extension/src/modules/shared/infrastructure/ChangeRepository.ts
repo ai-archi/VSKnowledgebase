@@ -29,6 +29,7 @@ export interface ChangeRepository {
     changeType?: string;
     limit?: number;
   }): Promise<Result<ArtifactChange[], ArtifactError>>;
+
 }
 
 export class ChangeRepositoryImpl implements ChangeRepository {

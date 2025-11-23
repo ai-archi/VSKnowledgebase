@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import { AIApplicationService } from '../application/AIApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ViewpointApplicationService } from '../../viewpoint/application/ViewpointApplicationService';
+import { ChangeRepository } from '../../shared/infrastructure/ChangeRepository';
+import { Artifact } from '../../../domain/shared/artifact/Artifact';
 import { Logger } from '../../../core/logger/Logger';
 
 /**
@@ -12,6 +15,8 @@ export class AICommands {
     private aiService: AIApplicationService,
     private artifactService: ArtifactFileSystemApplicationService,
     private vaultService: VaultApplicationService,
+    private viewpointService: ViewpointApplicationService,
+    private changeRepository: ChangeRepository,
     private logger: Logger
   ) {}
 
@@ -24,6 +29,8 @@ export class AICommands {
       'archi.ai.analyzeImpact',
       async (artifactId?: string) => {
         try {
+          let artifact: Artifact | null = null;
+          
           if (!artifactId) {
             // 从当前活动编辑器获取
             const editor = vscode.window.activeTextEditor;
@@ -31,14 +38,80 @@ export class AICommands {
               vscode.window.showErrorMessage('请先打开一个文档或选择 Artifact');
               return;
             }
-            // TODO: 从文件路径推断 artifactId
-            vscode.window.showInformationMessage('分析影响功能需要 Artifact ID');
+            
+            // 从文件路径推断 artifactId
+            const filePath = editor.document.uri.fsPath;
+            const artifactResult = await this.viewpointService.getArtifactByPath(filePath);
+            if (!artifactResult.success || !artifactResult.value) {
+              vscode.window.showErrorMessage('当前文件不是 Artifact 文件，无法进行分析');
+              return;
+            }
+            
+            artifact = artifactResult.value;
+            artifactId = artifact.id;
+          } else {
+            // 如果提供了 artifactId，尝试查找 Artifact 信息
+            const vaultsResult = await this.vaultService.listVaults();
+            if (vaultsResult.success) {
+              for (const vault of vaultsResult.value) {
+                const artifactResult = await this.artifactService.getArtifact(vault.id, artifactId);
+                if (artifactResult.success && artifactResult.value) {
+                  artifact = artifactResult.value;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!artifact) {
+            vscode.window.showErrorMessage('无法找到 Artifact 信息，无法进行分析');
             return;
           }
 
+          const vaultName = artifact.vault.name;
+
           // 获取最近的变更
-          // TODO: 从 ChangeRepository 获取最近的变更
-          vscode.window.showInformationMessage('影响分析功能需要变更记录');
+          const recentChangesResult = await this.changeRepository.findByArtifact(artifactId, vaultName);
+          if (!recentChangesResult.success) {
+            vscode.window.showErrorMessage(`获取变更记录失败: ${recentChangesResult.error.message}`);
+            return;
+          }
+
+          const recentChanges = recentChangesResult.value;
+          if (recentChanges.length === 0) {
+            vscode.window.showInformationMessage('该 Artifact 暂无变更记录');
+            return;
+          }
+
+          // 使用最近的变更进行分析
+          const latestChange = recentChanges[0];
+          const impactResult = await this.aiService.analyzeImpact(artifactId, latestChange);
+
+          if (impactResult.success) {
+            // 在输出面板显示分析结果
+            const outputChannel = vscode.window.createOutputChannel('ArchiTool AI');
+            outputChannel.appendLine(`影响分析结果 (Artifact: ${artifactId}):`);
+            outputChannel.appendLine('');
+            outputChannel.appendLine(`影响原因: ${impactResult.value.impactReason}`);
+            outputChannel.appendLine(`严重程度: ${impactResult.value.severity}`);
+            if (impactResult.value.impactedArtifacts && impactResult.value.impactedArtifacts.length > 0) {
+              outputChannel.appendLine('');
+              outputChannel.appendLine('受影响的 Artifact:');
+              impactResult.value.impactedArtifacts.forEach(id => {
+                outputChannel.appendLine(`  - ${id}`);
+              });
+            }
+            if (impactResult.value.suggestions && impactResult.value.suggestions.length > 0) {
+              outputChannel.appendLine('');
+              outputChannel.appendLine('建议操作:');
+              impactResult.value.suggestions.forEach(suggestion => {
+                outputChannel.appendLine(`  - ${suggestion}`);
+              });
+            }
+            outputChannel.show();
+          } else {
+            vscode.window.showErrorMessage(`影响分析失败: ${impactResult.error.message}`);
+          }
         } catch (error: any) {
           this.logger.error('Error analyzing impact', error);
           vscode.window.showErrorMessage(`分析失败: ${error.message}`);

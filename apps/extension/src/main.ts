@@ -146,7 +146,8 @@ export async function activate(context: vscode.ExtensionContext) {
   templateCommands.registerCommands(context);
 
   // 11. 初始化 AI 服务命令
-  const aiCommands = new AICommands(aiService, artifactService, vaultService, logger);
+  const changeRepository = container.get<import('./modules/shared/infrastructure/ChangeRepository').ChangeRepository>(TYPES.ChangeRepository);
+  const aiCommands = new AICommands(aiService, artifactService, vaultService, viewpointService, changeRepository, logger);
   aiCommands.registerCommands(context);
 
   // 12. 注册自定义编辑器
