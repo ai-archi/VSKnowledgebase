@@ -49,6 +49,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "architool.mermaidEditor",
+        "displayName": "Mermaid Diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.mmd"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "languages": [
@@ -62,6 +72,16 @@
           "archimate"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "mermaid",
+        "extensions": [
+          ".mmd"
+        ],
+        "aliases": [
+          "Mermaid",
+          "mermaid"
+        ]
       }
     ],
     "commands": [

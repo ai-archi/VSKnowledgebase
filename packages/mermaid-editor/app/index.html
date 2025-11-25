@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mermaid Diagram Editor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="status" role="status" aria-live="polite" id="status-message">
+        Loading diagram...
+      </div>
+      <div class="actions">
+        <button id="reset-overrides-btn" title="Remove all manual positions">
+          Reset overrides
+        </button>
+        <button id="delete-selected-btn" title="Delete the currently selected node or edge">
+          Delete selected
+        </button>
+      </div>
+    </header>
+    <main class="workspace">
+      <aside class="style-panel" id="style-panel">
+        <div class="panel-header">
+          <span class="panel-title">Style</span>
+          <span class="panel-caption" id="panel-caption">Select an element</span>
+        </div>
+        <div class="panel-body" id="style-panel-body">
+          <!-- Style controls will be dynamically generated -->
+        </div>
+      </aside>
+      <div class="diagram-container" id="diagram-container"></div>
+      <aside class="source-panel" id="source-panel">
+        <div class="panel-header">
+          <span class="panel-title">Source</span>
+          <span class="panel-path" id="source-path"></span>
+        </div>
+        <textarea
+          class="source-editor"
+          id="source-editor"
+          spellcheck="false"
+          aria-label="Diagram source"
+        ></textarea>
+        <div class="panel-footer">
+          <span class="source-status" id="source-status">Synced</span>
+          <span class="selection-label" id="selection-label">No selection</span>
+        </div>
+      </aside>
+    </main>
+    <footer class="error" id="error-message" role="alert" style="display: none;"></footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
+

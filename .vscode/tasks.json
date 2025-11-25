@@ -59,10 +59,29 @@
       }
     },
     {
+      "label": "Build Mermaid Editor",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "run",
+        "build:mermaid-editor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Build All",
       "dependsOrder": "sequence",
       "dependsOn": [
         "Build Archimate JS",
+        "Build Mermaid Editor",
         "Compile Extension",
         "Build Webview"
       ],

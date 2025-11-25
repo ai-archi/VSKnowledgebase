@@ -1,6 +1,6 @@
 clean:
 	echo "Cleaning project"
-	rm -rf apps/*/out apps/*/dist apps/extension/webview apps/extension/archimate-js domain/*/lib infrastructure/*/lib packages/*/public
+	rm -rf apps/*/out apps/*/dist apps/extension/webview apps/extension/archimate-js apps/extension/mermaid-editor domain/*/lib infrastructure/*/lib packages/*/public packages/*/dist
 
 install:
 	echo "Installing dependencies..."
@@ -18,11 +18,17 @@ build-archimate-js:
 	rm -rf apps/extension/archimate-js/*
 	cd packages/archimate-js && OUTPUT_PATH=../../apps/extension/archimate-js npm run build
 
+build-mermaid-editor:
+	echo "Building mermaid-editor..."
+	mkdir -p apps/extension/mermaid-editor
+	rm -rf apps/extension/mermaid-editor/*
+	cd packages/mermaid-editor && OUTPUT_PATH=../../apps/extension/mermaid-editor pnpm run build
+
 build-webview:
 	echo "Building webview..."
 	cd apps/webview && pnpm run build
 
-build-all: build-archimate-js build-webview
+build-all: build-archimate-js build-mermaid-editor build-webview
 	echo "Building extension..."
 	cd apps/extension && pnpm run compile
 	echo "Copying webview build artifacts..."
