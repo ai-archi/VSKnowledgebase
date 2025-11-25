@@ -33,6 +33,7 @@ class MermaidEditorApp {
     this.diagramCanvas = null;
     this.saveTimer = null;
     this.lastSubmittedSource = null;
+    this.isSaving = false; // 标记是否正在保存，避免保存后触发重新加载
     
     // DOM elements
     this.elements = {
@@ -78,6 +79,10 @@ class MermaidEditorApp {
       window.addEventListener('message', (event) => {
         const data = event.data;
         if (data.type === 'load' || data.type === 'load-response') {
+          // 如果正在保存，忽略加载消息（避免保存后触发重新加载导致闪烁）
+          if (this.isSaving) {
+            return;
+          }
           if (data.diagram) {
             this.handleDiagramLoad(data.diagram);
           }
@@ -163,10 +168,17 @@ class MermaidEditorApp {
     }
     
     try {
+      this.isSaving = true; // 标记正在保存
       this.stateManager.setState({ saving: true, error: null });
       await saveDiagram(diagram);
       this.stateManager.setState({ saving: false });
+      
+      // 延迟重置标志，给 VSCode 时间处理保存事件
+      setTimeout(() => {
+        this.isSaving = false;
+      }, 500);
     } catch (error) {
+      this.isSaving = false;
       this.stateManager.setState({ 
         saving: false,
         error: error.message 
@@ -253,31 +265,51 @@ class MermaidEditorApp {
     const diagram = this.stateManager.diagram;
     if (!diagram) return;
     
-    // 删除节点和相关边
-    diagram.nodes = diagram.nodes.filter(n => n.id !== id);
-    diagram.edges = diagram.edges.filter(e => e.from !== id && e.to !== id);
+    // 创建新的 diagram 对象，避免直接修改原对象
+    const newDiagram = {
+      ...diagram,
+      nodes: diagram.nodes.filter(n => n.id !== id),
+      edges: diagram.edges.filter(e => e.from !== id && e.to !== id),
+    };
     
+    // 清除选中状态
     if (this.stateManager.selectedNodeId === id) {
       this.stateManager.setState({ selectedNodeId: null });
     }
     
+    // 更新 stateManager 的 diagram 状态
+    this.stateManager.setState({ diagram: newDiagram });
+    
+    // 更新 canvas 显示
+    this.diagramCanvas.setDiagram(newDiagram);
+    
+    // 保存更改
     await this.saveDiagram();
-    this.diagramCanvas.setDiagram(diagram);
   }
   
   async handleDeleteEdge(id) {
     const diagram = this.stateManager.diagram;
     if (!diagram) return;
     
-    // 删除边
-    diagram.edges = diagram.edges.filter(e => e.id !== id);
+    // 创建新的 diagram 对象，避免直接修改原对象
+    const newDiagram = {
+      ...diagram,
+      edges: diagram.edges.filter(e => e.id !== id),
+    };
     
+    // 清除选中状态
     if (this.stateManager.selectedEdgeId === id) {
       this.stateManager.setState({ selectedEdgeId: null });
     }
     
+    // 更新 stateManager 的 diagram 状态
+    this.stateManager.setState({ diagram: newDiagram });
+    
+    // 更新 canvas 显示
+    this.diagramCanvas.setDiagram(newDiagram);
+    
+    // 保存更改
     await this.saveDiagram();
-    this.diagramCanvas.setDiagram(diagram);
   }
   
   handleSelectNode(id) {
@@ -464,11 +496,11 @@ class MermaidEditorApp {
     
     // Update caption
     if (selectedNode) {
-      this.elements.panelCaption.textContent = `Node: ${selectedNode.label || selectedNode.id}`;
+      this.elements.panelCaption.textContent = `节点: ${selectedNode.label || selectedNode.id}`;
     } else if (selectedEdge) {
-      this.elements.panelCaption.textContent = `Edge: ${selectedEdge.label || `${selectedEdge.from}→${selectedEdge.to}`}`;
+      this.elements.panelCaption.textContent = `边: ${selectedEdge.label || `${selectedEdge.from}→${selectedEdge.to}`}`;
     } else {
-      this.elements.panelCaption.textContent = 'Select an element';
+      this.elements.panelCaption.textContent = '选择一个元素';
       this.elements.panelCaption.className = 'panel-caption muted';
     }
     
@@ -489,7 +521,7 @@ class MermaidEditorApp {
     const header = document.createElement('header');
     header.className = 'section-heading';
     header.innerHTML = `
-      <h3>Node</h3>
+      <h3>节点</h3>
       <span class="section-caption">${node.label || node.id}</span>
     `;
     
@@ -499,20 +531,20 @@ class MermaidEditorApp {
     
     // Fill color
     if (!node.image) {
-      const fillControl = this.createColorControl('Fill', 'node-fill', node.fillColor, DEFAULT_NODE_COLORS[node.shape], (value) => {
+      const fillControl = this.createColorControl('填充', 'node-fill', node.fillColor, DEFAULT_NODE_COLORS[node.shape], (value) => {
         this.handleNodeFillChange(node.id, value);
       });
       controls.appendChild(fillControl);
     }
     
     // Stroke color
-    const strokeControl = this.createColorControl('Stroke', 'node-stroke', node.strokeColor, DEFAULT_EDGE_COLOR, (value) => {
+    const strokeControl = this.createColorControl('描边', 'node-stroke', node.strokeColor, DEFAULT_EDGE_COLOR, (value) => {
       this.handleNodeStrokeChange(node.id, value);
     });
     controls.appendChild(strokeControl);
     
     // Text color
-    const textControl = this.createColorControl('Text', 'node-text', node.textColor, DEFAULT_NODE_TEXT, (value) => {
+    const textControl = this.createColorControl('文本', 'node-text', node.textColor, DEFAULT_NODE_TEXT, (value) => {
       this.handleNodeTextColorChange(node.id, value);
     });
     controls.appendChild(textControl);
@@ -524,7 +556,7 @@ class MermaidEditorApp {
       
       // Title background color
       const labelFillControl = this.createColorControl(
-        'Title background',
+        '标题背景',
         'node-label-fill',
         node.labelFillColor,
         node.fillColor ?? DEFAULT_NODE_COLORS[node.shape],
@@ -536,7 +568,7 @@ class MermaidEditorApp {
       
       // Image background color
       const imageFillControl = this.createColorControl(
-        'Image background',
+        '图片背景',
         'node-image-fill',
         node.imageFillColor,
         '#ffffff',
@@ -551,7 +583,7 @@ class MermaidEditorApp {
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
     resetBtn.className = 'style-reset';
-    resetBtn.textContent = 'Reset node style';
+    resetBtn.textContent = '重置节点样式';
     resetBtn.disabled = state.saving || !node;
     resetBtn.addEventListener('click', () => {
       this.handleNodeStyleReset(node.id);
@@ -570,7 +602,7 @@ class MermaidEditorApp {
     const header = document.createElement('header');
     header.className = 'section-heading';
     header.innerHTML = `
-      <h3>Edge</h3>
+      <h3>边</h3>
       <span class="section-caption">${edge.label || `${edge.from}→${edge.to}`}</span>
     `;
     
@@ -579,19 +611,19 @@ class MermaidEditorApp {
     controls.setAttribute('aria-disabled', state.saving || !edge);
     
     // Color
-    const colorControl = this.createColorControl('Color', 'edge-color', edge.color, DEFAULT_EDGE_COLOR, (value) => {
+    const colorControl = this.createColorControl('颜色', 'edge-color', edge.color, DEFAULT_EDGE_COLOR, (value) => {
       this.handleEdgeColorChange(edge.id, value);
     });
     controls.appendChild(colorControl);
     
     // Line style
-    const lineControl = this.createSelectControl('Line', 'edge-line', LINE_STYLE_OPTIONS, edge.kind || 'solid', (value) => {
+    const lineControl = this.createSelectControl('线条', 'edge-line', LINE_STYLE_OPTIONS, edge.kind || 'solid', (value) => {
       this.handleEdgeLineStyleChange(edge.id, value);
     });
     controls.appendChild(lineControl);
     
     // Arrow direction
-    const arrowControl = this.createSelectControl('Arrows', 'edge-arrow', ARROW_DIRECTION_OPTIONS, edge.arrowDirection || 'forward', (value) => {
+    const arrowControl = this.createSelectControl('箭头', 'edge-arrow', ARROW_DIRECTION_OPTIONS, edge.arrowDirection || 'forward', (value) => {
       this.handleEdgeArrowChange(edge.id, value);
     });
     controls.appendChild(arrowControl);
@@ -600,7 +632,7 @@ class MermaidEditorApp {
     const addJointBtn = document.createElement('button');
     addJointBtn.type = 'button';
     addJointBtn.className = 'style-reset';
-    addJointBtn.textContent = 'Add control point';
+    addJointBtn.textContent = '添加控制点';
     addJointBtn.disabled = state.saving || !edge;
     addJointBtn.addEventListener('click', () => {
       this.handleAddEdgeJoint();
@@ -610,7 +642,7 @@ class MermaidEditorApp {
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
     resetBtn.className = 'style-reset';
-    resetBtn.textContent = 'Reset edge style';
+    resetBtn.textContent = '重置边样式';
     resetBtn.disabled = state.saving || !edge;
     resetBtn.addEventListener('click', () => {
       this.handleEdgeStyleReset(edge.id);
@@ -675,14 +707,14 @@ class MermaidEditorApp {
     control.className = 'style-control image-control';
     
     const label = document.createElement('span');
-    label.textContent = 'Image';
+    label.textContent = '图片';
     
     const actions = document.createElement('div');
     actions.className = 'image-control-actions';
     
     const uploadBtn = document.createElement('button');
     uploadBtn.type = 'button';
-    uploadBtn.textContent = node.image ? 'Replace PNG' : 'Upload PNG';
+    uploadBtn.textContent = node.image ? '替换 PNG' : '上传 PNG';
     uploadBtn.disabled = state.saving;
     uploadBtn.addEventListener('click', () => {
       const input = document.createElement('input');
@@ -696,7 +728,7 @@ class MermaidEditorApp {
     
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.textContent = 'Remove';
+    removeBtn.textContent = '移除';
     removeBtn.disabled = state.saving || !node.image;
     removeBtn.addEventListener('click', () => {
       this.handleNodeImageRemove(node.id);
@@ -708,8 +740,8 @@ class MermaidEditorApp {
     const meta = document.createElement('span');
     meta.className = node.image ? 'image-control-meta' : 'image-control-meta muted';
     meta.textContent = node.image
-      ? `${node.image.width}x${node.image.height}px (padding ${formatPaddingValue(node.image.padding)}px)`
-      : 'No image attached';
+      ? `${node.image.width}x${node.image.height}px (内边距 ${formatPaddingValue(node.image.padding)}px)`
+      : '未附加图片';
     
     control.appendChild(label);
     control.appendChild(actions);
@@ -721,7 +753,7 @@ class MermaidEditorApp {
       paddingControl.className = 'style-control';
       
       const paddingLabel = document.createElement('span');
-      paddingLabel.textContent = 'Image padding (px)';
+      paddingLabel.textContent = '图片内边距 (px)';
       
       const paddingInput = document.createElement('input');
       paddingInput.type = 'number';
@@ -919,8 +951,13 @@ class MermaidEditorApp {
         }
       }
       
-      await this.saveDiagram();
+      // 更新 stateManager 的 diagram 状态
+      this.stateManager.setState({ diagram });
+      
+      // 更新 canvas 显示
       this.diagramCanvas.setDiagram(diagram);
+      
+      await this.saveDiagram();
     } catch (error) {
       this.stateManager.setState({ error: error.message });
     } finally {
@@ -1009,17 +1046,17 @@ class MermaidEditorApp {
   
   onStateChange(state) {
     // Update status message
-    let statusMessage = 'No diagram selected';
+    let statusMessage = '未选择图表';
     if (state.loading) {
-      statusMessage = 'Loading diagram...';
+      statusMessage = '正在加载图表...';
     } else if (state.saving) {
-      statusMessage = 'Saving changes...';
+      statusMessage = '正在保存更改...';
     } else if (state.sourceSaving) {
-      statusMessage = 'Syncing source...';
+      statusMessage = '正在同步源代码...';
     } else if (state.error) {
-      statusMessage = `Error: ${state.error}`;
+      statusMessage = `错误: ${state.error}`;
     } else if (state.diagram) {
-      statusMessage = `Editing ${state.diagram.sourcePath || 'diagram'}`;
+      statusMessage = `正在编辑 ${state.diagram.sourcePath || '图表'}`;
     }
     this.elements.statusMessage.textContent = statusMessage;
     
@@ -1037,27 +1074,27 @@ class MermaidEditorApp {
     this.elements.deleteSelectedBtn.disabled = !hasSelection || state.saving || state.sourceSaving;
     
     // Update source status
-    let sourceStatusText = 'Synced';
+    let sourceStatusText = '已同步';
     let sourceStatusClass = 'synced';
     if (state.sourceError) {
       sourceStatusText = state.sourceError;
       sourceStatusClass = 'error';
     } else if (state.sourceSaving) {
-      sourceStatusText = 'Saving changes…';
+      sourceStatusText = '正在保存更改…';
       sourceStatusClass = 'saving';
     } else if (state.sourceDraft !== state.source) {
-      sourceStatusText = 'Pending changes…';
+      sourceStatusText = '待处理更改…';
       sourceStatusClass = 'pending';
     }
     this.elements.sourceStatus.textContent = sourceStatusText;
     this.elements.sourceStatus.className = `source-status ${sourceStatusClass}`;
     
     // Update selection label
-    let selectionLabel = 'No selection';
+    let selectionLabel = '未选择';
     if (state.selectedNodeId) {
-      selectionLabel = `Selected node: ${state.selectedNodeId}`;
+      selectionLabel = `已选择节点: ${state.selectedNodeId}`;
     } else if (state.selectedEdgeId) {
-      selectionLabel = `Selected edge: ${state.selectedEdgeId}`;
+      selectionLabel = `已选择边: ${state.selectedEdgeId}`;
     }
     this.elements.selectionLabel.textContent = selectionLabel;
     

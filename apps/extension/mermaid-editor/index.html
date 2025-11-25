@@ -10,22 +10,22 @@
   <div class="app">
     <header class="toolbar">
       <div class="status" role="status" aria-live="polite" id="status-message">
-        Loading diagram...
+        正在加载图表...
       </div>
       <div class="actions">
-        <button id="reset-overrides-btn" title="Remove all manual positions">
-          Reset overrides
+        <button id="reset-overrides-btn" title="移除所有手动位置">
+          重置位置
         </button>
-        <button id="delete-selected-btn" title="Delete the currently selected node or edge">
-          Delete selected
+        <button id="delete-selected-btn" title="删除当前选中的节点或边">
+          删除选中
         </button>
       </div>
     </header>
     <main class="workspace">
       <aside class="style-panel" id="style-panel">
         <div class="panel-header">
-          <span class="panel-title">Style</span>
-          <span class="panel-caption" id="panel-caption">Select an element</span>
+          <span class="panel-title">样式</span>
+          <span class="panel-caption" id="panel-caption">选择一个元素</span>
         </div>
         <div class="panel-body" id="style-panel-body">
           <!-- Style controls will be dynamically generated -->
@@ -34,7 +34,7 @@
       <div class="diagram-container" id="diagram-container"></div>
       <aside class="source-panel" id="source-panel">
         <div class="panel-header">
-          <span class="panel-title">Source</span>
+          <span class="panel-title">源代码</span>
           <span class="panel-path" id="source-path"></span>
         </div>
         <textarea
@@ -44,8 +44,8 @@
           aria-label="Diagram source"
         ></textarea>
         <div class="panel-footer">
-          <span class="source-status" id="source-status">Synced</span>
-          <span class="selection-label" id="selection-label">No selection</span>
+          <span class="source-status" id="source-status">已同步</span>
+          <span class="selection-label" id="selection-label">未选择</span>
         </div>
       </aside>
     </main>
