@@ -368,6 +368,20 @@ class MermaidEditorAppV2 {
   handleDiagramLoad(diagram) {
     const source = diagram.source || '';
     
+    // 如果内容没有变化，不更新编辑器（避免重置滚动位置）
+    const currentSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+    if (currentSource === source) {
+      // 内容相同，只更新状态，不更新编辑器
+      this.stateManager.setState({
+        diagram: diagram,
+        source: source,
+        sourceDraft: source,
+        loading: false,
+        error: null
+      });
+      return;
+    }
+    
     this.stateManager.setState({
       diagram: diagram,
       source: source,
@@ -406,10 +420,11 @@ class MermaidEditorAppV2 {
     const source = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
     this.stateManager.setState({ sourceDraft: source });
     
-    // 防抖重新渲染
+    // 防抖重新渲染和保存
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(async () => {
       await this.renderDiagram(source);
+      await this.saveSource(source);
     }, 500);
   }
   
@@ -931,9 +946,33 @@ class MermaidCodeEditor {
    */
   setValue(value) {
     if (this.editor) {
+      // 保存当前滚动位置和光标位置
+      const scrollInfo = this.editor.getScrollInfo();
+      const cursor = this.editor.getCursor();
+      
+      // 设置新值
       this.editor.setValue(value);
+      
+      // 恢复滚动位置和光标位置
+      this.editor.scrollTo(scrollInfo.left, scrollInfo.top);
+      this.editor.setCursor(cursor);
     } else {
+      // 对于 textarea，保存滚动位置
+      const scrollTop = this.textarea.scrollTop;
+      const scrollLeft = this.textarea.scrollLeft;
+      const selectionStart = this.textarea.selectionStart;
+      const selectionEnd = this.textarea.selectionEnd;
+      
       this.textarea.value = value;
+      
+      // 恢复滚动位置和选择范围
+      this.textarea.scrollTop = scrollTop;
+      this.textarea.scrollLeft = scrollLeft;
+      
+      // 如果选择范围仍然有效，恢复它
+      if (selectionStart <= value.length && selectionEnd <= value.length) {
+        this.textarea.setSelectionRange(selectionStart, selectionEnd);
+      }
     }
   }
   

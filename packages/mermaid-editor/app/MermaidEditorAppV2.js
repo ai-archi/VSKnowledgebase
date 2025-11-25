@@ -322,6 +322,20 @@ export class MermaidEditorAppV2 {
   handleDiagramLoad(diagram) {
     const source = diagram.source || '';
     
+    // 如果内容没有变化，不更新编辑器（避免重置滚动位置）
+    const currentSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+    if (currentSource === source) {
+      // 内容相同，只更新状态，不更新编辑器
+      this.stateManager.setState({
+        diagram: diagram,
+        source: source,
+        sourceDraft: source,
+        loading: false,
+        error: null
+      });
+      return;
+    }
+    
     this.stateManager.setState({
       diagram: diagram,
       source: source,
@@ -360,10 +374,11 @@ export class MermaidEditorAppV2 {
     const source = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
     this.stateManager.setState({ sourceDraft: source });
     
-    // 防抖重新渲染
+    // 防抖重新渲染和保存
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(async () => {
       await this.renderDiagram(source);
+      await this.saveSource(source);
     }, 500);
   }
   
