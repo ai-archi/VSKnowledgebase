@@ -21,7 +21,7 @@ import { TemplateTreeDataProvider } from './modules/template/interface/TemplateT
 import { TemplateCommands } from './modules/template/interface/Commands';
 import { AIApplicationService } from './modules/ai/application/AIApplicationService';
 import { AICommands } from './modules/ai/interface/Commands';
-import { DuckDbRuntimeIndex } from './infrastructure/storage/duckdb/DuckDbRuntimeIndex';
+import { SqliteRuntimeIndex } from './infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { WebviewRPC } from './core/vscode-api/WebviewRPC';
@@ -81,16 +81,16 @@ export async function activate(context: vscode.ExtensionContext) {
     logger.error('Failed to initialize demo-vault:', error);
   }
 
-  // 3. 初始化 DuckDB
-  const dbPath = path.join(architoolRoot, 'cache', 'runtime.db');
+  // 3. 初始化 SQLite
+  const dbPath = path.join(architoolRoot, 'cache', 'runtime.sqlite');
   const container = createContainer(architoolRoot, dbPath);
-  const index = container.get<DuckDbRuntimeIndex>(TYPES.DuckDbRuntimeIndex);
+  const index = container.get<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex);
   
   try {
     await index.initialize();
-    logger.info('DuckDB runtime index initialized');
+    logger.info('SQLite runtime index initialized');
   } catch (error: any) {
-    logger.error('Failed to initialize DuckDB', error);
+    logger.error('Failed to initialize SQLite', error);
   }
 
   // 4. 获取服务

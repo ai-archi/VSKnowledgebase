@@ -10,9 +10,7 @@ export const TYPES = {
   // Infrastructure Adapters
   ArtifactFileSystemAdapter: Symbol.for('ArtifactFileSystemAdapter'),
   VaultFileSystemAdapter: Symbol.for('VaultFileSystemAdapter'),
-  DuckDbRuntimeIndex: Symbol.for('DuckDbRuntimeIndex'),
-  VectorSearchUtils: Symbol.for('VectorSearchUtils'),
-  VectorEmbeddingService: Symbol.for('VectorEmbeddingService'),
+  SqliteRuntimeIndex: Symbol.for('SqliteRuntimeIndex'),
   YamlMetadataRepository: Symbol.for('YamlMetadataRepository'),
   GitVaultAdapter: Symbol.for('GitVaultAdapter'),
 

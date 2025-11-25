@@ -9,9 +9,7 @@ import { EventBus } from '../../core/eventbus/EventBus';
 // Infrastructure Adapters
 import { ArtifactFileSystemAdapter } from '../../infrastructure/storage/file/ArtifactFileSystemAdapter';
 import { VaultFileSystemAdapter } from '../../infrastructure/storage/file/VaultFileSystemAdapter';
-import { DuckDbRuntimeIndex } from '../../infrastructure/storage/duckdb/DuckDbRuntimeIndex';
-import { DuckDbFactory } from '../../infrastructure/storage/duckdb/DuckDbFactory';
-// VectorEmbeddingService is not used in apps/extension version of DuckDbRuntimeIndex
+import { SqliteRuntimeIndex } from '../../infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { YamlMetadataRepository } from '../../infrastructure/storage/yaml/YamlMetadataRepository';
 import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/vault/infrastructure/GitVaultAdapter';
 
@@ -60,9 +58,8 @@ export function createContainer(
     .toConstantValue(new ArtifactFileSystemAdapter(architoolRoot));
   container.bind<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter)
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot));
-  // DuckDbFactory is a static class, no binding needed
-  container.bind<DuckDbRuntimeIndex>(TYPES.DuckDbRuntimeIndex)
-    .toConstantValue(new DuckDbRuntimeIndex(dbPath, logger));
+  container.bind<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex)
+    .toConstantValue(new SqliteRuntimeIndex(dbPath, logger));
   // YamlMetadataRepository 现在由 MetadataRepositoryImpl 内部管理（每个 vault 一个实例）
   // 不再需要在 DI 容器中绑定
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)

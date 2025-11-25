@@ -6,7 +6,7 @@ import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetada
 import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../../../domain/shared/artifact/errors';
 import { ArtifactValidator } from '../../../domain/shared/artifact/ArtifactValidator';
 import { ArtifactFileSystemAdapter } from '../../../infrastructure/storage/file/ArtifactFileSystemAdapter';
-import { DuckDbRuntimeIndex } from '../../../infrastructure/storage/duckdb/DuckDbRuntimeIndex';
+import { SqliteRuntimeIndex } from '../../../infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MetadataRepository } from '../infrastructure/MetadataRepository';
 import { VaultApplicationService } from './VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';
@@ -19,7 +19,7 @@ import * as yaml from 'js-yaml';
 export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSystemApplicationService {
   constructor(
     @inject(TYPES.ArtifactFileSystemAdapter) private fileAdapter: ArtifactFileSystemAdapter,
-    @inject(TYPES.DuckDbRuntimeIndex) private index: DuckDbRuntimeIndex,
+    @inject(TYPES.SqliteRuntimeIndex) private index: SqliteRuntimeIndex,
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
     @inject(TYPES.Logger) private logger: Logger

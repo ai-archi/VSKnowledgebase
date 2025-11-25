@@ -24,7 +24,7 @@ export class ArchitoolDirectoryManager {
       fs.mkdirSync(this.rootPath, { recursive: true });
     }
 
-    // 创建 cache 目录（用于 DuckDB）
+    // 创建 cache 目录（用于 SQLite）
     const cacheDir = path.join(this.rootPath, 'cache');
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true });

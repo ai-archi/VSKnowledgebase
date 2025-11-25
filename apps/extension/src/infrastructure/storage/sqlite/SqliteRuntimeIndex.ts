@@ -1,42 +1,39 @@
-import { DuckDbFactory } from './DuckDbFactory';
-import { VectorSearchUtils } from './VectorSearchUtils';
+import { SqliteFactory } from './SqliteFactory';
+import { Fts5SearchUtils } from './Fts5SearchUtils';
 import { Knex } from 'knex';
 import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
 import { Logger } from '../../../core/logger/Logger';
 
-export class DuckDbRuntimeIndex {
+/**
+ * SQLite 运行时索引
+ * 提供 SQLite 数据库级别的索引和查询功能
+ */
+export class SqliteRuntimeIndex {
   private knex: Knex | null = null;
-  private vectorSearchUtils: VectorSearchUtils;
+  private fts5SearchUtils: Fts5SearchUtils;
   private logger?: Logger;
   private dbPath: string;
 
   constructor(dbPath: string, logger?: Logger) {
     this.dbPath = dbPath;
     this.logger = logger;
-    this.vectorSearchUtils = new VectorSearchUtils(DuckDbFactory, dbPath, logger);
+    this.fts5SearchUtils = new Fts5SearchUtils(SqliteFactory, dbPath, logger);
   }
 
   async initialize(): Promise<void> {
-    this.knex = DuckDbFactory.createConnection(this.dbPath, this.logger);
+    this.knex = SqliteFactory.createConnection(this.dbPath, this.logger);
     await this.createTables();
-    await this.vectorSearchUtils.initialize();
-    this.logger?.info('DuckDBRuntimeIndex initialized successfully.');
+    await this.fts5SearchUtils.initialize();
+    this.logger?.info('SqliteRuntimeIndex initialized successfully.');
   }
 
   private async createTables(): Promise<void> {
     if (!this.knex) {
       throw new Error('Database not initialized');
     }
-    this.logger?.info('Creating DuckDB tables...');
-    await this.knex.raw('INSTALL json;');
-    await this.knex.raw('LOAD json;');
-    await this.knex.raw('INSTALL http;');
-    await this.knex.raw('LOAD http;');
-    await this.knex.raw('INSTALL icu;');
-    await this.knex.raw('LOAD icu;');
-    await this.knex.raw('INSTALL vss;');
-    await this.knex.raw('LOAD vss;');
+    this.logger?.info('Creating SQLite tables...');
 
+    // 创建元数据索引表
     await this.knex.schema.createTableIfNotExists('artifact_metadata_index', (table) => {
       table.string('id').primary();
       table.string('artifact_id').notNullable();
@@ -44,20 +41,29 @@ export class DuckDbRuntimeIndex {
       table.string('vault_name').notNullable();
       table.string('type');
       table.string('category');
-      table.json('tags');
-      table.json('links');
-      table.json('related_artifacts');
-      table.json('related_code_paths');
-      table.json('related_components');
+      table.text('tags'); // SQLite 使用 TEXT 存储 JSON
+      table.text('links');
+      table.text('related_artifacts');
+      table.text('related_code_paths');
+      table.text('related_components');
       table.string('author');
       table.string('owner');
-      table.json('reviewers');
-      table.json('properties');
+      table.text('reviewers');
+      table.text('properties');
       table.timestamp('created_at').notNullable();
       table.timestamp('updated_at').notNullable();
       table.string('metadata_file_path').notNullable();
+      table.string('title'); // 新增：用于 FTS5 搜索
+      table.text('description'); // 新增：用于 FTS5 搜索
+
+      // 创建索引
+      table.index('artifact_id');
+      table.index('vault_id');
+      table.index('type');
+      table.index('category');
     });
 
+    // 创建链接索引表
     await this.knex.schema.createTableIfNotExists('artifact_links', (table) => {
       table.string('id').primary();
       table.string('source_artifact_id').notNullable();
@@ -68,15 +74,27 @@ export class DuckDbRuntimeIndex {
       table.string('link_type').notNullable();
       table.string('description');
       table.string('strength');
-      table.json('code_location');
+      table.text('code_location'); // SQLite 使用 TEXT 存储 JSON
       table.string('vault_id').notNullable();
       table.timestamp('created_at').notNullable();
       table.timestamp('updated_at').notNullable();
+
+      // 创建索引
+      table.index('source_artifact_id');
+      table.index('target_path');
+      table.index('link_type');
+      table.index('vault_id');
     });
-    this.logger?.info('DuckDB tables created.');
+
+    this.logger?.info('SQLite tables created.');
   }
 
-  async syncFromYaml(metadata: ArtifactMetadata, metadataFilePath: string, title?: string, description?: string): Promise<void> {
+  async syncFromYaml(
+    metadata: ArtifactMetadata,
+    metadataFilePath: string,
+    title?: string,
+    description?: string
+  ): Promise<void> {
     if (!this.knex) {
       throw new Error('Database not initialized');
     }
@@ -100,11 +118,11 @@ export class DuckDbRuntimeIndex {
       created_at: metadata.createdAt,
       updated_at: metadata.updatedAt,
       metadata_file_path: metadataFilePath,
+      title: title || null, // 新增字段
+      description: description || null, // 新增字段
     }).onConflict('id').merge();
 
-    if (title !== undefined && description !== undefined) {
-      await this.vectorSearchUtils.upsertVector(metadata.artifactId, title || '', description || '');
-    }
+    // FTS5 索引通过触发器自动同步，无需手动更新
   }
 
   async removeFromIndex(artifactId: string): Promise<void> {
@@ -112,7 +130,7 @@ export class DuckDbRuntimeIndex {
       throw new Error('Database not initialized');
     }
     await this.knex('artifact_metadata_index').where({ artifact_id: artifactId }).delete();
-    await this.vectorSearchUtils.removeVector(artifactId);
+    // FTS5 索引通过触发器自动删除
   }
 
   async queryIndex(query: {
@@ -142,7 +160,9 @@ export class DuckDbRuntimeIndex {
       q = q.where('category', query.category);
     }
     if (query.tags && query.tags.length > 0) {
-      q = q.whereRaw('tags @> ?', [JSON.stringify(query.tags)]);
+      // SQLite JSON 查询：使用 json_extract 或 LIKE 查询
+      const tagsJson = JSON.stringify(query.tags);
+      q = q.whereRaw('tags LIKE ?', [`%${tagsJson}%`]);
     }
     if (query.limit) {
       q = q.limit(query.limit);
@@ -152,11 +172,18 @@ export class DuckDbRuntimeIndex {
     return results.map((r: any) => r.metadata_file_path);
   }
 
-  async vectorSearch(query: string, options?: { limit?: number }): Promise<string[]> {
+  /**
+   * 全文搜索
+   * @param query 搜索关键词
+   * @param options 搜索选项
+   * @returns Artifact ID 列表
+   */
+  async textSearch(query: string, options?: { limit?: number }): Promise<string[]> {
     try {
-      return await this.vectorSearchUtils.search(query, options?.limit || 20);
+      const artifactIds = await this.fts5SearchUtils.search(query, options?.limit || 20);
+      return artifactIds;
     } catch (error: any) {
-      this.logger?.warn('Vector search failed', error);
+      this.logger?.warn('Text search failed', error);
       return [];
     }
   }
@@ -168,5 +195,4 @@ export class DuckDbRuntimeIndex {
     }
   }
 }
-
 

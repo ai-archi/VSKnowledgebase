@@ -2,17 +2,16 @@ import knex, { Knex } from 'knex';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Logger } from '../../../core/logger/Logger';
-import { DuckDbKnexClient } from './DuckDbKnexClient';
 
 /**
- * DuckDB 连接工厂
- * 使用 Knex 作为查询构建器，避免直接使用 native binding
+ * SQLite 连接工厂
+ * 使用 Knex 作为查询构建器，使用 better-sqlite3 驱动
  */
-export class DuckDbFactory {
+export class SqliteFactory {
   private static instances: Map<string, Knex> = new Map();
 
   /**
-   * 创建 DuckDB 连接（使用 Knex）
+   * 创建 SQLite 连接（使用 Knex）
    */
   static createConnection(dbPath: string, logger?: Logger): Knex {
     const key = dbPath;
@@ -27,10 +26,9 @@ export class DuckDbFactory {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // 直接使用客户端构造函数
-    // 使用类型断言，因为 DuckDbKnexClient 完全兼容 Client 接口
+    // 使用 Knex 的 better-sqlite3 客户端
     const knexInstance = knex({
-      client: DuckDbKnexClient as any,
+      client: 'better-sqlite3',
       connection: {
         filename: dbPath,
       },
@@ -66,5 +64,4 @@ export class DuckDbFactory {
     return this.instances.get(dbPath) || null;
   }
 }
-
 
