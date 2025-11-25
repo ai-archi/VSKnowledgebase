@@ -45,6 +45,9 @@ export class MermaidEditorAppV2 {
       diagramContainer: document.getElementById('diagram-container'),
       sourcePanel: document.getElementById('source-panel'),
       sourceEditor: document.getElementById('source-editor'),
+      zoomIn: document.getElementById('zoom-in'),
+      zoomOut: document.getElementById('zoom-out'),
+      zoomReset: document.getElementById('zoom-reset'),
     };
     
     this.init();
@@ -147,6 +150,47 @@ export class MermaidEditorAppV2 {
     if (!this.boundHandleKeyDown) {
       this.boundHandleKeyDown = this.handleKeyDown.bind(this);
       window.addEventListener('keydown', this.boundHandleKeyDown);
+    }
+    
+    // 缩放控制按钮
+    if (this.elements.zoomIn) {
+      this.elements.zoomIn.addEventListener('click', () => {
+        this.renderer.zoomIn();
+        this.updateZoomButtons();
+      });
+    }
+    
+    if (this.elements.zoomOut) {
+      this.elements.zoomOut.addEventListener('click', () => {
+        this.renderer.zoomOut();
+        this.updateZoomButtons();
+      });
+    }
+    
+    if (this.elements.zoomReset) {
+      this.elements.zoomReset.addEventListener('click', () => {
+        this.renderer.zoomReset();
+        this.updateZoomButtons();
+      });
+    }
+  }
+  
+  /**
+   * 更新缩放按钮状态
+   */
+  updateZoomButtons() {
+    if (!this.renderer) return;
+    
+    const scale = this.renderer.getZoom();
+    const minScale = this.renderer.minScale;
+    const maxScale = this.renderer.maxScale;
+    
+    if (this.elements.zoomIn) {
+      this.elements.zoomIn.disabled = scale >= maxScale;
+    }
+    
+    if (this.elements.zoomOut) {
+      this.elements.zoomOut.disabled = scale <= minScale;
     }
   }
   
@@ -301,6 +345,7 @@ export class MermaidEditorAppV2 {
     try {
       await this.renderer.render(source);
       this.interactionLayer.update();
+      this.updateZoomButtons();
       
       this.stateManager.setState({ error: null });
     } catch (error) {
