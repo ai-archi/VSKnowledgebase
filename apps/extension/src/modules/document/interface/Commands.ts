@@ -760,13 +760,35 @@ export class DocumentCommands {
       let html = fs.readFileSync(htmlPath, 'utf-8');
       
       // 替换资源路径为 webview URI
-      // 匹配所有 src 和 href 属性中的相对路径（以 / 开头）
-      html = html.replace(/(src|href)="\/([^"]+)"/g, (match, attr, resourcePath) => {
-        // 构建资源文件的完整路径
-        const resourceFile = path.join(webviewDistPath, resourcePath);
-        // 转换为 webview URI
-        const resourceUri = webview.asWebviewUri(vscode.Uri.file(resourceFile));
-        return `${attr}="${resourceUri}"`;
+      // 匹配所有 src 和 href 属性中的路径（包括 /path, ./path, path 等）
+      // 排除已经是完整 URI 的路径（如 vscode-webview://, http://, https://, data: 等）
+      html = html.replace(/(src|href)=["']([^"']+)["']/g, (match, attr, resourcePath) => {
+        // 跳过已经是完整 URI 的路径
+        if (resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)) {
+          return match;
+        }
+        
+        // 处理相对路径和绝对路径
+        let normalizedPath = resourcePath;
+        // 移除开头的 ./ 或 /
+        if (normalizedPath.startsWith('./')) {
+          normalizedPath = normalizedPath.substring(2);
+        } else if (normalizedPath.startsWith('/')) {
+          normalizedPath = normalizedPath.substring(1);
+        }
+        
+        // 构建资源文件的完整路径（相对于 webviewDistPath）
+        const resourceFile = path.join(webviewDistPath, normalizedPath);
+        
+        // 检查文件是否存在
+        if (fs.existsSync(resourceFile)) {
+          // 转换为 webview URI
+          const resourceUri = webview.asWebviewUri(vscode.Uri.file(resourceFile));
+          return `${attr}="${resourceUri}"`;
+        }
+        
+        // 如果文件不存在，保持原样（可能是外部资源）
+        return match;
       });
       
       // 注入 VSCode API 和初始数据

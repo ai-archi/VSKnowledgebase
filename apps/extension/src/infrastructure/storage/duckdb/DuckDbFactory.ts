@@ -2,6 +2,7 @@ import knex, { Knex } from 'knex';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Logger } from '../../../core/logger/Logger';
+import { DuckDbKnexClient } from './DuckDbKnexClient';
 
 /**
  * DuckDB 连接工厂
@@ -26,8 +27,10 @@ export class DuckDbFactory {
       fs.mkdirSync(dir, { recursive: true });
     }
 
+    // 直接使用客户端构造函数
+    // 使用类型断言，因为 DuckDbKnexClient 完全兼容 Client 接口
     const knexInstance = knex({
-      client: 'duckdb',
+      client: DuckDbKnexClient as any,
       connection: {
         filename: dbPath,
       },
