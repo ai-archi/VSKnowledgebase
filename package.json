@@ -38,7 +38,7 @@
     "lint": "eslint . --ext ts,tsx",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "build:archimate-js": "mkdir -p apps/extension/archimate-js && rm -rf apps/extension/archimate-js/* && cd packages/archimate-js && OUTPUT_PATH=../../apps/extension/archimate-js npm run build",
-    "build:mermaid-editor": "mkdir -p apps/extension/mermaid-editor && rm -rf apps/extension/mermaid-editor/* && cd packages/mermaid-editor && OUTPUT_PATH=../../apps/extension/mermaid-editor pnpm run build",
+    "build:mermaid-editor": "mkdir -p apps/extension/mermaid-editor && rm -rf apps/extension/mermaid-editor/* && cd packages/mermaid-editor && OUTPUT_PATH=../../apps/extension/mermaid-editor pnpm run build:v2",
     "build:webview": "cd apps/webview && pnpm run build",
     "build:extension": "cd apps/extension && pnpm run compile",
     "copy:assets": "mkdir -p apps/extension/webview && rm -rf apps/extension/webview/* && cp -r apps/webview/dist/* apps/extension/webview/",

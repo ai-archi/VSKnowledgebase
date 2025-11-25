@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "description": "Mermaid diagram editor (pure JavaScript version)",
   "scripts": {
-    "all": "run-s lint build",
-    "build": "webpack",
-    "dev": "run-p build:watch serve",
-    "build:watch": "webpack -w",
+    "all": "run-s lint build:v2",
+    "build:v2": "webpack --config webpack.config.v2.js",
+    "build:all": "run-s build:v2",
+    "dev": "run-p build:watch:v2 serve",
+    "build:watch:v2": "webpack --config webpack.config.v2.js -w",
     "serve": "serve public",
     "lint": "eslint .",
     "start": "run-s dev"
@@ -24,6 +25,9 @@
     "webpack": "^5.37.0",
     "webpack-cli": "^4.7.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "mermaid": "^11.0.0",
+    "codemirror": "^5.65.16"
+  }
 }
 

@@ -7,16 +7,19 @@
 ```
 mermaid-editor/
 ├── app/                    # 应用入口文件
-│   ├── index.html         # HTML 模板
-│   ├── app.js             # 主应用逻辑
+│   ├── index-v2.html      # HTML 模板 (V2)
+│   ├── MermaidEditorAppV2.js  # 主应用逻辑 (V2)
 │   └── styles.css         # 样式文件
 ├── lib/                    # 核心库文件
 │   ├── types.js           # 类型定义和常量
 │   ├── utils.js           # 工具函数
 │   ├── vscodeApi.js       # VSCode API 适配器
-│   ├── StateManager.js    # 状态管理器（替代 React Hooks）
-│   └── DiagramCanvas.js   # 图表画布（核心渲染和交互）
-├── webpack.config.js       # Webpack 配置
+│   ├── StateManager.js    # 状态管理器
+│   ├── MermaidRenderer.js # Mermaid.js 渲染器
+│   ├── MermaidParser.js   # Mermaid 解析器
+│   ├── MermaidCodeGenerator.js # 代码生成器
+│   └── ...                # 其他 V2 组件
+├── webpack.config.v2.js    # Webpack 配置 (V2)
 └── package.json           # 项目配置
 ```
 
@@ -27,10 +30,10 @@ mermaid-editor/
 pnpm install
 
 # 开发模式（监听文件变化）
-pnpm run build:watch
+pnpm run build:watch:v2
 
 # 生产构建
-pnpm run build
+pnpm run build:v2
 
 # 开发服务器（用于测试）
 pnpm run serve
@@ -41,24 +44,21 @@ pnpm run serve
 构建后的文件会输出到 `public/` 目录。在 VSCode 扩展中，需要：
 
 1. 将 `public/` 目录复制到扩展的 `mermaid-editor/` 目录
-2. 在 `MermaidEditorProvider` 中加载 `index.html`
+2. 在 `MermaidEditorProvider` 中加载 `index-v2.html`
 
 ## 主要特性
 
-- ✅ 纯 JavaScript 实现，无 React 依赖
-- ✅ 完整的拖拽交互（节点、边、子图）
+- ✅ 基于 mermaid.js 的渲染引擎
+- ✅ 完整的拖拽交互（节点、边）
 - ✅ 样式编辑（颜色、线条、箭头）
 - ✅ 实时源代码同步
-- ✅ 图片上传支持
-- ✅ 键盘快捷键
+- ✅ 节点添加和连接
+- ✅ 标签编辑
 - ✅ VSCode webview 集成
 
-## 与原 React 版本的差异
+## V2 版本说明
 
-1. **状态管理**：使用 `StateManager` 类替代 React Hooks
-2. **DOM 操作**：直接操作 DOM，不使用虚拟 DOM
-3. **事件处理**：使用原生事件监听器
-4. **API 调用**：通过 VSCode 消息传递替代 HTTP fetch
+V2 版本使用 mermaid.js 作为渲染引擎，提供更好的兼容性和功能支持。
 
 ## 开发说明
 

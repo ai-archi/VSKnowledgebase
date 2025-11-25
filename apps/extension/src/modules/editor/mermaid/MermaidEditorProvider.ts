@@ -413,25 +413,24 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
     // 获取 mermaid-editor 的路径
     const extensionPath = this.context.extensionPath;
     const mermaidEditorPath = path.join(extensionPath, 'mermaid-editor');
-    // Next.js 输出到根目录的 index.html
-    const indexHtmlPath = path.join(mermaidEditorPath, 'index.html');
+    // 使用 V2 版本的 index-v2.html
+    const indexHtmlPath = path.join(mermaidEditorPath, 'index-v2.html');
     
     // 检查构建产物是否存在
     if (!fs.existsSync(indexHtmlPath)) {
       // 提供更详细的错误信息
       const possiblePaths = [
         indexHtmlPath,
-        path.join(extensionPath, 'mermaid-editor', 'app', 'index.html'),
-        path.join(extensionPath, 'mermaid-editor', 'index.html'),
+        path.join(extensionPath, 'mermaid-editor', 'app', 'index-v2.html'),
       ];
       
-      const errorMessage = `Mermaid editor build artifacts not found.
+      const errorMessage = `Mermaid editor V2 build artifacts not found.
 Expected path: ${indexHtmlPath}
 Extension path: ${extensionPath}
 Checked paths:
 ${possiblePaths.map(p => `  - ${p} (exists: ${fs.existsSync(p)})`).join('\n')}
 
-Please run: pnpm run build:mermaid-editor`;
+Please run: pnpm run build:mermaid-editor (or npm run build:v2 in packages/mermaid-editor)`;
       
       console.error(errorMessage);
       throw new Error(errorMessage);

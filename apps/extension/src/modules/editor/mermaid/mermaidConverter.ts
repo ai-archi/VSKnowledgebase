@@ -134,6 +134,7 @@ export function mermaidToDiagramData(source: string, sourcePath: string = ''): D
           to,
           label,
           kind: 'solid',
+          arrowDirection: 'forward', // Mermaid 的 --> 表示有箭头的边
           autoPoints,
           renderedPoints: autoPoints,
         });
