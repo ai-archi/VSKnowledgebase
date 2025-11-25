@@ -44,10 +44,7 @@ export class MermaidEditorAppV2 {
       workspaceDivider: document.getElementById('workspace-divider'),
       diagramContainer: document.getElementById('diagram-container'),
       sourcePanel: document.getElementById('source-panel'),
-      sourcePath: document.getElementById('source-path'),
       sourceEditor: document.getElementById('source-editor'),
-      sourceStatus: document.getElementById('source-status'),
-      selectionLabel: document.getElementById('selection-label'),
     };
     
     this.init();
@@ -295,9 +292,6 @@ export class MermaidEditorAppV2 {
     } else {
       this.elements.sourceEditor.value = source;
     }
-    if (diagram.sourcePath) {
-      this.elements.sourcePath.textContent = diagram.sourcePath;
-    }
     
     // 渲染图表
     this.renderDiagram(source);
@@ -507,10 +501,7 @@ export class MermaidEditorAppV2 {
   }
   
   handleMultiSelect(selection) {
-    const count = selection.nodes.length + selection.edges.length;
-    if (count > 1 && this.elements.selectionLabel) {
-      this.elements.selectionLabel.textContent = `已选择 ${count} 个元素`;
-    }
+    // 多选处理逻辑（已移除选择标签显示）
   }
   
   async deleteNode(nodeId) {
@@ -605,27 +596,6 @@ export class MermaidEditorAppV2 {
       this.elements.errorMessage.style.display = 'block';
     } else {
       this.elements.errorMessage.style.display = 'none';
-    }
-    
-    // 更新选择标签
-    let selectionLabel = '未选择';
-    const selection = this.interactionLayer?.getAllSelected();
-    if (selection) {
-      const count = selection.nodes.length + selection.edges.length;
-      if (count > 1) {
-        selectionLabel = `已选择 ${count} 个元素`;
-      } else if (state.selectedNodeId) {
-        selectionLabel = `节点: ${state.selectedNodeId}`;
-      } else if (state.selectedEdgeId) {
-        selectionLabel = `边: ${state.selectedEdgeId}`;
-      }
-    } else if (state.selectedNodeId) {
-      selectionLabel = `节点: ${state.selectedNodeId}`;
-    } else if (state.selectedEdgeId) {
-      selectionLabel = `边: ${state.selectedEdgeId}`;
-    }
-    if (this.elements.selectionLabel) {
-      this.elements.selectionLabel.textContent = selectionLabel;
     }
   }
 }

@@ -7,7 +7,8 @@
 
 html, body {
   height: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   font-size: 14px;
 }
@@ -15,7 +16,9 @@ html, body {
 .app {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
   height: 100vh;
+  min-width: 100%;
   background: #ffffff;
 }
 
@@ -62,8 +65,10 @@ html, body {
 .workspace {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   position: relative;
+  min-width: 100%;
 }
 
 .diagram-panel {
@@ -357,19 +362,48 @@ html, body {
 }
 
 /* CodeMirror 编辑器样式 */
-.CodeMirror {
+.source-panel .CodeMirror {
   height: 100%;
+  width: 100%;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
   line-height: 1.5;
+  flex: 1;
+  min-height: 0;
+  border: none !important;
+  border-right: none !important;
+  border-left: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
 }
 
-.CodeMirror-scroll {
+.source-panel .CodeMirror-scroll {
   min-height: 100%;
 }
 
-.CodeMirror-lines {
-  padding: 12px;
+.source-panel .CodeMirror-lines {
+  padding: 0;
+}
+
+/* CodeMirror 包装器 */
+.source-panel .CodeMirror-wrap {
+  height: 100%;
+  width: 100%;
+  border: none !important;
+}
+
+.source-panel .CodeMirror-gutters {
+  border: none !important;
+  border-right: none !important;
+}
+
+/* 隐藏垂直滚动条 */
+.source-panel .CodeMirror-vscrollbar {
+  display: none !important;
+}
+
+.source-panel .CodeMirror-scrollbar-filler {
+  display: none !important;
 }
 
 .CodeMirror-line {
@@ -398,6 +432,7 @@ html, body {
   flex-direction: column;
   background: #ffffff;
   flex: 0 0 auto;
+  overflow: hidden;
 }
 
 .panel-path {
@@ -408,7 +443,8 @@ html, body {
 
 .source-editor {
   flex: 1;
-  padding: 12px;
+  padding: 0;
+  margin: 0;
   border: none;
   resize: none;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -416,6 +452,9 @@ html, body {
   line-height: 1.5;
   background: #ffffff;
   color: #212529;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
 }
 
 .source-editor:focus {
