@@ -7,29 +7,20 @@
     <div class="content">
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
-      <div v-else class="template-libraries">
+      <div v-else class="templates">
         <div
-          v-for="library in libraries"
-          :key="library.name"
-          class="library-item"
+          v-for="template in templates"
+          :key="template.id"
+          class="template-item"
+          @click="createFromTemplate(template)"
         >
-          <h3>{{ library.name }}</h3>
-          <div class="templates">
-            <div
-              v-for="template in library.templates"
-              :key="template.id"
-              class="template-item"
-              @click="createFromTemplate(template)"
-            >
-              <div class="template-icon">
-                {{ template.type === 'structure' ? '📁' : '📄' }}
-              </div>
-              <div class="template-info">
-                <h4>{{ template.name }}</h4>
-                <p v-if="template.description" class="description">{{ template.description }}</p>
-                <span class="type">{{ template.type === 'structure' ? '结构模板' : '内容模板' }}</span>
-              </div>
-            </div>
+          <div class="template-icon">
+            {{ template.type === 'structure' ? '📁' : '📄' }}
+          </div>
+          <div class="template-info">
+            <h4>{{ template.name }}</h4>
+            <p v-if="template.description" class="description">{{ template.description }}</p>
+            <span class="type">{{ template.type === 'structure' ? '结构模板' : '内容模板' }}</span>
           </div>
         </div>
       </div>
@@ -46,28 +37,21 @@ interface Template {
   name: string;
   description?: string;
   type: 'structure' | 'content';
-  libraryName: string;
 }
 
-interface TemplateLibrary {
-  name: string;
-  description?: string;
-  templates: Template[];
-}
-
-const libraries = ref<TemplateLibrary[]>([]);
+const templates = ref<Template[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-const loadLibraries = async () => {
+const loadTemplates = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const result = await extensionService.call<TemplateLibrary[]>('template.listLibraries', {});
-    libraries.value = result || [];
+    const result = await extensionService.call<Template[]>('template.list', {});
+    templates.value = result || [];
   } catch (err: any) {
-    error.value = err.message || '加载模板库失败';
-    console.error('Failed to load template libraries', err);
+    error.value = err.message || '加载模板失败';
+    console.error('Failed to load templates', err);
   } finally {
     loading.value = false;
   }
@@ -80,7 +64,6 @@ const createFromTemplate = async (template: Template) => {
 
     await extensionService.call('template.createFromTemplate', {
       templateId: template.id,
-      libraryName: template.libraryName,
       title,
     });
     
@@ -92,11 +75,11 @@ const createFromTemplate = async (template: Template) => {
 };
 
 const refresh = () => {
-  loadLibraries();
+  loadTemplates();
 };
 
 onMounted(() => {
-  loadLibraries();
+  loadTemplates();
 });
 </script>
 
@@ -130,19 +113,6 @@ onMounted(() => {
   text-align: center;
   padding: 40px;
   color: #666;
-}
-
-.template-libraries {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.library-item h3 {
-  margin: 0 0 16px 0;
-  color: #333;
-  border-bottom: 2px solid #007acc;
-  padding-bottom: 8px;
 }
 
 .templates {

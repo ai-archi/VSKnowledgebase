@@ -217,7 +217,6 @@ interface Template {
   name: string;
   description?: string;
   type: 'structure' | 'content';
-  libraryName: string;
 }
 
 interface FileItem {
@@ -352,18 +351,11 @@ const loadVaults = async () => {
 
 const loadTemplates = async (vaultId: string) => {
   try {
-    const libraries = await extensionService.call<any[]>('template.listLibraries', { vaultId });
-    allTemplates.value = [];
-    if (libraries && libraries.length > 0) {
-      for (const library of libraries) {
-        if (library.templates && library.templates.length > 0) {
-          allTemplates.value.push(...library.templates);
-        }
-      }
-    }
+    const templates = await extensionService.call<any[]>('template.list', { vaultId });
+    allTemplates.value = templates || [];
   } catch (err: any) {
     console.error('Failed to load templates', err);
-    ElMessage.error('加载模板失败');
+    ElMessage.error('加载模板失败: ' + (err.message || '未知错误'));
     allTemplates.value = [];
   }
 };
@@ -493,7 +485,6 @@ const handleCreate = async () => {
         try {
           templateContent = await extensionService.call<any>('template.getContent', {
             templateId: formData.value.templateId,
-            libraryName: template.libraryName,
             vaultId: formData.value.vaultId,
           });
         } catch (err: any) {

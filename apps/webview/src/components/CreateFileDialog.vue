@@ -300,7 +300,6 @@ interface Template {
   name: string;
   description?: string;
   type: 'structure' | 'content';
-  libraryName: string;
 }
 
 interface FileItem {
@@ -434,15 +433,8 @@ const handleVaultChange = async (vaultId: string) => {
 
 const loadTemplates = async (vaultId: string) => {
   try {
-    const libraries = await extensionService.call<any[]>('template.listLibraries', { vaultId });
-    templates.value = [];
-    if (libraries && libraries.length > 0) {
-      for (const library of libraries) {
-        if (library.templates && library.templates.length > 0) {
-          templates.value.push(...library.templates);
-        }
-      }
-    }
+    const templatesList = await extensionService.call<any[]>('template.list', { vaultId });
+    templates.value = templatesList || [];
   } catch (err: any) {
     console.error('Failed to load templates', err);
     templates.value = [];
@@ -608,7 +600,6 @@ const getTemplateContent = async (templateId: string): Promise<string> => {
       // 这里需要调用后端获取模板内容
       const result = await extensionService.call<string>('template.getContent', {
         templateId,
-        libraryName: template.libraryName,
         vaultId: formData.value.vaultId,
       });
       return result || '';

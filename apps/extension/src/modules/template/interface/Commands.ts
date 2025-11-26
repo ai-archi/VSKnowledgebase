@@ -51,30 +51,15 @@ export class TemplateCommands {
             return;
           }
 
-          // 获取模板库
-          const librariesResult = await this.templateService.getTemplateLibraries(selectedVault.id);
-          if (!librariesResult.success || librariesResult.value.length === 0) {
-            vscode.window.showInformationMessage('No template libraries found');
-            return;
-          }
-
-          // 选择模板库
-          const libraryItems = librariesResult.value.map(lib => ({
-            label: lib.name,
-            description: lib.description,
-            library: lib,
-          }));
-
-          const selectedLibrary = await vscode.window.showQuickPick(libraryItems, {
-            placeHolder: 'Select a template library',
-          });
-
-          if (!selectedLibrary) {
+          // 获取模板
+          const templatesResult = await this.templateService.getTemplates(selectedVault.id);
+          if (!templatesResult.success || templatesResult.value.length === 0) {
+            vscode.window.showInformationMessage('No templates found');
             return;
           }
 
           // 选择模板
-          const templateItems = selectedLibrary.library.templates.map(t => ({
+          const templateItems = templatesResult.value.map(t => ({
             label: t.name,
             description: t.description || `${t.type} template`,
             template: t,

@@ -3,7 +3,6 @@ import { TYPES } from '../../../infrastructure/di/types';
 import {
   TemplateApplicationService,
   Template,
-  TemplateLibrary,
   CreateFromTemplateOpts,
 } from './TemplateApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
@@ -31,30 +30,17 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
   ) {}
 
   /**
-   * 获取所有模板库
+   * 获取所有模板
    */
-  async getTemplateLibraries(vaultId?: string): Promise<Result<TemplateLibrary[], ArtifactError>> {
+  async getTemplates(vaultId?: string): Promise<Result<Template[], ArtifactError>> {
     try {
-      const libraries: TemplateLibrary[] = [];
+      const templates: Template[] = [];
 
       if (vaultId) {
-        // 先尝试直接加载（无库名称层级）：vault/templates/structure/ 和 vault/templates/content/
-        const directLibrary = await this.loadTemplateLibraryDirectly(vaultId);
-        if (directLibrary.success && directLibrary.value) {
-          libraries.push(directLibrary.value);
-        }
-        
-        // 也尝试加载有库名称层级的模板（向后兼容）
-        // 先获取 vault 名称
-        const vaultResult = await this.vaultService.getVault(vaultId);
-        if (vaultResult.success && vaultResult.value) {
-          const library = await this.loadTemplateLibraryFromVault(vaultId, vaultResult.value.name);
-        if (library.success && library.value) {
-            // 避免重复添加
-            if (!libraries.some(lib => lib.name === library.value!.name)) {
-          libraries.push(library.value);
-            }
-          }
+        // 加载指定 vault 的模板
+        const vaultTemplates = await this.loadTemplatesFromVault(vaultId);
+        if (vaultTemplates.success) {
+          templates.push(...vaultTemplates.value);
         }
       } else {
         // 从所有 Vault 加载
@@ -65,27 +51,14 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
             .map(dirent => dirent.name);
 
           for (const vaultName of vaults) {
-            const templatesDir = path.join(vaultsRoot, vaultName, 'templates');
-            if (fs.existsSync(templatesDir)) {
-              // 先尝试直接加载（无库名称层级）
-              const directLibrary = await this.loadTemplateLibraryDirectly(vaultName);
-              if (directLibrary.success && directLibrary.value) {
-                libraries.push(directLibrary.value);
-              }
-              
-              // 也尝试加载有库名称层级的模板
-              const libraryDirs = fs.readdirSync(templatesDir, { withFileTypes: true })
-                .filter(dirent => dirent.isDirectory())
-                .map(dirent => dirent.name)
-                .filter(dir => dir !== 'structure' && dir !== 'content'); // 排除直接的结构和内容目录
-
-              for (const libraryName of libraryDirs) {
-                const libraryResult = await this.loadTemplateLibraryFromVault(vaultName, libraryName);
-                if (libraryResult.success && libraryResult.value) {
-                  // 避免重复添加
-                  if (!libraries.some(lib => lib.name === libraryResult.value!.name && lib.vaultId === vaultName)) {
-                  libraries.push(libraryResult.value);
-                  }
+            // 通过 vaultName 获取 vaultId
+            const vaultsResult = await this.vaultService.listVaults();
+            if (vaultsResult.success) {
+              const vault = vaultsResult.value.find(v => v.name === vaultName);
+              if (vault) {
+                const vaultTemplates = await this.loadTemplatesFromVault(vault.id);
+                if (vaultTemplates.success) {
+                  templates.push(...vaultTemplates.value);
                 }
               }
             }
@@ -93,13 +66,13 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         }
       }
 
-      return { success: true, value: libraries };
+      return { success: true, value: templates };
     } catch (error: any) {
       return {
         success: false,
         error: new ArtifactError(
           ArtifactErrorCode.OPERATION_FAILED,
-          `Failed to get template libraries: ${error.message}`,
+          `Failed to get templates: ${error.message}`,
           { vaultId },
           error
         ),
@@ -108,33 +81,38 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
   }
 
   /**
-   * 直接从 Vault 加载模板库（无库名称层级）
+   * 从 Vault 加载模板
    * 支持结构：vault/templates/structure/ 和 vault/templates/content/
    */
-  private async loadTemplateLibraryDirectly(
+  private async loadTemplatesFromVault(
     vaultId: string
-  ): Promise<Result<TemplateLibrary | null, ArtifactError>> {
+  ): Promise<Result<Template[], ArtifactError>> {
     try {
       // 通过 vaultId 获取 vault，然后使用 vault.name
       const vaultResult = await this.vaultService.getVault(vaultId);
       if (!vaultResult.success || !vaultResult.value) {
-        return { success: true, value: null };
+        this.logger.warn(`Vault not found for vaultId: ${vaultId}`);
+        return { success: true, value: [] };
       }
       const vaultName = vaultResult.value.name;
       const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
       const templatesDir = path.join(vaultPath, 'templates');
+      
+      this.logger.info(`Loading templates directly for vaultId: ${vaultId}, vaultName: ${vaultName}, path: ${templatesDir}`);
 
       if (!fs.existsSync(templatesDir)) {
-        return { success: true, value: null };
+        this.logger.warn(`Templates directory not found: ${templatesDir}`);
+        return { success: true, value: [] };
       }
 
       const templates: Template[] = [];
-      const libraryName = 'default'; // 默认库名称
 
       // 加载结构模板
       const structureDir = path.join(templatesDir, 'structure');
+      this.logger.info(`Checking structure directory: ${structureDir}, exists: ${fs.existsSync(structureDir)}`);
       if (fs.existsSync(structureDir)) {
         const files = fs.readdirSync(structureDir);
+        this.logger.info(`Found ${files.length} files in structure directory: ${files.join(', ')}`);
         for (const file of files) {
           if (file.endsWith('.yml') || file.endsWith('.yaml')) {
             const filePath = path.join(structureDir, file);
@@ -145,7 +123,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
               name: templateData.name || path.basename(file, path.extname(file)),
               description: templateData.description,
               type: 'structure',
-              libraryName,
               category: templateData.category,
               viewType: templateData.viewType,
               structure: templateData.structure,
@@ -171,7 +148,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
               name: path.basename(file, path.extname(file)),
               description: undefined,
               type: 'content',
-              libraryName,
               content,
               variables: this.extractVariables(content),
               createdAt: new Date().toISOString(),
@@ -181,149 +157,15 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         }
       }
 
-      // 如果没有找到任何模板，返回 null
-      if (templates.length === 0) {
-        return { success: true, value: null };
-      }
-
-      const library: TemplateLibrary = {
-        name: libraryName,
-        description: undefined,
-        vaultId,
-        templates,
-      };
-
-      return { success: true, value: library };
+      this.logger.info(`Loaded ${templates.length} templates, structure templates: ${templates.filter(t => t.type === 'structure').length}`);
+      return { success: true, value: templates };
     } catch (error: any) {
       return {
         success: false,
         error: new ArtifactError(
           ArtifactErrorCode.OPERATION_FAILED,
-          `Failed to load template library directly: ${error.message}`,
+          `Failed to load templates from vault: ${error.message}`,
           { vaultId },
-          error
-        ),
-      };
-    }
-  }
-
-  /**
-   * 从 Vault 加载模板库（有库名称层级）
-   * 支持结构：vault/templates/libraryName/structure/ 和 vault/templates/libraryName/content/
-   */
-  private async loadTemplateLibraryFromVault(
-    vaultId: string,
-    libraryName: string
-  ): Promise<Result<TemplateLibrary | null, ArtifactError>> {
-    try {
-      // 通过 vaultId 获取 vault，然后使用 vault.name
-      const vaultResult = await this.vaultService.getVault(vaultId);
-      if (!vaultResult.success || !vaultResult.value) {
-        return { success: true, value: null };
-      }
-      const vaultName = vaultResult.value.name;
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-      const libraryPath = path.join(vaultPath, 'templates', libraryName);
-
-      if (!fs.existsSync(libraryPath)) {
-        return { success: true, value: null };
-      }
-
-      const templates: Template[] = [];
-
-      // 加载结构模板
-      const structureDir = path.join(libraryPath, 'structure');
-      if (fs.existsSync(structureDir)) {
-        const files = fs.readdirSync(structureDir);
-        for (const file of files) {
-          if (file.endsWith('.yml') || file.endsWith('.yaml')) {
-            const filePath = path.join(structureDir, file);
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const templateData = yaml.load(content) as any;
-            templates.push({
-              id: templateData.id || uuidv4(),
-              name: templateData.name || path.basename(file, path.extname(file)),
-              description: templateData.description,
-              type: 'structure',
-              libraryName,
-              category: templateData.category,
-              viewType: templateData.viewType,
-              structure: templateData.structure,
-              variables: templateData.variables || [],
-              createdAt: templateData.createdAt || new Date().toISOString(),
-              updatedAt: templateData.updatedAt || new Date().toISOString(),
-            });
-          }
-        }
-      }
-
-      // 加载内容模板
-      const contentDir = path.join(libraryPath, 'content');
-      if (fs.existsSync(contentDir)) {
-        const files = fs.readdirSync(contentDir);
-        for (const file of files) {
-          if (file.endsWith('.md') || file.endsWith('.yml') || file.endsWith('.yaml')) {
-            const filePath = path.join(contentDir, file);
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const templateId = uuidv4();
-            templates.push({
-              id: templateId,
-              name: path.basename(file, path.extname(file)),
-              description: undefined,
-              type: 'content',
-              libraryName,
-              content,
-              variables: this.extractVariables(content),
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
-          }
-        }
-      }
-
-      // 尝试从 README.md 读取描述
-      let description: string | undefined = undefined;
-      const readmePath = path.join(libraryPath, 'README.md');
-      if (fs.existsSync(readmePath)) {
-        try {
-          const readmeContent = fs.readFileSync(readmePath, 'utf-8');
-          // 提取第一段作为描述（去除 Markdown 标题和空行）
-          const lines = readmeContent.split('\n').filter(line => line.trim().length > 0);
-          // 跳过 Markdown 标题（以 # 开头）
-          const descriptionLines: string[] = [];
-          for (const line of lines) {
-            if (line.trim().startsWith('#')) {
-              continue; // 跳过标题
-            }
-            descriptionLines.push(line.trim());
-            // 取第一段（遇到空行或达到一定长度停止）
-            if (descriptionLines.length >= 3 || line.trim().length === 0) {
-              break;
-            }
-          }
-          if (descriptionLines.length > 0) {
-            description = descriptionLines.join(' ').substring(0, 200); // 限制长度
-          }
-        } catch (error: any) {
-          this.logger.warn(`Failed to read README.md for template library: ${libraryName}`, error);
-        }
-      }
-
-      const library: TemplateLibrary = {
-        name: libraryName,
-        description,
-        vaultId,
-        templates,
-      };
-
-      return { success: true, value: library };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: new ArtifactError(
-          ArtifactErrorCode.OPERATION_FAILED,
-          `Failed to load template library: ${error.message}`,
-          { vaultId, libraryName },
           error
         ),
       };
@@ -346,43 +188,19 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
   }
 
   /**
-   * 获取模板库
-   */
-  async getTemplateLibrary(libraryName: string, vaultId: string): Promise<Result<TemplateLibrary, ArtifactError>> {
-    // 如果是默认库名称，先尝试直接加载
-    if (libraryName === 'default') {
-      const directResult = await this.loadTemplateLibraryDirectly(vaultId);
-      if (directResult.success && directResult.value) {
-        return { success: true, value: directResult.value };
-      }
-    }
-    
-    // 尝试从有库名称层级的路径加载
-    const result = await this.loadTemplateLibraryFromVault(vaultId, libraryName);
-    if (result.success && result.value) {
-      return { success: true, value: result.value };
-    }
-    
-    return {
-      success: false,
-      error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Template library not found: ${libraryName}`, { libraryName, vaultId }),
-    };
-  }
-
-  /**
    * 获取模板
    */
-  async getTemplate(templateId: string, libraryName: string, vaultId: string): Promise<Result<Template, ArtifactError>> {
-    const libraryResult = await this.getTemplateLibrary(libraryName, vaultId);
-    if (!libraryResult.success) {
-      return libraryResult;
+  async getTemplate(templateId: string, vaultId: string): Promise<Result<Template, ArtifactError>> {
+    const templatesResult = await this.getTemplates(vaultId);
+    if (!templatesResult.success) {
+      return templatesResult;
     }
 
-    const template = libraryResult.value.templates.find(t => t.id === templateId);
+    const template = templatesResult.value.find(t => t.id === templateId);
     if (!template) {
       return {
         success: false,
-        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Template not found: ${templateId}`, { templateId, libraryName, vaultId }),
+        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Template not found: ${templateId}`, { templateId, vaultId }),
       };
     }
 
@@ -394,8 +212,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
    */
   async createTemplate(
     vaultId: string,
-    libraryName: string,
-    template: Omit<Template, 'id' | 'createdAt' | 'updatedAt' | 'libraryName'>
+    template: Omit<Template, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<Result<Template, ArtifactError>> {
     try {
       const templateId = uuidv4();
@@ -404,7 +221,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       const fullTemplate: Template = {
         ...template,
         id: templateId,
-        libraryName,
         createdAt: now,
         updatedAt: now,
       };
@@ -423,23 +239,23 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       }
       const vaultName = vaultResult.value.name;
       const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-      const libraryPath = path.join(vaultPath, 'templates', libraryName);
+      const templatesDir = path.join(vaultPath, 'templates');
 
-      // 确保模板库目录存在
-      if (!fs.existsSync(libraryPath)) {
-        fs.mkdirSync(libraryPath, { recursive: true });
+      // 确保模板目录存在
+      if (!fs.existsSync(templatesDir)) {
+        fs.mkdirSync(templatesDir, { recursive: true });
       }
 
       // 根据模板类型保存到不同目录
       if (template.type === 'structure') {
-        const structureDir = path.join(libraryPath, 'structure');
+        const structureDir = path.join(templatesDir, 'structure');
         if (!fs.existsSync(structureDir)) {
           fs.mkdirSync(structureDir, { recursive: true });
         }
         const templatePath = path.join(structureDir, `${templateId}.yml`);
         fs.writeFileSync(templatePath, yaml.dump(fullTemplate), 'utf-8');
       } else {
-        const contentDir = path.join(libraryPath, 'content');
+        const contentDir = path.join(templatesDir, 'content');
         if (!fs.existsSync(contentDir)) {
           fs.mkdirSync(contentDir, { recursive: true });
         }
@@ -453,7 +269,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           name: template.name,
           description: template.description,
           type: template.type,
-          libraryName,
           category: template.category,
           viewType: template.viewType,
           variables: template.variables,
@@ -469,7 +284,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         error: new ArtifactError(
           ArtifactErrorCode.OPERATION_FAILED,
           `Failed to create template: ${error.message}`,
-          { vaultId, libraryName, template },
+          { vaultId, template },
           error
         ),
       };
@@ -481,11 +296,10 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
    */
   async updateTemplate(
     vaultId: string,
-    libraryName: string,
     templateId: string,
     updates: Partial<Template>
   ): Promise<Result<Template, ArtifactError>> {
-    const templateResult = await this.getTemplate(templateId, libraryName, vaultId);
+    const templateResult = await this.getTemplate(templateId, vaultId);
     if (!templateResult.success) {
       return templateResult;
     }
@@ -494,7 +308,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       ...templateResult.value,
       ...updates,
       id: templateId,
-      libraryName,
       updatedAt: new Date().toISOString(),
     };
 
@@ -513,14 +326,14 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
     }
     const vaultName = vaultResult.value.name;
     const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-    const libraryPath = path.join(vaultPath, 'templates', libraryName);
+    const templatesDir = path.join(vaultPath, 'templates');
 
     if (updatedTemplate.type === 'structure') {
-      const structureDir = path.join(libraryPath, 'structure');
+      const structureDir = path.join(templatesDir, 'structure');
       const templatePath = path.join(structureDir, `${templateId}.yml`);
       fs.writeFileSync(templatePath, yaml.dump(updatedTemplate), 'utf-8');
     } else {
-      const contentDir = path.join(libraryPath, 'content');
+      const contentDir = path.join(templatesDir, 'content');
       const extension = updatedTemplate.viewType === 'design' ? '.md' : '.md';
       const templatePath = path.join(contentDir, `${templateId}${extension}`);
       if (updates.content !== undefined) {
@@ -533,7 +346,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         name: updatedTemplate.name,
         description: updatedTemplate.description,
         type: updatedTemplate.type,
-        libraryName,
         category: updatedTemplate.category,
         viewType: updatedTemplate.viewType,
         variables: updatedTemplate.variables,
@@ -548,9 +360,9 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
   /**
    * 删除模板
    */
-  async deleteTemplate(vaultId: string, libraryName: string, templateId: string): Promise<Result<void, ArtifactError>> {
+  async deleteTemplate(vaultId: string, templateId: string): Promise<Result<void, ArtifactError>> {
     try {
-      const templateResult = await this.getTemplate(templateId, libraryName, vaultId);
+      const templateResult = await this.getTemplate(templateId, vaultId);
       if (!templateResult.success) {
         return templateResult;
       }
@@ -570,16 +382,16 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       }
       const vaultName = vaultResult.value.name;
       const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-      const libraryPath = path.join(vaultPath, 'templates', libraryName);
+      const templatesDir = path.join(vaultPath, 'templates');
 
       if (template.type === 'structure') {
-        const structureDir = path.join(libraryPath, 'structure');
+        const structureDir = path.join(templatesDir, 'structure');
         const templatePath = path.join(structureDir, `${templateId}.yml`);
         if (fs.existsSync(templatePath)) {
           fs.unlinkSync(templatePath);
         }
       } else {
-        const contentDir = path.join(libraryPath, 'content');
+        const contentDir = path.join(templatesDir, 'content');
         const extension = template.viewType === 'design' ? '.md' : '.md';
         const templatePath = path.join(contentDir, `${templateId}${extension}`);
         const metaPath = path.join(contentDir, `${templateId}.meta.yml`);
@@ -598,7 +410,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         error: new ArtifactError(
           ArtifactErrorCode.OPERATION_FAILED,
           `Failed to delete template: ${error.message}`,
-          { vaultId, libraryName, templateId },
+          { vaultId, templateId },
           error
         ),
       };
@@ -631,20 +443,13 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         };
       }
 
-      // 查找模板（需要知道模板库名称）
-      // 简化处理：遍历所有模板库查找
-      const librariesResult = await this.getTemplateLibraries(opts.vaultId);
-      if (!librariesResult.success) {
-        return librariesResult;
+      // 查找模板
+      const templatesResult = await this.getTemplates(opts.vaultId);
+      if (!templatesResult.success) {
+        return templatesResult;
       }
 
-      let template: Template | undefined;
-      for (const library of librariesResult.value) {
-        template = library.templates.find(t => t.id === opts.templateId);
-        if (template) {
-          break;
-        }
-      }
+      const template = templatesResult.value.find(t => t.id === opts.templateId);
 
       if (!template) {
         return {

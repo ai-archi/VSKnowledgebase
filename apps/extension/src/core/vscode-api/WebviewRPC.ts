@@ -170,34 +170,28 @@ export class WebviewRPC {
     });
 
     // Template 相关方法
-    this.webviewAdapter.registerMethod('template.listLibraries', async (params: { vaultId?: string }) => {
-      const result = await this.templateService.getTemplateLibraries(params.vaultId);
+    this.webviewAdapter.registerMethod('template.list', async (params: { vaultId?: string }) => {
+      const result = await this.templateService.getTemplates(params.vaultId);
       if (!result.success) {
         throw new Error(result.error.message);
       }
-      return result.value.map(library => ({
-        name: library.name,
-        description: library.description,
-        vaultId: library.vaultId,
-        templates: library.templates.map(template => ({
-          id: template.id,
-          name: template.name,
-          description: template.description,
-          type: template.type,
-          libraryName: template.libraryName,
-        })),
+      return result.value.map(template => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        type: template.type,
+        category: template.category,
+        viewType: template.viewType,
       }));
     });
 
     this.webviewAdapter.registerMethod('template.getContent', async (params: {
       templateId: string;
-      libraryName: string;
       vaultId: string;
     }) => {
       // 先获取模板
       const templateResult = await this.templateService.getTemplate(
         params.templateId,
-        params.libraryName,
         params.vaultId
       );
       if (!templateResult.success) {
