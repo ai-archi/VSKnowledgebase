@@ -1,33 +1,45 @@
 import * as vscode from 'vscode';
-import { TemplateApplicationService, Template, TemplateLibrary } from '../application/TemplateApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';
+import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * 模板树项
  */
 export class TemplateTreeItem extends vscode.TreeItem {
+  public readonly vaultName?: string;
+  public readonly filePath?: string; // 相对于 vault/templates 的路径
+
   constructor(
     public readonly label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly template?: Template,
-    public readonly library?: TemplateLibrary,
-    public readonly contextValue?: string
+    vaultName?: string,
+    filePath?: string,
+    contextValue?: string
   ) {
     super(label, collapsibleState);
     
-    if (template) {
-      this.tooltip = template.description || template.name;
-      this.contextValue = template.type === 'structure' ? 'template.structure' : 'template.content';
-      this.iconPath = template.type === 'structure' 
-        ? new vscode.ThemeIcon('folder')
-        : new vscode.ThemeIcon('file-text');
-    } else if (library) {
-      this.tooltip = library.description || library.name;
-      this.contextValue = 'template.library';
-      this.iconPath = new vscode.ThemeIcon('library');
+    this.vaultName = vaultName;
+    this.filePath = filePath;
+    this.contextValue = contextValue || 'template.file';
+    
+    // 根据文件扩展名设置图标
+    if (filePath) {
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.yml' || ext === '.yaml') {
+        this.iconPath = new vscode.ThemeIcon('file-code');
+      } else if (ext === '.md') {
+        this.iconPath = new vscode.ThemeIcon('markdown');
+      } else {
+        this.iconPath = new vscode.ThemeIcon('file');
+      }
+      this.tooltip = filePath;
     } else {
-      this.contextValue = contextValue || 'template.group';
+      // 目录
+      this.iconPath = new vscode.ThemeIcon('folder');
+      this.tooltip = vaultName ? `Vault: ${vaultName}` : label;
     }
   }
 }
@@ -42,8 +54,8 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
     this._onDidChangeTreeData.event;
 
   constructor(
-    private templateService: TemplateApplicationService,
     private vaultService: VaultApplicationService,
+    private vaultAdapter: VaultFileSystemAdapter,
     private logger: Logger
   ) {}
 
@@ -68,89 +80,35 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
           new TemplateTreeItem(
             vault.name,
             vscode.TreeItemCollapsibleState.Collapsed,
-            undefined,
+            vault.name,
             undefined,
             'vault'
           )
         );
       }
 
-      // Vault 节点：显示该 vault 的所有模板库
-      if (element.contextValue === 'vault') {
-        const vaultName = element.label;
-        const vaultsResult = await this.vaultService.listVaults();
-        const vault = vaultsResult.success
-          ? vaultsResult.value.find(v => v.name === vaultName)
-          : undefined;
+      // Vault 节点：显示该 vault 的 templates 目录下的文件和子目录
+      if (element.contextValue === 'vault' && element.vaultName) {
+        const vaultPath = this.vaultAdapter.getVaultPath(element.vaultName);
+        const templatesDir = path.join(vaultPath, 'templates');
 
-        if (!vault) {
+        if (!fs.existsSync(templatesDir)) {
           return [];
         }
 
-        const librariesResult = await this.templateService.getTemplateLibraries(vault.id);
-        if (!librariesResult.success || librariesResult.value.length === 0) {
+        return this.getTemplateFiles(templatesDir, element.vaultName, '');
+      }
+
+      // 目录节点：显示该目录下的文件和子目录
+      if (element.vaultName && element.filePath !== undefined) {
+        const vaultPath = this.vaultAdapter.getVaultPath(element.vaultName);
+        const fullPath = path.join(vaultPath, 'templates', element.filePath);
+
+        if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isDirectory()) {
           return [];
         }
 
-        return librariesResult.value.map(library =>
-          new TemplateTreeItem(
-            library.name,
-            vscode.TreeItemCollapsibleState.Collapsed,
-            undefined,
-            library
-          )
-        );
-      }
-
-      // 模板库节点：显示结构模板和内容模板分组
-      if (element.library) {
-        const library = element.library;
-        const structureTemplates = library.templates.filter(t => t.type === 'structure');
-        const contentTemplates = library.templates.filter(t => t.type === 'content');
-
-        const items: TemplateTreeItem[] = [];
-
-        if (structureTemplates.length > 0) {
-          items.push(
-            new TemplateTreeItem(
-              `结构模板 (${structureTemplates.length})`,
-              vscode.TreeItemCollapsibleState.Collapsed,
-              undefined,
-              library,
-              'template.group'
-            )
-          );
-        }
-
-        if (contentTemplates.length > 0) {
-          items.push(
-            new TemplateTreeItem(
-              `内容模板 (${contentTemplates.length})`,
-              vscode.TreeItemCollapsibleState.Collapsed,
-              undefined,
-              library,
-              'template.group'
-            )
-          );
-        }
-
-        return items;
-      }
-
-      // 模板分组节点：显示该类型的模板
-      if (element.label.includes('结构模板') || element.label.includes('内容模板')) {
-        const library = element.library!;
-        const templateType = element.label.includes('结构模板') ? 'structure' : 'content';
-        const templates = library.templates.filter(t => t.type === templateType);
-
-        return templates.map(template =>
-          new TemplateTreeItem(
-            template.name,
-            vscode.TreeItemCollapsibleState.None,
-            template,
-            library
-          )
-        );
+        return this.getTemplateFiles(fullPath, element.vaultName, element.filePath);
       }
 
       return [];
@@ -159,5 +117,66 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
       return [];
     }
   }
-}
 
+  /**
+   * 获取模板目录下的文件和子目录
+   */
+  private getTemplateFiles(
+    dirPath: string,
+    vaultName: string,
+    relativePath: string
+  ): TemplateTreeItem[] {
+    try {
+      if (!fs.existsSync(dirPath)) {
+        return [];
+      }
+
+      const items: TemplateTreeItem[] = [];
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+      // 排序：目录在前，文件在后，都按名称排序
+      entries.sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      for (const entry of entries) {
+        // 跳过隐藏文件和系统文件
+        if (entry.name.startsWith('.')) {
+          continue;
+        }
+
+        const fullPath = path.join(dirPath, entry.name);
+        const itemRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+        if (entry.isDirectory()) {
+          items.push(
+            new TemplateTreeItem(
+              entry.name,
+              vscode.TreeItemCollapsibleState.Collapsed,
+              vaultName,
+              itemRelativePath,
+              'template.directory'
+            )
+          );
+        } else {
+          items.push(
+            new TemplateTreeItem(
+              entry.name,
+              vscode.TreeItemCollapsibleState.None,
+              vaultName,
+              itemRelativePath,
+              'template.file'
+            )
+          );
+        }
+      }
+
+      return items;
+    } catch (error: any) {
+      this.logger.error(`Failed to read template directory: ${dirPath}`, error);
+      return [];
+    }
+  }
+}

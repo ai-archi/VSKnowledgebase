@@ -38,9 +38,23 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       const libraries: TemplateLibrary[] = [];
 
       if (vaultId) {
-        const library = await this.loadTemplateLibraryFromVault(vaultId, vaultId);
+        // 先尝试直接加载（无库名称层级）：vault/templates/structure/ 和 vault/templates/content/
+        const directLibrary = await this.loadTemplateLibraryDirectly(vaultId);
+        if (directLibrary.success && directLibrary.value) {
+          libraries.push(directLibrary.value);
+        }
+        
+        // 也尝试加载有库名称层级的模板（向后兼容）
+        // 先获取 vault 名称
+        const vaultResult = await this.vaultService.getVault(vaultId);
+        if (vaultResult.success && vaultResult.value) {
+          const library = await this.loadTemplateLibraryFromVault(vaultId, vaultResult.value.name);
         if (library.success && library.value) {
+            // 避免重复添加
+            if (!libraries.some(lib => lib.name === library.value!.name)) {
           libraries.push(library.value);
+            }
+          }
         }
       } else {
         // 从所有 Vault 加载
@@ -53,14 +67,25 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           for (const vaultName of vaults) {
             const templatesDir = path.join(vaultsRoot, vaultName, 'templates');
             if (fs.existsSync(templatesDir)) {
+              // 先尝试直接加载（无库名称层级）
+              const directLibrary = await this.loadTemplateLibraryDirectly(vaultName);
+              if (directLibrary.success && directLibrary.value) {
+                libraries.push(directLibrary.value);
+              }
+              
+              // 也尝试加载有库名称层级的模板
               const libraryDirs = fs.readdirSync(templatesDir, { withFileTypes: true })
                 .filter(dirent => dirent.isDirectory())
-                .map(dirent => dirent.name);
+                .map(dirent => dirent.name)
+                .filter(dir => dir !== 'structure' && dir !== 'content'); // 排除直接的结构和内容目录
 
               for (const libraryName of libraryDirs) {
                 const libraryResult = await this.loadTemplateLibraryFromVault(vaultName, libraryName);
                 if (libraryResult.success && libraryResult.value) {
+                  // 避免重复添加
+                  if (!libraries.some(lib => lib.name === libraryResult.value!.name && lib.vaultId === vaultName)) {
                   libraries.push(libraryResult.value);
+                  }
                 }
               }
             }
@@ -83,14 +108,121 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
   }
 
   /**
-   * 从 Vault 加载模板库
+   * 直接从 Vault 加载模板库（无库名称层级）
+   * 支持结构：vault/templates/structure/ 和 vault/templates/content/
+   */
+  private async loadTemplateLibraryDirectly(
+    vaultId: string
+  ): Promise<Result<TemplateLibrary | null, ArtifactError>> {
+    try {
+      // 通过 vaultId 获取 vault，然后使用 vault.name
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return { success: true, value: null };
+      }
+      const vaultName = vaultResult.value.name;
+      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
+      const templatesDir = path.join(vaultPath, 'templates');
+
+      if (!fs.existsSync(templatesDir)) {
+        return { success: true, value: null };
+      }
+
+      const templates: Template[] = [];
+      const libraryName = 'default'; // 默认库名称
+
+      // 加载结构模板
+      const structureDir = path.join(templatesDir, 'structure');
+      if (fs.existsSync(structureDir)) {
+        const files = fs.readdirSync(structureDir);
+        for (const file of files) {
+          if (file.endsWith('.yml') || file.endsWith('.yaml')) {
+            const filePath = path.join(structureDir, file);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const templateData = yaml.load(content) as any;
+            templates.push({
+              id: templateData.id || uuidv4(),
+              name: templateData.name || path.basename(file, path.extname(file)),
+              description: templateData.description,
+              type: 'structure',
+              libraryName,
+              category: templateData.category,
+              viewType: templateData.viewType,
+              structure: templateData.structure,
+              variables: templateData.variables || [],
+              createdAt: templateData.createdAt || new Date().toISOString(),
+              updatedAt: templateData.updatedAt || new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      // 加载内容模板
+      const contentDir = path.join(templatesDir, 'content');
+      if (fs.existsSync(contentDir)) {
+        const files = fs.readdirSync(contentDir);
+        for (const file of files) {
+          if (file.endsWith('.md') || file.endsWith('.yml') || file.endsWith('.yaml')) {
+            const filePath = path.join(contentDir, file);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const templateId = uuidv4();
+            templates.push({
+              id: templateId,
+              name: path.basename(file, path.extname(file)),
+              description: undefined,
+              type: 'content',
+              libraryName,
+              content,
+              variables: this.extractVariables(content),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      // 如果没有找到任何模板，返回 null
+      if (templates.length === 0) {
+        return { success: true, value: null };
+      }
+
+      const library: TemplateLibrary = {
+        name: libraryName,
+        description: undefined,
+        vaultId,
+        templates,
+      };
+
+      return { success: true, value: library };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to load template library directly: ${error.message}`,
+          { vaultId },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 从 Vault 加载模板库（有库名称层级）
+   * 支持结构：vault/templates/libraryName/structure/ 和 vault/templates/libraryName/content/
    */
   private async loadTemplateLibraryFromVault(
     vaultId: string,
     libraryName: string
   ): Promise<Result<TemplateLibrary | null, ArtifactError>> {
     try {
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultId);
+      // 通过 vaultId 获取 vault，然后使用 vault.name
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return { success: true, value: null };
+      }
+      const vaultName = vaultResult.value.name;
+      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
       const libraryPath = path.join(vaultPath, 'templates', libraryName);
 
       if (!fs.existsSync(libraryPath)) {
@@ -217,10 +349,20 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
    * 获取模板库
    */
   async getTemplateLibrary(libraryName: string, vaultId: string): Promise<Result<TemplateLibrary, ArtifactError>> {
+    // 如果是默认库名称，先尝试直接加载
+    if (libraryName === 'default') {
+      const directResult = await this.loadTemplateLibraryDirectly(vaultId);
+      if (directResult.success && directResult.value) {
+        return { success: true, value: directResult.value };
+      }
+    }
+    
+    // 尝试从有库名称层级的路径加载
     const result = await this.loadTemplateLibraryFromVault(vaultId, libraryName);
     if (result.success && result.value) {
       return { success: true, value: result.value };
     }
+    
     return {
       success: false,
       error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Template library not found: ${libraryName}`, { libraryName, vaultId }),
@@ -267,7 +409,20 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         updatedAt: now,
       };
 
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultId);
+      // 通过 vaultId 获取 vault，然后使用 vault.name
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${vaultId}`,
+            { vaultId }
+          ),
+        };
+      }
+      const vaultName = vaultResult.value.name;
+      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
       const libraryPath = path.join(vaultPath, 'templates', libraryName);
 
       // 确保模板库目录存在
@@ -344,7 +499,20 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
     };
 
     // 重新保存模板
-    const vaultPath = this.vaultAdapter.getVaultPath(vaultId);
+    // 通过 vaultId 获取 vault，然后使用 vault.name
+    const vaultResult = await this.vaultService.getVault(vaultId);
+    if (!vaultResult.success || !vaultResult.value) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.NOT_FOUND,
+          `Vault not found: ${vaultId}`,
+          { vaultId }
+        ),
+      };
+    }
+    const vaultName = vaultResult.value.name;
+    const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
     const libraryPath = path.join(vaultPath, 'templates', libraryName);
 
     if (updatedTemplate.type === 'structure') {
@@ -388,7 +556,20 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       }
 
       const template = templateResult.value;
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultId);
+      // 通过 vaultId 获取 vault，然后使用 vault.name
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${vaultId}`,
+            { vaultId }
+          ),
+        };
+      }
+      const vaultName = vaultResult.value.name;
+      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
       const libraryPath = path.join(vaultPath, 'templates', libraryName);
 
       if (template.type === 'structure') {

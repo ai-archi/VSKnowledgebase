@@ -141,7 +141,8 @@ export async function activate(context: vscode.ExtensionContext) {
   viewpointCommands.registerCommands(context);
 
   // 10. 初始化模板视图
-  const templateTreeDataProvider = new TemplateTreeDataProvider(templateService, vaultService, logger);
+  const vaultAdapter = container.get<import('./infrastructure/storage/file/VaultFileSystemAdapter').VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
+  const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, vaultAdapter, logger);
   vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
   const templateCommands = new TemplateCommands(templateService, vaultService, logger);
   templateCommands.registerCommands(context);

@@ -36,7 +36,10 @@
     <!-- 中间：输入和选择区域 -->
     <div class="middle-section">
       <el-form :model="formData" label-width="100px" label-position="left">
-        <el-form-item label="文件夹名称" required>
+        <el-form-item label="文件夹名称" :required="true">
+          <template #label>
+            <span>文件夹名称<span style="color: var(--vscode-inputValidation-errorForeground, #f14c4c); margin-left: 4px;">*</span></span>
+          </template>
           <el-input
             v-model="formData.folderName"
             placeholder="输入文件夹名称（支持模糊搜索）"
@@ -51,11 +54,11 @@
         <el-form-item label="文件夹模板">
           <el-select
             v-model="formData.templateId"
-            placeholder="选择文件夹模板（可选）"
+            :placeholder="folderTemplates.length === 0 ? '暂无文件夹模板' : '选择文件夹模板（可选）'"
             filterable
             clearable
             style="width: 100%"
-            :disabled="!formData.vaultId || folderTemplates.length === 0"
+            :disabled="!formData.vaultId"
           >
             <el-option
               v-for="template in folderTemplates"
@@ -72,6 +75,11 @@
               </div>
             </el-option>
           </el-select>
+          <div v-if="formData.vaultId && folderTemplates.length === 0" class="template-hint">
+            <span style="font-size: 12px; color: var(--vscode-descriptionForeground, #999999);">
+              当前 Vault 没有可用的文件夹模板（structure 类型）
+            </span>
+          </div>
         </el-form-item>
       </el-form>
     </div>
@@ -355,6 +363,7 @@ const loadTemplates = async (vaultId: string) => {
     }
   } catch (err: any) {
     console.error('Failed to load templates', err);
+    ElMessage.error('加载模板失败');
     allTemplates.value = [];
   }
 };
@@ -644,6 +653,10 @@ const generatePrompt = (action: string) => {
 .template-description {
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
+}
+
+.template-hint {
+  margin-top: 4px;
 }
 
 /* 下方区域 */
