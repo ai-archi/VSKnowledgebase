@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { DocumentApplicationService } from '../application/DocumentApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
+import { ArtifactTreeApplicationService } from '../../../domain/shared/artifact/application';
 import { Logger } from '../../../core/logger/Logger';
 import { Artifact } from '../../../domain/shared/artifact/Artifact';
 import * as path from 'path';
@@ -9,17 +10,26 @@ export class DocumentTreeItem extends vscode.TreeItem {
   public readonly artifact?: Artifact;
   public readonly vaultName?: string;
   public readonly folderPath?: string; // 文件夹路径（相对于 vault 的 artifacts 目录）
+  public readonly filePath?: string; // 文件路径（相对于 vault 的 artifacts 目录）
+  public readonly vaultId?: string; // Vault ID
 
   constructor(
     artifact?: Artifact,
     collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None,
     vaultName?: string,
     contextValue?: string,
-    folderPath?: string
+    folderPath?: string,
+    filePath?: string,
+    vaultId?: string
   ) {
     if (artifact) {
-      super(artifact.title, collapsibleState);
+      // 使用文件名（包含扩展名）作为显示名称，与模板视图保持一致
+      const fileName = path.basename(artifact.path) || artifact.title;
+      super(fileName, collapsibleState);
       this.artifact = artifact;
+      this.filePath = artifact.path;
+      this.vaultId = artifact.vault.id;
+      this.vaultName = artifact.vault.name;
       this.tooltip = artifact.path;
       this.command = {
         command: 'vscode.open',
@@ -27,6 +37,24 @@ export class DocumentTreeItem extends vscode.TreeItem {
         arguments: [vscode.Uri.file(artifact.contentLocation)],
       };
       this.contextValue = 'document';
+    } else if (filePath !== undefined) {
+      // 文件节点（未索引的文件，直接使用文件系统信息）
+      const fileName = path.basename(filePath);
+      super(fileName, collapsibleState);
+      this.filePath = filePath;
+      this.vaultName = vaultName;
+      this.vaultId = vaultId;
+      this.tooltip = filePath;
+      this.contextValue = 'document';
+      // 设置图标
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext === '.md') {
+        this.iconPath = new vscode.ThemeIcon('markdown');
+      } else if (ext === '.yml' || ext === '.yaml') {
+        this.iconPath = new vscode.ThemeIcon('file-code');
+      } else {
+        this.iconPath = new vscode.ThemeIcon('file');
+      }
     } else if (folderPath !== undefined) {
       // 文件夹节点
       const folderName = path.basename(folderPath) || folderPath;
@@ -71,6 +99,7 @@ export class DocumentTreeViewProvider implements vscode.TreeDataProvider<Documen
   constructor(
     private documentService: DocumentApplicationService,
     private vaultService: VaultApplicationService,
+    private treeService: ArtifactTreeApplicationService,
     private logger: Logger
   ) {}
 
@@ -123,14 +152,45 @@ export class DocumentTreeViewProvider implements vscode.TreeDataProvider<Documen
         );
       }
 
-      // Vault 节点：返回该 vault 下的文件和文件夹
+      // Vault 节点：显示该 vault 的 artifacts 目录下的文件和子目录
       if (element.isVault(element.vaultName!)) {
-        return this.getVaultChildren(element.vaultName!);
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          return [];
+        }
+        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
+        if (!vault) {
+          return [];
+        }
+        const vaultRef = { id: vault.id, name: vault.name };
+        
+        const existsResult = await this.treeService.exists(vaultRef, 'artifacts');
+        if (!existsResult.success || !existsResult.value) {
+          return [];
+        }
+
+        return this.getDocumentFiles(vaultRef, 'artifacts', '');
       }
 
-      // 文件夹节点：返回该文件夹下的文件和子文件夹
+      // 文件夹节点：显示该目录下的文件和子目录
       if (element.folderPath !== undefined && element.vaultName) {
-        return this.getFolderChildren(element.vaultName, element.folderPath);
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          return [];
+        }
+        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
+        if (!vault) {
+          return [];
+        }
+        const vaultRef = { id: vault.id, name: vault.name };
+        const dirPath = `artifacts/${element.folderPath}`;
+        
+        const isDirResult = await this.treeService.isDirectory(vaultRef, dirPath);
+        if (!isDirResult.success || !isDirResult.value) {
+          return [];
+        }
+
+        return this.getDocumentFiles(vaultRef, dirPath, element.folderPath);
       }
 
       return [];
@@ -141,125 +201,70 @@ export class DocumentTreeViewProvider implements vscode.TreeDataProvider<Documen
   }
 
   /**
-   * 获取 vault 对象
+   * 获取文档目录下的文件和子目录
    */
-  private async getVaultByName(vaultName: string) {
-    const vaultsResult = await this.vaultService.listVaults();
-    return vaultsResult.success ? vaultsResult.value.find(v => v.name === vaultName) : undefined;
-  }
+  private async getDocumentFiles(
+    vaultRef: { id: string; name: string },
+    dirPath: string,
+    relativePath: string
+  ): Promise<DocumentTreeItem[]> {
+    try {
+      const listResult = await this.treeService.listDirectory(
+        vaultRef,
+        dirPath,
+        { includeHidden: false }
+      );
 
-  /**
-   * 获取 vault 的子节点（文件和文件夹）
-   */
-  private async getVaultChildren(vaultName: string): Promise<DocumentTreeItem[]> {
-    const vault = await this.getVaultByName(vaultName);
-    if (!vault) {
-      return [];
-    }
-
-    const documentsResult = await this.documentService.listDocuments(vault.id);
-    if (!documentsResult.success) {
-      return [];
-    }
-
-    return this.organizeByFolders(documentsResult.value, vaultName);
-  }
-
-  /**
-   * 获取文件夹的子节点（文件和子文件夹）
-   */
-  private async getFolderChildren(vaultName: string, folderPath: string): Promise<DocumentTreeItem[]> {
-    const vault = await this.getVaultByName(vaultName);
-    if (!vault) {
-      return [];
-    }
-
-    const documentsResult = await this.documentService.listDocuments(vault.id);
-    if (!documentsResult.success) {
-      return [];
-    }
-
-    const items: DocumentTreeItem[] = [];
-    const folderPrefix = folderPath === '' ? '' : `${folderPath}/`;
-    const subFolders = new Set<string>();
-
-    for (const artifact of documentsResult.value) {
-      const artifactDir = this.normalizePath(path.dirname(artifact.path));
-      const folderDir = this.normalizePath(folderPath);
-
-      // 直接在当前文件夹下的文件
-      if (artifactDir === folderDir) {
-        items.push(new DocumentTreeItem(artifact, vscode.TreeItemCollapsibleState.None));
+      if (!listResult.success) {
+        return [];
       }
-      // 在子文件夹中的文件
-      else if (artifactDir.startsWith(folderPrefix)) {
-        const relativePath = artifactDir.substring(folderPrefix.length);
-        const firstPart = relativePath.split('/').filter(p => p)[0];
-        if (firstPart) {
-          subFolders.add(firstPart);
+
+      const items: DocumentTreeItem[] = [];
+      for (const node of listResult.value) {
+        const itemRelativePath = relativePath ? `${relativePath}/${node.name}` : node.name;
+
+        if (node.isDirectory) {
+          items.push(
+            new DocumentTreeItem(
+              undefined,
+              vscode.TreeItemCollapsibleState.Collapsed,
+              vaultRef.name,
+              'folder',
+              itemRelativePath,
+              undefined,
+              vaultRef.id
+            )
+          );
+        } else if (node.isFile) {
+          // 文件节点：直接使用文件系统信息，与模板视图保持一致
+          const artifactPath = node.path.startsWith('artifacts/')
+            ? node.path.substring('artifacts/'.length)
+            : node.path;
+          
+          const fileItem = new DocumentTreeItem(
+            undefined,
+            vscode.TreeItemCollapsibleState.None,
+            vaultRef.name,
+            'document',
+            undefined,
+            artifactPath,
+            vaultRef.id
+          );
+          // 添加打开文件的命令
+          fileItem.command = {
+            command: 'vscode.open',
+            title: 'Open Document',
+            arguments: [vscode.Uri.file(node.fullPath)],
+          };
+          items.push(fileItem);
         }
       }
+
+      return items;
+    } catch (error: any) {
+      this.logger.error(`Failed to read document directory: ${dirPath}`, error);
+      return [];
     }
-
-    // 添加子文件夹
-    for (const subFolderName of Array.from(subFolders).sort()) {
-      const subFolderPath = folderPrefix === '' ? subFolderName : `${folderPrefix}${subFolderName}`;
-      items.push(new DocumentTreeItem(
-        undefined,
-        vscode.TreeItemCollapsibleState.Collapsed,
-        vaultName,
-        'folder',
-        subFolderPath
-      ));
-    }
-
-    return items;
-  }
-
-  /**
-   * 标准化路径：将 '.' 和 '' 都视为根目录
-   */
-  private normalizePath(dirPath: string): string {
-    return dirPath === '.' || dirPath === '' ? '' : dirPath;
-  }
-
-  /**
-   * 按文件夹结构组织文档（vault 根目录下的文件和文件夹）
-   */
-  private organizeByFolders(artifacts: Artifact[], vaultName: string): DocumentTreeItem[] {
-    const items: DocumentTreeItem[] = [];
-    const rootFiles: Artifact[] = [];
-    const rootFolders = new Set<string>();
-
-    for (const artifact of artifacts) {
-      const artifactDir = this.normalizePath(path.dirname(artifact.path));
-      
-      if (artifactDir === '') {
-        rootFiles.push(artifact);
-      } else {
-        const firstFolder = artifactDir.split('/').filter(p => p)[0];
-        if (firstFolder) {
-          rootFolders.add(firstFolder);
-        }
-      }
-    }
-
-    // 先添加文件，再添加文件夹
-    rootFiles.forEach(artifact => {
-      items.push(new DocumentTreeItem(artifact, vscode.TreeItemCollapsibleState.None));
-    });
-
-    Array.from(rootFolders).sort().forEach(folderName => {
-      items.push(new DocumentTreeItem(
-        undefined,
-        vscode.TreeItemCollapsibleState.Collapsed,
-        vaultName,
-        'folder',
-        folderName
-      ));
-    });
-
-    return items;
   }
 }
 

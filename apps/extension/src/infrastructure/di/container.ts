@@ -23,6 +23,7 @@ import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../module
 
 // Application Services
 import { ArtifactFileSystemApplicationServiceImpl } from '../../modules/shared/application/ArtifactFileSystemApplicationServiceImpl';
+import { ArtifactTreeApplicationService, ArtifactTreeApplicationServiceImpl } from '../../domain/shared/artifact/application';
 import { VaultApplicationServiceImpl } from '../../modules/shared/application/VaultApplicationServiceImpl';
 import { LookupApplicationServiceImpl } from '../../modules/lookup/application/LookupApplicationServiceImpl';
 import { DocumentApplicationServiceImpl } from '../../modules/document/application/DocumentApplicationServiceImpl';
@@ -92,6 +93,8 @@ export function createContainer(
   // Application Services
   container.bind(TYPES.ArtifactFileSystemApplicationService)
     .to(ArtifactFileSystemApplicationServiceImpl).inSingletonScope();
+  container.bind<ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService)
+    .to(ArtifactTreeApplicationServiceImpl).inSingletonScope();
   container.bind(TYPES.VaultApplicationService)
     .to(VaultApplicationServiceImpl).inSingletonScope();
   container.bind(TYPES.LookupApplicationService)

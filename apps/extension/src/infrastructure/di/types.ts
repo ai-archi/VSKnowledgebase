@@ -24,6 +24,7 @@ export const TYPES = {
 
   // Application Services
   ArtifactFileSystemApplicationService: Symbol.for('ArtifactFileSystemApplicationService'),
+  ArtifactTreeApplicationService: Symbol.for('ArtifactTreeApplicationService'),
   VaultApplicationService: Symbol.for('VaultApplicationService'),
   LookupApplicationService: Symbol.for('LookupApplicationService'),
   DocumentApplicationService: Symbol.for('DocumentApplicationService'),

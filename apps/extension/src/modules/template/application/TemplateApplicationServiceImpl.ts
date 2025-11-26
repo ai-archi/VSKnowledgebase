@@ -7,12 +7,12 @@ import {
 } from './TemplateApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
+import { ArtifactTreeApplicationService } from '../../../domain/shared/artifact/application';
 import { Artifact } from '../../../domain/shared/artifact/Artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
 import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
@@ -21,6 +21,8 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
   constructor(
     @inject(TYPES.ArtifactFileSystemApplicationService)
     private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactTreeApplicationService)
+    private treeService: ArtifactTreeApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
     @inject(TYPES.VaultFileSystemAdapter)
@@ -44,23 +46,12 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         }
       } else {
         // 从所有 Vault 加载
-        const vaultsRoot = this.vaultAdapter.getVaultsRoot();
-        if (fs.existsSync(vaultsRoot)) {
-          const vaults = fs.readdirSync(vaultsRoot, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
-            .map(dirent => dirent.name);
-
-          for (const vaultName of vaults) {
-            // 通过 vaultName 获取 vaultId
-            const vaultsResult = await this.vaultService.listVaults();
-            if (vaultsResult.success) {
-              const vault = vaultsResult.value.find(v => v.name === vaultName);
-              if (vault) {
-                const vaultTemplates = await this.loadTemplatesFromVault(vault.id);
-                if (vaultTemplates.success) {
-                  templates.push(...vaultTemplates.value);
-                }
-              }
+        const vaultsResult = await this.vaultService.listVaults();
+        if (vaultsResult.success) {
+          for (const vault of vaultsResult.value) {
+            const vaultTemplates = await this.loadTemplatesFromVault(vault.id);
+            if (vaultTemplates.success) {
+              templates.push(...vaultTemplates.value);
             }
           }
         }
@@ -88,72 +79,134 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
     vaultId: string
   ): Promise<Result<Template[], ArtifactError>> {
     try {
-      // 通过 vaultId 获取 vault，然后使用 vault.name
+      // 通过 vaultId 获取 vault
       const vaultResult = await this.vaultService.getVault(vaultId);
       if (!vaultResult.success || !vaultResult.value) {
         this.logger.warn(`Vault not found for vaultId: ${vaultId}`);
         return { success: true, value: [] };
       }
-      const vaultName = vaultResult.value.name;
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-      const templatesDir = path.join(vaultPath, 'templates');
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
       
-      this.logger.info(`Loading templates directly for vaultId: ${vaultId}, vaultName: ${vaultName}, path: ${templatesDir}`);
+      this.logger.info(`Loading templates for vaultId: ${vaultId}, vaultName: ${vault.name}`);
 
-      if (!fs.existsSync(templatesDir)) {
-        this.logger.warn(`Templates directory not found: ${templatesDir}`);
+      // 检查 templates 目录是否存在
+      const templatesDirExists = await this.treeService.exists(vaultRef, 'templates');
+      if (!templatesDirExists.success || !templatesDirExists.value) {
+        this.logger.warn(`Templates directory not found for vault: ${vault.name}`);
         return { success: true, value: [] };
       }
 
       const templates: Template[] = [];
 
-      // 加载结构模板
-      const structureDir = path.join(templatesDir, 'structure');
-      this.logger.info(`Checking structure directory: ${structureDir}, exists: ${fs.existsSync(structureDir)}`);
-      if (fs.existsSync(structureDir)) {
-        const files = fs.readdirSync(structureDir);
-        this.logger.info(`Found ${files.length} files in structure directory: ${files.join(', ')}`);
-        for (const file of files) {
-          if (file.endsWith('.yml') || file.endsWith('.yaml')) {
-            const filePath = path.join(structureDir, file);
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const templateData = yaml.load(content) as any;
-            templates.push({
-              id: templateData.id || uuidv4(),
-              name: templateData.name || path.basename(file, path.extname(file)),
-              description: templateData.description,
-              type: 'structure',
-              category: templateData.category,
-              viewType: templateData.viewType,
-              structure: templateData.structure,
-              variables: templateData.variables || [],
-              createdAt: templateData.createdAt || new Date().toISOString(),
-              updatedAt: templateData.updatedAt || new Date().toISOString(),
-            });
-          }
-        }
+      // 递归扫描 templates 目录下的所有文件
+      const templatesDirResult = await this.treeService.listDirectory(
+        vaultRef,
+        'templates',
+        { recursive: true, includeHidden: false }
+      );
+
+      if (!templatesDirResult.success) {
+        this.logger.warn(`Failed to list templates directory for vault: ${vault.name}`);
+        return { success: true, value: [] };
       }
 
-      // 加载内容模板
-      const contentDir = path.join(templatesDir, 'content');
-      if (fs.existsSync(contentDir)) {
-        const files = fs.readdirSync(contentDir);
-        for (const file of files) {
-          if (file.endsWith('.md') || file.endsWith('.yml') || file.endsWith('.yaml')) {
-            const filePath = path.join(contentDir, file);
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const templateId = uuidv4();
+      this.logger.info(`Found ${templatesDirResult.value.length} items in templates directory`);
+
+      // 处理所有文件
+      for (const fileNode of templatesDirResult.value) {
+        if (!fileNode.isFile) {
+          continue;
+        }
+
+        // 跳过元数据文件
+        if (fileNode.name.endsWith('.meta.yml') || fileNode.name.endsWith('.meta.yaml')) {
+          continue;
+        }
+
+        const contentResult = await this.treeService.readFile(vaultRef, fileNode.path);
+        if (!contentResult.success) {
+          this.logger.warn(`Failed to read template file: ${fileNode.path}`);
+          continue;
+        }
+
+        const content = contentResult.value;
+        const ext = fileNode.extension?.toLowerCase();
+
+        // 判断模板类型
+        // 1. YAML/YML 文件：尝试解析，如果包含 structure 字段则为结构模板，否则为内容模板
+        if (ext === 'yml' || ext === 'yaml') {
+          try {
+            const templateData = yaml.load(content) as any;
+            
+            // 如果包含 structure 字段，则为结构模板
+            if (templateData && typeof templateData === 'object' && templateData.structure) {
+              templates.push({
+                id: templateData.id || uuidv4(),
+                name: templateData.name || path.basename(fileNode.name, path.extname(fileNode.name)),
+                description: templateData.description,
+                type: 'structure',
+                category: templateData.category,
+                viewType: templateData.viewType,
+                structure: templateData.structure,
+                variables: templateData.variables || [],
+                createdAt: templateData.createdAt || new Date().toISOString(),
+                updatedAt: templateData.updatedAt || new Date().toISOString(),
+              });
+            } else {
+              // 否则作为内容模板
+              templates.push({
+                id: templateData?.id || uuidv4(),
+                name: templateData?.name || path.basename(fileNode.name, path.extname(fileNode.name)),
+                description: templateData?.description,
+                type: 'content',
+                category: templateData?.category,
+                viewType: templateData?.viewType,
+                content: content,
+                variables: this.extractVariables(content),
+                createdAt: templateData?.createdAt || new Date().toISOString(),
+                updatedAt: templateData?.updatedAt || new Date().toISOString(),
+              });
+            }
+          } catch (yamlError: any) {
+            // YAML 解析失败，作为普通内容模板
+            this.logger.warn(`Failed to parse YAML template: ${fileNode.path}, treating as content template`, yamlError);
             templates.push({
-              id: templateId,
-              name: path.basename(file, path.extname(file)),
+              id: uuidv4(),
+              name: path.basename(fileNode.name, path.extname(fileNode.name)),
               description: undefined,
               type: 'content',
-              content,
+              content: content,
               variables: this.extractVariables(content),
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             });
           }
+        } else if (ext === 'md') {
+          // Markdown 文件：作为内容模板
+          templates.push({
+            id: uuidv4(),
+            name: path.basename(fileNode.name, path.extname(fileNode.name)),
+            description: undefined,
+            type: 'content',
+            content: content,
+            variables: this.extractVariables(content),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        } else {
+          // 其他文件类型：作为内容模板
+          this.logger.info(`Loading file with unknown extension as content template: ${fileNode.path}`);
+          templates.push({
+            id: uuidv4(),
+            name: path.basename(fileNode.name, path.extname(fileNode.name)),
+            description: undefined,
+            type: 'content',
+            content: content,
+            variables: this.extractVariables(content),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
         }
       }
 
@@ -225,7 +278,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         updatedAt: now,
       };
 
-      // 通过 vaultId 获取 vault，然后使用 vault.name
+      // 通过 vaultId 获取 vault
       const vaultResult = await this.vaultService.getVault(vaultId);
       if (!vaultResult.success || !vaultResult.value) {
         return {
@@ -237,44 +290,56 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           ),
         };
       }
-      const vaultName = vaultResult.value.name;
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-      const templatesDir = path.join(vaultPath, 'templates');
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
 
       // 确保模板目录存在
-      if (!fs.existsSync(templatesDir)) {
-        fs.mkdirSync(templatesDir, { recursive: true });
-      }
+      await this.treeService.createDirectory(vaultRef, 'templates');
 
       // 根据模板类型保存到不同目录
       if (template.type === 'structure') {
-        const structureDir = path.join(templatesDir, 'structure');
-        if (!fs.existsSync(structureDir)) {
-          fs.mkdirSync(structureDir, { recursive: true });
+        await this.treeService.createDirectory(vaultRef, 'templates/structure');
+        const templatePath = `templates/structure/${templateId}.yml`;
+        const writeResult = await this.treeService.writeFile(
+          vaultRef,
+          templatePath,
+          yaml.dump(fullTemplate)
+        );
+        if (!writeResult.success) {
+          return writeResult;
         }
-        const templatePath = path.join(structureDir, `${templateId}.yml`);
-        fs.writeFileSync(templatePath, yaml.dump(fullTemplate), 'utf-8');
       } else {
-        const contentDir = path.join(templatesDir, 'content');
-        if (!fs.existsSync(contentDir)) {
-          fs.mkdirSync(contentDir, { recursive: true });
-        }
+        await this.treeService.createDirectory(vaultRef, 'templates/content');
         const extension = template.viewType === 'design' ? '.md' : '.md';
-        const templatePath = path.join(contentDir, `${templateId}${extension}`);
-        fs.writeFileSync(templatePath, template.content || '', 'utf-8');
+        const templatePath = `templates/content/${templateId}${extension}`;
+        const writeResult = await this.treeService.writeFile(
+          vaultRef,
+          templatePath,
+          template.content || ''
+        );
+        if (!writeResult.success) {
+          return writeResult;
+        }
         // 同时保存元数据
-        const metaPath = path.join(contentDir, `${templateId}.meta.yml`);
-        fs.writeFileSync(metaPath, yaml.dump({
-          id: templateId,
-          name: template.name,
-          description: template.description,
-          type: template.type,
-          category: template.category,
-          viewType: template.viewType,
-          variables: template.variables,
-          createdAt: now,
-          updatedAt: now,
-        }), 'utf-8');
+        const metaPath = `templates/content/${templateId}.meta.yml`;
+        const metaWriteResult = await this.treeService.writeFile(
+          vaultRef,
+          metaPath,
+          yaml.dump({
+            id: templateId,
+            name: template.name,
+            description: template.description,
+            type: template.type,
+            category: template.category,
+            viewType: template.viewType,
+            variables: template.variables,
+            createdAt: now,
+            updatedAt: now,
+          })
+        );
+        if (!metaWriteResult.success) {
+          return metaWriteResult;
+        }
       }
 
       return { success: true, value: fullTemplate };
@@ -312,7 +377,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
     };
 
     // 重新保存模板
-    // 通过 vaultId 获取 vault，然后使用 vault.name
     const vaultResult = await this.vaultService.getVault(vaultId);
     if (!vaultResult.success || !vaultResult.value) {
       return {
@@ -324,34 +388,52 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         ),
       };
     }
-    const vaultName = vaultResult.value.name;
-    const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-    const templatesDir = path.join(vaultPath, 'templates');
+    const vault = vaultResult.value;
+    const vaultRef = { id: vault.id, name: vault.name };
 
     if (updatedTemplate.type === 'structure') {
-      const structureDir = path.join(templatesDir, 'structure');
-      const templatePath = path.join(structureDir, `${templateId}.yml`);
-      fs.writeFileSync(templatePath, yaml.dump(updatedTemplate), 'utf-8');
+      const templatePath = `templates/structure/${templateId}.yml`;
+      const writeResult = await this.treeService.writeFile(
+        vaultRef,
+        templatePath,
+        yaml.dump(updatedTemplate)
+      );
+      if (!writeResult.success) {
+        return writeResult;
+      }
     } else {
-      const contentDir = path.join(templatesDir, 'content');
       const extension = updatedTemplate.viewType === 'design' ? '.md' : '.md';
-      const templatePath = path.join(contentDir, `${templateId}${extension}`);
+      const templatePath = `templates/content/${templateId}${extension}`;
       if (updates.content !== undefined) {
-        fs.writeFileSync(templatePath, updates.content, 'utf-8');
+        const writeResult = await this.treeService.writeFile(
+          vaultRef,
+          templatePath,
+          updates.content
+        );
+        if (!writeResult.success) {
+          return writeResult;
+        }
       }
       // 更新元数据
-      const metaPath = path.join(contentDir, `${templateId}.meta.yml`);
-      fs.writeFileSync(metaPath, yaml.dump({
-        id: updatedTemplate.id,
-        name: updatedTemplate.name,
-        description: updatedTemplate.description,
-        type: updatedTemplate.type,
-        category: updatedTemplate.category,
-        viewType: updatedTemplate.viewType,
-        variables: updatedTemplate.variables,
-        createdAt: updatedTemplate.createdAt,
-        updatedAt: updatedTemplate.updatedAt,
-      }), 'utf-8');
+      const metaPath = `templates/content/${templateId}.meta.yml`;
+      const metaWriteResult = await this.treeService.writeFile(
+        vaultRef,
+        metaPath,
+        yaml.dump({
+          id: updatedTemplate.id,
+          name: updatedTemplate.name,
+          description: updatedTemplate.description,
+          type: updatedTemplate.type,
+          category: updatedTemplate.category,
+          viewType: updatedTemplate.viewType,
+          variables: updatedTemplate.variables,
+          createdAt: updatedTemplate.createdAt,
+          updatedAt: updatedTemplate.updatedAt,
+        })
+      );
+      if (!metaWriteResult.success) {
+        return metaWriteResult;
+      }
     }
 
     return { success: true, value: updatedTemplate };
@@ -368,7 +450,6 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       }
 
       const template = templateResult.value;
-      // 通过 vaultId 获取 vault，然后使用 vault.name
       const vaultResult = await this.vaultService.getVault(vaultId);
       if (!vaultResult.success || !vaultResult.value) {
         return {
@@ -380,26 +461,26 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           ),
         };
       }
-      const vaultName = vaultResult.value.name;
-      const vaultPath = this.vaultAdapter.getVaultPath(vaultName);
-      const templatesDir = path.join(vaultPath, 'templates');
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
 
       if (template.type === 'structure') {
-        const structureDir = path.join(templatesDir, 'structure');
-        const templatePath = path.join(structureDir, `${templateId}.yml`);
-        if (fs.existsSync(templatePath)) {
-          fs.unlinkSync(templatePath);
+        const templatePath = `templates/structure/${templateId}.yml`;
+        const deleteResult = await this.treeService.delete(vaultRef, templatePath);
+        if (!deleteResult.success) {
+          return deleteResult;
         }
       } else {
-        const contentDir = path.join(templatesDir, 'content');
         const extension = template.viewType === 'design' ? '.md' : '.md';
-        const templatePath = path.join(contentDir, `${templateId}${extension}`);
-        const metaPath = path.join(contentDir, `${templateId}.meta.yml`);
-        if (fs.existsSync(templatePath)) {
-          fs.unlinkSync(templatePath);
+        const templatePath = `templates/content/${templateId}${extension}`;
+        const metaPath = `templates/content/${templateId}.meta.yml`;
+        const deleteTemplateResult = await this.treeService.delete(vaultRef, templatePath);
+        if (!deleteTemplateResult.success && deleteTemplateResult.error?.code !== ArtifactErrorCode.NOT_FOUND) {
+          return deleteTemplateResult;
         }
-        if (fs.existsSync(metaPath)) {
-          fs.unlinkSync(metaPath);
+        const deleteMetaResult = await this.treeService.delete(vaultRef, metaPath);
+        if (!deleteMetaResult.success && deleteMetaResult.error?.code !== ArtifactErrorCode.NOT_FOUND) {
+          return deleteMetaResult;
         }
       }
 

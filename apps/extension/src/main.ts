@@ -111,7 +111,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const lookupProvider = new NoteLookupProvider(lookupService, vaultService, logger);
 
   // 7. 初始化文档视图
-  const documentTreeViewProvider = new DocumentTreeViewProvider(documentService, vaultService, logger);
+  const documentTreeService = container.get<import('./domain/shared/artifact/application').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const documentTreeViewProvider = new DocumentTreeViewProvider(documentService, vaultService, documentTreeService, logger);
   const documentTreeView = vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
   const webviewRPC = new WebviewRPC(
     logger,
@@ -142,7 +143,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 10. 初始化模板视图
   const vaultAdapter = container.get<import('./infrastructure/storage/file/VaultFileSystemAdapter').VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
-  const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, vaultAdapter, logger);
+  const treeService = container.get<import('./domain/shared/artifact/application').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, treeService, vaultAdapter, logger);
   vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
   const templateCommands = new TemplateCommands(templateService, vaultService, logger);
   templateCommands.registerCommands(context);

@@ -238,6 +238,7 @@ export class DocumentCommands {
       if (item.artifact) {
         return item.artifact.vault.name;
       }
+      // 对于未索引的文件，vaultName 应该已经设置
     }
 
     // 否则从当前选中的项获取
@@ -320,9 +321,9 @@ export class DocumentCommands {
       const targetPath = item.folderPath === '' ? `${fileName}${fileExtension}` : `${item.folderPath}/${fileName}${fileExtension}`;
       const targetFolderPath = item.folderPath === '' ? undefined : item.folderPath;
       return { targetPath, targetFolderPath };
-    } else if (item?.artifact) {
+    } else if (item?.artifact || item?.filePath) {
       // 如果是在文档节点上右键，在同一个目录下创建
-      const artifactPath = item.artifact.path;
+      const artifactPath = item.artifact?.path || item.filePath!;
       const dir = path.dirname(artifactPath);
       const targetPath = dir === '.' || dir === '' ? `${fileName}${fileExtension}` : `${dir}/${fileName}${fileExtension}`;
       const targetFolderPath = dir === '.' || dir === '' ? undefined : dir;
@@ -510,10 +511,14 @@ export class DocumentCommands {
         } else {
           vscode.window.showErrorMessage(`Failed to delete vault: ${result.error.message}`);
         }
-      } else if (item.artifact) {
+      } else if (item.artifact || item.filePath) {
         // 删除文档
+        const filePath = item.artifact?.path || item.filePath!;
+        const vaultId = item.artifact?.vault.id || item.vaultId!;
+        const fileName = item.artifact?.title || path.basename(filePath);
+        
         const confirm = await vscode.window.showWarningMessage(
-          `Are you sure you want to delete '${item.artifact.title}'? This action cannot be undone.`,
+          `Are you sure you want to delete '${fileName}'? This action cannot be undone.`,
           { modal: true },
           'Delete'
         );
@@ -522,13 +527,10 @@ export class DocumentCommands {
           return;
         }
 
-        const result = await this.documentService.deleteDocument(
-          item.artifact.vault.id,
-          item.artifact.path
-        );
+        const result = await this.documentService.deleteDocument(vaultId, filePath);
 
         if (result.success) {
-          vscode.window.showInformationMessage(`Document '${item.artifact.title}' deleted`);
+          vscode.window.showInformationMessage(`Document '${fileName}' deleted`);
           this.treeViewProvider.refresh();
         } else {
           vscode.window.showErrorMessage(`Failed to delete document: ${result.error.message}`);
@@ -566,9 +568,9 @@ export class DocumentCommands {
       }
       if (item.folderPath !== undefined) {
         initialFolderPath = item.folderPath;
-      } else if (item.artifact) {
+      } else if (item.artifact || item.filePath) {
         // 如果是在文档节点上右键，在同一个目录下创建
-        const artifactPath = item.artifact.path;
+        const artifactPath = item.artifact?.path || item.filePath!;
         const dir = path.dirname(artifactPath);
         initialFolderPath = dir === '.' || dir === '' ? undefined : dir;
       }

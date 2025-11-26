@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
+import { ArtifactTreeApplicationService } from '../../../domain/shared/artifact/application';
 import { Logger } from '../../../core/logger/Logger';
 import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
-import * as fs from 'fs';
 import * as path from 'path';
 
 /**
@@ -55,6 +55,7 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
 
   constructor(
     private vaultService: VaultApplicationService,
+    private treeService: ArtifactTreeApplicationService,
     private vaultAdapter: VaultFileSystemAdapter,
     private logger: Logger
   ) {}
@@ -89,26 +90,43 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
 
       // Vault 节点：显示该 vault 的 templates 目录下的文件和子目录
       if (element.contextValue === 'vault' && element.vaultName) {
-        const vaultPath = this.vaultAdapter.getVaultPath(element.vaultName);
-        const templatesDir = path.join(vaultPath, 'templates');
-
-        if (!fs.existsSync(templatesDir)) {
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          return [];
+        }
+        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
+        if (!vault) {
+          return [];
+        }
+        const vaultRef = { id: vault.id, name: vault.name };
+        
+        const existsResult = await this.treeService.exists(vaultRef, 'templates');
+        if (!existsResult.success || !existsResult.value) {
           return [];
         }
 
-        return this.getTemplateFiles(templatesDir, element.vaultName, '');
+        return this.getTemplateFiles(vaultRef, 'templates', '');
       }
 
       // 目录节点：显示该目录下的文件和子目录
       if (element.vaultName && element.filePath !== undefined) {
-        const vaultPath = this.vaultAdapter.getVaultPath(element.vaultName);
-        const fullPath = path.join(vaultPath, 'templates', element.filePath);
-
-        if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isDirectory()) {
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          return [];
+        }
+        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
+        if (!vault) {
+          return [];
+        }
+        const vaultRef = { id: vault.id, name: vault.name };
+        const dirPath = `templates/${element.filePath}`;
+        
+        const isDirResult = await this.treeService.isDirectory(vaultRef, dirPath);
+        if (!isDirResult.success || !isDirResult.value) {
           return [];
         }
 
-        return this.getTemplateFiles(fullPath, element.vaultName, element.filePath);
+        return this.getTemplateFiles(vaultRef, dirPath, element.filePath);
       }
 
       return [];
@@ -121,41 +139,32 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
   /**
    * 获取模板目录下的文件和子目录
    */
-  private getTemplateFiles(
+  private async getTemplateFiles(
+    vaultRef: { id: string; name: string },
     dirPath: string,
-    vaultName: string,
     relativePath: string
-  ): TemplateTreeItem[] {
+  ): Promise<TemplateTreeItem[]> {
     try {
-      if (!fs.existsSync(dirPath)) {
+      const listResult = await this.treeService.listDirectory(
+        vaultRef,
+        dirPath,
+        { includeHidden: false }
+      );
+
+      if (!listResult.success) {
         return [];
       }
 
       const items: TemplateTreeItem[] = [];
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const node of listResult.value) {
+        const itemRelativePath = relativePath ? `${relativePath}/${node.name}` : node.name;
 
-      // 排序：目录在前，文件在后，都按名称排序
-      entries.sort((a, b) => {
-        if (a.isDirectory() && !b.isDirectory()) return -1;
-        if (!a.isDirectory() && b.isDirectory()) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      for (const entry of entries) {
-        // 跳过隐藏文件和系统文件
-        if (entry.name.startsWith('.')) {
-          continue;
-        }
-
-        const fullPath = path.join(dirPath, entry.name);
-        const itemRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-
-        if (entry.isDirectory()) {
+        if (node.isDirectory) {
           items.push(
             new TemplateTreeItem(
-              entry.name,
+              node.name,
               vscode.TreeItemCollapsibleState.Collapsed,
-              vaultName,
+              vaultRef.name,
               itemRelativePath,
               'template.directory'
             )
@@ -163,9 +172,9 @@ export class TemplateTreeDataProvider implements vscode.TreeDataProvider<Templat
         } else {
           items.push(
             new TemplateTreeItem(
-              entry.name,
+              node.name,
               vscode.TreeItemCollapsibleState.None,
-              vaultName,
+              vaultRef.name,
               itemRelativePath,
               'template.file'
             )
