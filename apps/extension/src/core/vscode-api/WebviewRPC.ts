@@ -129,6 +129,46 @@ export class WebviewRPC {
       };
     });
 
+    this.webviewAdapter.registerMethod('document.createFolder', async (params: {
+      vaultId: string;
+      folderPath: string;
+      folderName: string;
+      template?: any; // 模板内容（structure 类型）
+    }) => {
+      // 创建文件夹（通过创建一个占位文件）
+      const targetFolderPath = params.folderPath === '' 
+        ? params.folderName
+        : `${params.folderPath}/${params.folderName}`;
+      const placeholderPath = `${targetFolderPath}/.keep`;
+      
+      const result = await this.documentService.createDocument(
+        params.vaultId,
+        placeholderPath,
+        params.folderName,
+        `# ${params.folderName}\n\nThis folder contains documents.\n`
+      );
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+
+      // 如果有模板，根据模板创建目录结构
+      if (params.template && params.template.structure) {
+        // TODO: 实现根据模板创建目录结构的逻辑
+        // 这里需要递归创建目录和文件
+        // 暂时只创建主文件夹，模板功能后续实现
+        this.logger.info('Template structure creation not yet implemented');
+      }
+
+      return {
+        id: result.value.id,
+        path: result.value.path,
+        name: result.value.name,
+        title: result.value.title,
+        vault: result.value.vault,
+        folderPath: targetFolderPath,
+      };
+    });
+
     // Template 相关方法
     this.webviewAdapter.registerMethod('template.listLibraries', async (params: { vaultId?: string }) => {
       const result = await this.templateService.getTemplateLibraries(params.vaultId);

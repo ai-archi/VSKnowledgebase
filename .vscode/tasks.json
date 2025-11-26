@@ -2,25 +2,23 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Compile Extension",
-      "type": "shell",
-      "command": "npm",
-      "args": [
-        "run",
-        "compile"
+      "label": "Build All",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Build Archimate JS",
+        "Build Mermaid Editor",
+        "Compile Extension",
+        "Build Webview",
+        "Copy Webview Assets"
       ],
-      "options": {
-        "cwd": "${workspaceFolder}/apps/extension"
-      },
-      "problemMatcher": "$tsc",
+      "problemMatcher": [],
       "group": {
         "kind": "build",
         "isDefault": true
       },
       "presentation": {
         "reveal": "always",
-        "panel": "shared",
-        "echo": true
+        "panel": "shared"
       }
     },
     {
@@ -38,24 +36,6 @@
       "presentation": {
         "reveal": "always",
         "panel": "shared"
-      }
-    },
-    {
-      "label": "Build Webview",
-      "type": "shell",
-      "command": "pnpm",
-      "args": [
-        "run",
-        "build"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}/apps/webview"
-      },
-      "problemMatcher": [],
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
       }
     },
     {
@@ -77,15 +57,55 @@
       }
     },
     {
-      "label": "Build All",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "Build Archimate JS",
-        "Build Mermaid Editor",
-        "Compile Extension",
-        "Build Webview"
+      "label": "Compile Extension",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "compile"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/extension"
+      },
+      "problemMatcher": "$tsc",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "echo": true
+      }
+    },
+    {
+      "label": "Build Webview",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/webview"
+      },
       "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Copy Webview Assets",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "run",
+        "copy:assets"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "build",
       "presentation": {
         "reveal": "always",
         "panel": "shared"

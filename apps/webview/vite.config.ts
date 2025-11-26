@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         'create-file-dialog': resolve(__dirname, 'create-file-dialog.html'),
+        'create-folder-dialog': resolve(__dirname, 'create-folder-dialog.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

@@ -7,31 +7,6 @@
       "request": "launch",
       "runtimeExecutable": "${execPath}",
       "args": [
-        "--disable-extensions",
-        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/apps/extension/out/**/*.js"
-      ],
-      "skipFiles": [
-        "<node_internals>/**/*.js",
-        "${workspaceFolder}/**/node_modules/mocha/**/*.js",
-        "**/extension.js",
-        "**/extensionHostProcess.js"
-      ],
-      "env": {
-        "STAGE": "dev",
-        "VSCODE_DEBUGGING_EXTENSION": "architool",
-        "LOG_LEVEL": "debug"
-      },
-      "preLaunchTask": "Build All"
-    },
-    {
-      "name": "Run Extension (with extensions)",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/apps/extension"
       ],
       "outFiles": [
@@ -47,93 +22,6 @@
         "LOG_LEVEL": "debug"
       },
       "preLaunchTask": "Build All"
-    },
-    {
-      "name": "Run Extension (reuse window)",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--reuse-window",
-        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
-        "${workspaceFolder}"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/apps/extension/out/**/*.js"
-      ],
-      "skipFiles": [
-        "<node_internals>/**/*.js",
-        "${workspaceFolder}/**/node_modules/mocha/**/*.js",
-        "**/extension.js",
-        "**/extensionHostProcess.js"
-      ],
-      "env": {
-        "STAGE": "dev",
-        "VSCODE_DEBUGGING_EXTENSION": "architool",
-        "LOG_LEVEL": "debug"
-      },
-      "preLaunchTask": "Build All"
-    },
-    {
-      "name": "Run Web Extension",
-      "type": "pwa-extensionHost",
-      "debugWebWorkerHost": true,
-      "request": "launch",
-      "args": [
-        "--disable-extensions",
-        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
-        "--extensionDevelopmentKind=web"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/apps/extension/out/**/*.js"
-      ],
-      "preLaunchTask": "Build All"
-    },
-    {
-      "name": "Extension Tests",
-      "type": "extensionHost",
-			"request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--disable-extensions",
-        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
-        "--extensionTestsPath=${workspaceFolder}/apps/extension/out/test/suite/index.js"
-      ],
-			"env": {
-        "STAGE": "test"
-      },
-      "skipFiles": [
-        "<node_internals>/**/*.js",
-        "${workspaceFolder}/**/node_modules/mocha/**/*.js"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/apps/extension/out/test/**/*.js"
-      ],
-      "preLaunchTask": "Build All"
-    },
-    {
-      "name": "Extension Tests - Current File",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-			"args": [
-        "--disable-extensions",
-        "--extensionDevelopmentPath=${workspaceFolder}/apps/extension",
-        "--extensionTestsPath=${workspaceFolder}/packages/plugin-core/out/src/test/suite-integ/index"
-      ],
-      "env": {
-        "STAGE": "test",
-        "TEST_TO_RUN": "${fileBasenameNoExtension}"
-      },
-      "skipFiles": [
-        "<node_internals>/**/*.js",
-        "${workspaceFolder}/**/node_modules/mocha/**/*.js",
-        "**/extensionHostProcess.js"
-			],
-			"outFiles": [
-        "${workspaceFolder}/apps/extension/out/test/**/*.js"
-      ],
-      "preLaunchTask": "Build All"
-		}
+    }
 	]
 }

@@ -14,6 +14,7 @@ export class DocumentCommands {
   private static readonly TREE_UPDATE_DELAY_MS = 50;
   private static readonly VAULT_EXPAND_DELAY_MS = 150;
   private createFileWebviewPanel: vscode.WebviewPanel | null = null;
+  private createFolderWebviewPanel: vscode.WebviewPanel | null = null;
 
   constructor(
     private documentService: DocumentApplicationService,
@@ -374,67 +375,7 @@ export class DocumentCommands {
    * 添加文件夹
    */
   private async addFolder(item?: DocumentTreeItem): Promise<void> {
-    try {
-      const vaultInfo = await this.validateAndGetVault(item, 'add folder');
-      if (!vaultInfo) {
-        return;
-      }
-      const { vault, vaultName } = vaultInfo;
-
-      const folderName = await vscode.window.showInputBox({
-        prompt: 'Enter folder name',
-        validateInput: this.validateFileName.bind(this)
-      });
-
-      if (!folderName) return;
-
-      // 确定文件夹路径
-      let folderPath: string;
-      let parentFolderPath: string | undefined;
-      if (item?.folderPath !== undefined) {
-        // 如果是在文件夹节点上右键，在该文件夹下创建
-        folderPath = item.folderPath === '' ? folderName : `${item.folderPath}/${folderName}`;
-        parentFolderPath = item.folderPath === '' ? undefined : item.folderPath;
-      } else if (item?.artifact) {
-        // 如果是在文档节点上右键，在同一个目录下创建
-        const artifactPath = item.artifact.path;
-        const dir = path.dirname(artifactPath);
-        folderPath = dir === '.' || dir === '' ? folderName : `${dir}/${folderName}`;
-        parentFolderPath = dir === '.' || dir === '' ? undefined : dir;
-      } else {
-        // 如果是在 vault 节点上右键，在根目录下创建
-        folderPath = folderName;
-        parentFolderPath = undefined;
-      }
-
-      // 创建文件夹（通过创建一个占位文件）
-      const placeholderPath = path.join(folderPath, '.keep');
-      
-      const result = await this.documentService.createDocument(
-        vault.id,
-        placeholderPath,
-        folderName,
-        `# ${folderName}\n\nThis folder contains documents.\n`
-      );
-
-      if (result.success) {
-        // 刷新视图，确保文件夹显示出来
-        this.treeViewProvider.refresh();
-        
-        // 展开相关节点
-        await this.expandNode(vaultName, parentFolderPath);
-        
-        // 再次刷新以确保新文件夹显示
-        this.treeViewProvider.refresh();
-        
-        vscode.window.showInformationMessage(`Folder '${folderName}' created`);
-      } else {
-        vscode.window.showErrorMessage(`Failed to create folder: ${result.error.message}`);
-      }
-    } catch (error: any) {
-      this.logger.error('Failed to add folder', error);
-      vscode.window.showErrorMessage(`Failed to add folder: ${error.message}`);
-    }
+    await this.showCreateFolderDialog(item);
   }
 
   /**
@@ -602,6 +543,90 @@ export class DocumentCommands {
   }
 
   /**
+   * 显示创建文件夹对话框（Webview）
+   */
+  private async showCreateFolderDialog(item?: DocumentTreeItem): Promise<void> {
+    // 如果已经打开，直接显示
+    if (this.createFolderWebviewPanel) {
+      this.createFolderWebviewPanel.reveal();
+      return;
+    }
+
+    // 获取当前选中的 vault 信息
+    let initialVaultId: string | undefined;
+    let initialFolderPath: string | undefined;
+    
+    if (item) {
+      if (item.vaultName) {
+        // 从 vaultName 获取 vaultId
+        const vault = await this.findVaultByName(item.vaultName);
+        if (vault) {
+          initialVaultId = vault.id;
+        }
+      }
+      if (item.folderPath !== undefined) {
+        initialFolderPath = item.folderPath;
+      } else if (item.artifact) {
+        // 如果是在文档节点上右键，在同一个目录下创建
+        const artifactPath = item.artifact.path;
+        const dir = path.dirname(artifactPath);
+        initialFolderPath = dir === '.' || dir === '' ? undefined : dir;
+      }
+    }
+
+    // 创建新的 webview panel
+    const webviewDistPath = this.getWebviewDistPath();
+    
+    const panel = vscode.window.createWebviewPanel(
+      'createFolderDialog',
+      '创建文件夹',
+      vscode.ViewColumn.Beside, // 在侧边打开，不替换当前编辑器
+      {
+        enableScripts: true,
+        retainContextWhenHidden: false, // 关闭时释放资源
+        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+      }
+    );
+
+    // 设置 webview 消息处理器
+    panel.webview.onDidReceiveMessage(
+      async (message) => {
+        // 处理关闭请求
+        if (message.method === 'close') {
+          panel.dispose();
+          return;
+        }
+        // 处理创建成功后的刷新和展开
+        if (message.method === 'folderCreated') {
+          const { vaultName, folderPath } = message.params || {};
+          if (vaultName) {
+            this.treeViewProvider.refresh();
+            await this.expandNode(vaultName, folderPath);
+            // 再次刷新以确保新文件夹显示
+            this.treeViewProvider.refresh();
+          }
+          return;
+        }
+        // 处理其他 RPC 消息
+        await this.webviewAdapter.handleMessage(panel.webview, message);
+      },
+      null,
+      this.context.subscriptions
+    );
+
+    // 加载 webview 内容，并传递初始数据
+    const htmlContent = await this.getWebviewContent(panel.webview, 'create-folder-dialog.html', initialVaultId, initialFolderPath);
+    panel.webview.html = htmlContent;
+
+    // 监听面板关闭事件
+    panel.onDidDispose(() => {
+      this.createFolderWebviewPanel = null;
+    });
+
+    this.createFolderWebviewPanel = panel;
+  }
+
+  /**
    * 显示创建文件对话框（Webview）
    */
   private async showCreateFileDialog(item?: DocumentTreeItem): Promise<void> {
@@ -740,13 +765,14 @@ export class DocumentCommands {
     }
 
     // 如果构建文件不存在，返回一个简单的 HTML，提示需要构建
+    const title = htmlFileName === 'create-folder-dialog.html' ? 'Create Folder' : 'Create File';
     return `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Create File</title>
+          <title>${title}</title>
         </head>
         <body>
           <div style="padding: 20px; text-align: center;">
