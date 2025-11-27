@@ -16,6 +16,21 @@ lib/
 **/.next/
 *.tsbuildinfo
 
+# TypeScript/Vite build artifacts (should not be compiled)
+apps/webview/vite.config.js
+apps/webview/vite.config.js.map
+apps/webview/vite.config.d.ts
+apps/webview/src/**/*.js
+apps/webview/src/**/*.js.map
+apps/webview/src/**/*.d.ts
+!apps/webview/src/vite-env.d.ts
+
+# Extension build artifacts (should not be in src directory)
+apps/extension/src/**/*.js
+apps/extension/src/**/*.js.map
+apps/extension/src/**/*.d.ts
+apps/extension/src/**/*.d.ts.map
+
 # Logs
 logs/
 *.log

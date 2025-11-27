@@ -90,7 +90,22 @@ export async function activate(context: vscode.ExtensionContext) {
     await index.initialize();
     logger.info('SQLite runtime index initialized');
   } catch (error: any) {
-    logger.error('Failed to initialize SQLite', error);
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('bindings') || errorMessage.includes('better_sqlite3.node') || errorMessage.includes('NODE_MODULE_VERSION')) {
+      const nodeVersion = process.versions.node;
+      const electronVersion = (process.versions as any).electron || 'unknown';
+      const moduleVersion = process.versions.modules;
+      logger.error(
+        `Failed to initialize SQLite: Native bindings version mismatch. ` +
+        `Extension runtime: Node.js ${nodeVersion} (NODE_MODULE_VERSION ${moduleVersion}), Electron ${electronVersion}. ` +
+        `The better-sqlite3 module was compiled for a different Node.js version. ` +
+        `Some features requiring full-text search may not be available. ` +
+        `To fix this, run: cd apps/extension && pnpm run rebuild:electron`,
+        error
+      );
+    } else {
+      logger.error('Failed to initialize SQLite', error);
+    }
   }
 
   // 4. 获取服务

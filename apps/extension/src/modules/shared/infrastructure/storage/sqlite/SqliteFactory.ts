@@ -26,23 +26,35 @@ export class SqliteFactory {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // 使用 Knex 的 better-sqlite3 客户端
-    const knexInstance = knex({
-      client: 'better-sqlite3',
-      connection: {
-        filename: dbPath,
-      },
-      useNullAsDefault: true,
-      log: {
-        warn: (message) => logger?.warn(message),
-        error: (message) => logger?.error(message),
-        deprecate: (message) => logger?.warn(message),
-        debug: (message) => logger?.debug(message),
-      },
-    });
+    try {
+      // 使用 Knex 的 better-sqlite3 客户端
+      const knexInstance = knex({
+        client: 'better-sqlite3',
+        connection: {
+          filename: dbPath,
+        },
+        useNullAsDefault: true,
+        log: {
+          warn: (message) => logger?.warn(message),
+          error: (message) => logger?.error(message),
+          deprecate: (message) => logger?.warn(message),
+          debug: (message) => logger?.debug(message),
+        },
+      });
 
-    this.instances.set(key, knexInstance);
-    return knexInstance;
+      this.instances.set(key, knexInstance);
+      return knexInstance;
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      if (errorMessage.includes('bindings') || errorMessage.includes('better_sqlite3.node')) {
+        logger?.error(
+          'Failed to load better-sqlite3 native bindings. ' +
+          'This usually means the native module needs to be rebuilt. ' +
+          'Please run: cd apps/extension && pnpm rebuild better-sqlite3'
+        );
+      }
+      throw error;
+    }
   }
 
   /**

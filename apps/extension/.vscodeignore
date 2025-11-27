@@ -6,8 +6,23 @@ tsconfig.json
 *.ts
 !dist/extension/**/*.d.ts
 
+# 排除构建脚本（开发工具，不需要打包）
+scripts/
+
 # 排除构建工具
 node_modules/
+!node_modules/better-sqlite3/**/*
+!node_modules/bindings/**/*
+!node_modules/file-uri-to-path/**/*
+!node_modules/tar-fs/**/*
+!node_modules/tar-stream/**/*
+!node_modules/bl/**/*
+!node_modules/readable-stream/**/*
+!node_modules/inherits/**/*
+!node_modules/safe-buffer/**/*
+!node_modules/end-of-stream/**/*
+!node_modules/once/**/*
+!node_modules/fs-constants/**/*
 .vscode/
 
 # 只包含构建产物和配置文件

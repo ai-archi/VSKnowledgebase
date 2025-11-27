@@ -256,11 +256,13 @@
   "scripts": {
     "compile": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
-    "test": "jest"
+    "test": "jest",
+    "rebuild:electron": "node scripts/rebuild-electron.js",
+    "postinstall": "echo 'Note: better-sqlite3 will be compiled for development Node.js version. For Electron runtime, run: pnpm run rebuild:electron'"
   },
   "dependencies": {
     "archimate-js": "0.0.4",
-    "better-sqlite3": "^9.0.0",
+    "better-sqlite3": "^12.0.0",
     "diagram-js": "^15.4.0",
     "inversify": "^6.0.2",
     "js-yaml": "^4.1.0",
@@ -270,6 +272,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "@types/better-sqlite3": "^7.6.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
