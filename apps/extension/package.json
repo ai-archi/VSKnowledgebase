@@ -258,6 +258,7 @@
     "watch": "tsc -p tsconfig.json --watch",
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",
+    "install:electron": "pnpm install && pnpm run rebuild:electron",
     "postinstall": "echo 'Note: better-sqlite3 will be compiled for development Node.js version. For Electron runtime, run: pnpm run rebuild:electron'"
   },
   "dependencies": {
