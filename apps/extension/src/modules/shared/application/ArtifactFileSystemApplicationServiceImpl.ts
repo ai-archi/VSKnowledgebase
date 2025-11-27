@@ -1,12 +1,12 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { ArtifactFileSystemApplicationService, CreateArtifactOpts, UpdateArtifactOpts } from './ArtifactFileSystemApplicationService';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
-import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../../../domain/shared/artifact/errors';
-import { ArtifactValidator } from '../../../domain/shared/artifact/ArtifactValidator';
-import { ArtifactFileSystemAdapter } from '../../../infrastructure/storage/file/ArtifactFileSystemAdapter';
-import { SqliteRuntimeIndex } from '../../../infrastructure/storage/sqlite/SqliteRuntimeIndex';
+import { Artifact } from '../domain/artifact';
+import { ArtifactMetadata } from '../domain/ArtifactMetadata';
+import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../domain/errors';
+import { ArtifactValidator } from '../domain/ArtifactValidator';
+import { ArtifactFileSystemAdapter } from '../infrastructure/storage/file/ArtifactFileSystemAdapter';
+import { SqliteRuntimeIndex } from '../infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MetadataRepository } from '../infrastructure/MetadataRepository';
 import { VaultApplicationService } from './VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';

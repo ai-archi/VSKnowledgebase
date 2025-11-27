@@ -4,7 +4,7 @@ import { TaskApplicationService, Task, CreateTaskOptions } from './TaskApplicati
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
 // Remove duplicate Result import - use the one from errors
-import { ArtifactError, ArtifactErrorCode, Result } from '../../../domain/shared/artifact/errors';
+import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
 

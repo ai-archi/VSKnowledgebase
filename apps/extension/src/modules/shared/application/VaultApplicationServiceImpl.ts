@@ -1,11 +1,11 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { VaultApplicationService, AddLocalVaultOpts, AddVaultFromGitOpts } from './VaultApplicationService';
-import { Vault } from '../../../domain/shared/vault/Vault';
-import { Result, VaultError, VaultErrorCode } from '../../../domain/shared/artifact/errors';
+import { Vault } from '../domain/vault';
+import { Result, VaultError, VaultErrorCode } from '../domain/errors';
 import { VaultRepository } from '../infrastructure/VaultRepository';
-import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
-import { GitVaultAdapter } from '../../vault/infrastructure/GitVaultAdapter';
+import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
+import { GitVaultAdapter } from '../infrastructure/storage/git/GitVaultAdapter';
 import { ArchitoolDirectoryManager } from '../../../core/storage/ArchitoolDirectoryManager';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';

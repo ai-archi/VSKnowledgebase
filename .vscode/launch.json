@@ -10,7 +10,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/apps/extension"
       ],
       "outFiles": [
-        "${workspaceFolder}/apps/extension/out/**/*.js"
+        "${workspaceFolder}/apps/extension/dist/extension/**/*.js"
       ],
       "skipFiles": [
         "<node_internals>/**/*.js",

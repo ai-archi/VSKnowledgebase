@@ -21,13 +21,13 @@ import { TemplateTreeDataProvider } from './modules/template/interface/TemplateT
 import { TemplateCommands } from './modules/template/interface/Commands';
 import { AIApplicationService } from './modules/ai/application/AIApplicationService';
 import { AICommands } from './modules/ai/interface/Commands';
-import { SqliteRuntimeIndex } from './infrastructure/storage/sqlite/SqliteRuntimeIndex';
+import { SqliteRuntimeIndex } from './modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
-import { RemoteEndpoint } from './domain/shared/vault/RemoteEndpoint';
-import { GitVaultAdapter } from './modules/vault/infrastructure/GitVaultAdapter';
+import { RemoteEndpoint } from './modules/shared/domain/RemoteEndpoint';
+import { GitVaultAdapter } from './modules/shared/infrastructure/storage/git/GitVaultAdapter';
 import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
 import * as path from 'path';
@@ -111,7 +111,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const lookupProvider = new NoteLookupProvider(lookupService, vaultService, logger);
 
   // 7. 初始化文档视图
-  const documentTreeService = container.get<import('./domain/shared/artifact/application').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const documentTreeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
   const documentTreeViewProvider = new DocumentTreeViewProvider(documentService, vaultService, documentTreeService, logger);
   const documentTreeView = vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
   const webviewRPC = new WebviewRPC(
@@ -142,8 +142,8 @@ export async function activate(context: vscode.ExtensionContext) {
   viewpointCommands.registerCommands(context);
 
   // 10. 初始化模板视图
-  const vaultAdapter = container.get<import('./infrastructure/storage/file/VaultFileSystemAdapter').VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
-  const treeService = container.get<import('./domain/shared/artifact/application').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const vaultAdapter = container.get<import('./modules/shared/infrastructure/storage/file/VaultFileSystemAdapter').VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
+  const treeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
   const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, treeService, vaultAdapter, logger);
   vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
   const templateCommands = new TemplateCommands(templateService, vaultService, logger);
@@ -356,6 +356,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const remote: RemoteEndpoint = {
           url: remoteUrl.trim(),
           branch: branch || 'main',
+          sync: 'manual',
         };
 
         // 显示进度提示

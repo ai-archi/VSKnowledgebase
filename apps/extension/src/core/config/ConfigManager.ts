@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { Vault } from '../../domain/shared/vault/Vault';
-import { Result, VaultError, VaultErrorCode } from '../../domain/shared/artifact/errors';
+import { Vault } from '../../modules/shared/domain/vault';
+import { Result, VaultError, VaultErrorCode } from '../../modules/shared/domain/errors';
 import { Logger } from '../logger/Logger';
 
 export class ConfigManager {
@@ -63,7 +63,7 @@ export class ConfigManager {
     if (!vaultsResult.success) {
       return vaultsResult;
     }
-    const vault = vaultsResult.value.find(v => v.id === vaultId);
+    const vault = vaultsResult.value.find((v: Vault) => v.id === vaultId);
     if (!vault) {
       return { success: false, error: new VaultError(VaultErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`) };
     }

@@ -7,10 +7,10 @@ import {
 } from './TemplateApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService } from '../../../domain/shared/artifact/application';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
-import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
+import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
+import { Artifact } from '../../shared/domain/artifact';
+import { Result, ArtifactError, ArtifactErrorCode } from '../../shared/domain/errors';
+import { VaultFileSystemAdapter } from '../../shared/infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';

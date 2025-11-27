@@ -3,9 +3,9 @@ import { TYPES } from '../../infrastructure/di/types';
 import { ArtifactFileSystemApplicationService } from '../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
 import { ArtifactLinkRepository } from '../shared/infrastructure/ArtifactLinkRepository';
-import { SqliteRuntimeIndex } from '../../infrastructure/storage/sqlite/SqliteRuntimeIndex';
-import { Artifact } from '../../domain/shared/artifact/Artifact';
-import { ArtifactLink } from '../../domain/shared/artifact/ArtifactLink';
+import { SqliteRuntimeIndex } from '../shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
+import { Artifact } from '../shared/domain/artifact';
+import { ArtifactLink } from '../shared/domain/ArtifactLink';
 import { Logger } from '../../core/logger/Logger';
 
 /**

@@ -1,5 +1,5 @@
-import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
-import { Result, ArtifactError } from '../../../domain/shared/artifact/errors';
+import { ArtifactMetadata } from '../domain/ArtifactMetadata';
+import { Result, ArtifactError } from '../domain/errors';
 
 export interface MetadataRepository {
   findById(metadataId: string): Promise<Result<ArtifactMetadata | null, ArtifactError>>;

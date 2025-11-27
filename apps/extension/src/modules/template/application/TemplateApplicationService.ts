@@ -1,7 +1,7 @@
 import { Result } from '../../../core/types/Result';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactError } from '../../../domain/shared/artifact/errors';
-import { ArtifactViewType } from '../../../domain/shared/artifact/types';
+import { Artifact } from '../../shared/domain/artifact';
+import { ArtifactError } from '../../shared/domain/errors';
+import { ArtifactViewType } from '../../shared/domain/types';
 
 /**
  * 模板类型

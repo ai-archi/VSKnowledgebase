@@ -38,3 +38,4 @@ tmp/
 # ArchiTool runtime
 .architool/cache/
 
+yarn.lock

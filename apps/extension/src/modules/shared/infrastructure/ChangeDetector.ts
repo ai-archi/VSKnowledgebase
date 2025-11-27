@@ -1,9 +1,10 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactChange, ChangeType } from '../../../domain/shared/artifact/ArtifactChange';
-import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
-import { ArtifactFileSystemAdapter } from '../../../infrastructure/storage/file/ArtifactFileSystemAdapter';
+import { Artifact } from '../domain/artifact';
+import { ArtifactChange } from '../domain/ArtifactChange';
+import { ChangeType } from '../domain/types';
+import { VaultFileSystemAdapter } from './storage/file/VaultFileSystemAdapter';
+import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';
 import { ArtifactRepository } from './ArtifactRepository';
 import { VaultRepository } from './VaultRepository';
 import { Logger } from '../../../core/logger/Logger';

@@ -1,7 +1,7 @@
-import { ArtifactChange } from '../../../domain/shared/artifact/ArtifactChange';
+import { ArtifactChange } from '../domain/ArtifactChange';
 import { Result } from '../../../core/types/Result';
-import { ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
-import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
+import { ArtifactError, ArtifactErrorCode } from '../domain/errors';
+import { VaultFileSystemAdapter } from './storage/file/VaultFileSystemAdapter';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';

@@ -1,6 +1,6 @@
 import { Result } from '../../../core/types/Result';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactError } from '../../../domain/shared/artifact/errors';
+import { Artifact } from '../../shared/domain/artifact';
+import { ArtifactError } from '../../shared/domain/errors';
 
 export interface Task {
   id: string;

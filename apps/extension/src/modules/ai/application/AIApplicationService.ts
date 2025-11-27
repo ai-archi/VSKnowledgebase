@@ -1,7 +1,7 @@
 import { Result } from '../../../core/types/Result';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactError } from '../../../domain/shared/artifact/errors';
-import { ArtifactChange } from '../../../domain/shared/artifact/ArtifactChange';
+import { Artifact } from '../../shared/domain/artifact';
+import { ArtifactError } from '../../shared/domain/errors';
+import { ArtifactChange } from '../../shared/domain/ArtifactChange';
 
 /**
  * 影响分析结果

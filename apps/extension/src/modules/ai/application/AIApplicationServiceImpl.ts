@@ -3,9 +3,9 @@ import { TYPES } from '../../../infrastructure/di/types';
 import { AIApplicationService, ImpactAnalysisResult, PromptGenerationOpts } from './AIApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { ArtifactLinkRepository } from '../../shared/infrastructure/ArtifactLinkRepository';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactChange } from '../../../domain/shared/artifact/ArtifactChange';
-import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
+import { Artifact } from '../../shared/domain/artifact';
+import { ArtifactChange } from '../../shared/domain/ArtifactChange';
+import { Result, ArtifactError, ArtifactErrorCode } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
 
 /**

@@ -4,8 +4,8 @@ import { DocumentApplicationService } from './DocumentApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 // Remove duplicate Result import - use the one from errors
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactError, ArtifactErrorCode, Result } from '../../../domain/shared/artifact/errors';
+import { Artifact } from '../../shared/domain/artifact';
+import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
 
 @injectable()

@@ -3,7 +3,7 @@ import { ViewpointApplicationService, Viewpoint } from '../application/Viewpoint
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { FileWatcher } from './FileWatcher';
 import { Logger } from '../../../core/logger/Logger';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
+import { Artifact } from '../../shared/domain/artifact';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 
 /**

@@ -1,5 +1,5 @@
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { Result, ArtifactError } from '../../../domain/shared/artifact/errors';
+import { Artifact } from '../domain/artifact';
+import { Result, ArtifactError } from '../domain/errors';
 
 export interface ArtifactRepository {
   findById(vaultId: string, artifactId: string): Promise<Result<Artifact | null, ArtifactError>>;

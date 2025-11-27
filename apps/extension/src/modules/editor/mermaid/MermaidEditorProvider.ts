@@ -45,7 +45,7 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
   ): Promise<void> {
     // 设置 Webview 内容
     const extensionPath = this.context.extensionPath;
-    const mermaidEditorPath = path.join(extensionPath, 'mermaid-editor');
+    const mermaidEditorPath = path.join(extensionPath, 'dist', 'mermaid-editor');
     const mermaidEditorUri = vscode.Uri.file(mermaidEditorPath);
     
     webviewPanel.webview.options = {
@@ -412,7 +412,7 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
   ): string {
     // 获取 mermaid-editor 的路径
     const extensionPath = this.context.extensionPath;
-    const mermaidEditorPath = path.join(extensionPath, 'mermaid-editor');
+    const mermaidEditorPath = path.join(extensionPath, 'dist', 'mermaid-editor');
     // 使用 V2 版本的 index-v2.html
     const indexHtmlPath = path.join(mermaidEditorPath, 'index-v2.html');
     
@@ -421,7 +421,7 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
       // 提供更详细的错误信息
       const possiblePaths = [
         indexHtmlPath,
-        path.join(extensionPath, 'mermaid-editor', 'app', 'index-v2.html'),
+        path.join(extensionPath, 'dist', 'mermaid-editor', 'app', 'index-v2.html'),
       ];
       
       const errorMessage = `Mermaid editor V2 build artifacts not found.

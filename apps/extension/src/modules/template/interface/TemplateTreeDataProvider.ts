@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService } from '../../../domain/shared/artifact/application';
+import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
 import { Logger } from '../../../core/logger/Logger';
-import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
+import { VaultFileSystemAdapter } from '../../shared/infrastructure/storage/file/VaultFileSystemAdapter';
 import * as path from 'path';
 
 /**

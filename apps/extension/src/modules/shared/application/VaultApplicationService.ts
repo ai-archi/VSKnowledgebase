@@ -1,6 +1,6 @@
-import { Result, VaultError } from '../../../domain/shared/artifact/errors';
-import { Vault } from '../../../domain/shared/vault/Vault';
-import { RemoteEndpoint } from '../../../domain/shared/vault/RemoteEndpoint';
+import { Result, VaultError } from '../domain/errors';
+import { Vault } from '../domain/vault';
+import { RemoteEndpoint } from '../domain/RemoteEndpoint';
 
 export interface AddLocalVaultOpts {
   name: string;

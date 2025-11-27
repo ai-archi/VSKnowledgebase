@@ -1,8 +1,8 @@
-import { Result, ArtifactError, QueryOptions } from '../../../domain/shared/artifact/errors';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
-import { ArtifactViewType } from '../../../domain/shared/artifact/types';
-import { VaultReference } from '../../../domain/shared/vault/VaultReference';
+import { Result, ArtifactError, QueryOptions } from '../domain/errors';
+import { Artifact } from '../domain/artifact';
+import { ArtifactMetadata } from '../domain/ArtifactMetadata';
+import { ArtifactViewType } from '../domain/types';
+import { VaultReference } from '../domain/VaultReference';
 
 export interface CreateArtifactOpts {
   vault: VaultReference;

@@ -12,9 +12,9 @@ import { ArtifactFileSystemApplicationService } from '../../shared/application/A
 import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
 import { ArtifactRepository } from '../../shared/infrastructure/ArtifactRepository';
 import { VaultRepository } from '../../shared/infrastructure/VaultRepository';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
-import { VaultFileSystemAdapter } from '../../../infrastructure/storage/file/VaultFileSystemAdapter';
+import { Artifact } from '../../shared/domain/artifact';
+import { Result, ArtifactError, ArtifactErrorCode } from '../../shared/domain/errors';
+import { VaultFileSystemAdapter } from '../../shared/infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 import { v4 as uuidv4 } from 'uuid';

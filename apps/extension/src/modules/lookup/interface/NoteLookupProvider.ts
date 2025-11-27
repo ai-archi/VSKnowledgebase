@@ -3,7 +3,7 @@ import { LookupApplicationService } from '../application/LookupApplicationServic
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 import { LookupStateManager, LookupState } from './LookupStateManager';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
+import { Artifact } from '../../shared/domain/artifact';
 
 export interface LookupResult {
   create?: boolean;

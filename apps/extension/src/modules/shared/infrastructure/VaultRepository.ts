@@ -1,5 +1,5 @@
-import { Vault } from '../../../domain/shared/vault/Vault';
-import { Result, VaultError } from '../../../domain/shared/artifact/errors';
+import { Vault } from '../domain/vault';
+import { Result, VaultError } from '../domain/errors';
 
 export interface VaultRepository {
   findById(vaultId: string): Promise<Result<Vault | null, VaultError>>;

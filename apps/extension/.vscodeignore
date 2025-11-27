@@ -1,0 +1,18 @@
+# 排除源码
+src/
+
+# 排除开发文件
+tsconfig.json
+*.ts
+!dist/extension/**/*.d.ts
+
+# 排除构建工具
+node_modules/
+.vscode/
+
+# 只包含构建产物和配置文件
+dist/
+package.json
+README.md
+language-configuration.json
+

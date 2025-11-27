@@ -4,7 +4,7 @@ import { VaultApplicationService } from '../../shared/application/VaultApplicati
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { ViewpointApplicationService } from '../../viewpoint/application/ViewpointApplicationService';
 import { ChangeRepository } from '../../shared/infrastructure/ChangeRepository';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
+import { Artifact } from '../../shared/domain/artifact';
 import { Logger } from '../../../core/logger/Logger';
 
 /**

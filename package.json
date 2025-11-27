@@ -6,9 +6,7 @@
   },
   "workspaces": {
     "packages": [
-      "apps/*",
-      "domain/*",
-      "infrastructure/*"
+      "apps/*"
     ]
   },
   "devDependencies": {
@@ -32,17 +30,17 @@
   "scripts": {
     "setup": "pnpm install && pnpm build",
     "setup:sqlite": "npx node-pre-gyp install --directory=node_modules/sqlite3 || echo 'SQLite3 binary installation skipped'",
-    "cleanup": "rm -rf apps/*/out apps/*/dist apps/extension/webview apps/extension/archimate-js apps/extension/mermaid-editor domain/*/lib infrastructure/*/lib packages/*/public packages/*/dist",
+    "cleanup": "rm -rf apps/*/out apps/*/dist packages/*/public packages/*/dist",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "format:pkg": "prettier --write",
     "lint": "eslint . --ext ts,tsx",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "build:archimate-js": "mkdir -p apps/extension/archimate-js && rm -rf apps/extension/archimate-js/* && cd packages/archimate-js && OUTPUT_PATH=../../apps/extension/archimate-js npm run build",
-    "build:mermaid-editor": "mkdir -p apps/extension/mermaid-editor && rm -rf apps/extension/mermaid-editor/* && cd packages/mermaid-editor && OUTPUT_PATH=../../apps/extension/mermaid-editor pnpm run build:v2",
-    "build:webview": "cd apps/webview && pnpm run build",
+    "build:archimate-js": "mkdir -p apps/extension/dist/archimate-js && rm -rf apps/extension/dist/archimate-js/* && cd packages/archimate-js && OUTPUT_PATH=../../apps/extension/dist/archimate-js npm run build",
+    "build:mermaid-editor": "mkdir -p apps/extension/dist/mermaid-editor && rm -rf apps/extension/dist/mermaid-editor/* && cd packages/mermaid-editor && OUTPUT_PATH=../../apps/extension/dist/mermaid-editor pnpm run build:v2",
+    "build:webview": "cd apps/webview && pnpm run build && mkdir -p ../extension/dist/webview && rm -rf ../extension/dist/webview/* && cp -r dist/* ../extension/dist/webview/",
     "build:extension": "cd apps/extension && pnpm run compile",
-    "copy:assets": "mkdir -p apps/extension/webview && rm -rf apps/extension/webview/* && cp -r apps/webview/dist/* apps/extension/webview/",
-    "build": "pnpm run build:archimate-js && pnpm run build:mermaid-editor && pnpm run build:webview && pnpm run build:extension && pnpm run copy:assets",
+    "copy:assets": "mkdir -p apps/extension/dist/webview && rm -rf apps/extension/dist/webview/* && cp -r apps/webview/dist/* apps/extension/dist/webview/",
+    "build": "pnpm run build:extension && pnpm run build:webview && pnpm run build:archimate-js && pnpm run build:mermaid-editor",
     "build:ci": "pnpm run build:archimate-js && pnpm run build:extension",
     "watch": "cd apps/extension && pnpm run watch",
     "ci:init": "pnpm install && pnpm build",

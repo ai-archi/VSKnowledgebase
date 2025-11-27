@@ -7,11 +7,11 @@ import { ConfigManager } from '../../core/config/ConfigManager';
 import { EventBus } from '../../core/eventbus/EventBus';
 
 // Infrastructure Adapters
-import { ArtifactFileSystemAdapter } from '../../infrastructure/storage/file/ArtifactFileSystemAdapter';
-import { VaultFileSystemAdapter } from '../../infrastructure/storage/file/VaultFileSystemAdapter';
-import { SqliteRuntimeIndex } from '../../infrastructure/storage/sqlite/SqliteRuntimeIndex';
-import { YamlMetadataRepository } from '../../infrastructure/storage/yaml/YamlMetadataRepository';
-import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/vault/infrastructure/GitVaultAdapter';
+import { ArtifactFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/ArtifactFileSystemAdapter';
+import { VaultFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/VaultFileSystemAdapter';
+import { SqliteRuntimeIndex } from '../../modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
+import { YamlMetadataRepository } from '../../modules/shared/infrastructure/storage/yaml/YamlMetadataRepository';
+import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/shared/infrastructure/storage/git/GitVaultAdapter';
 
 // Repositories
 import { ArtifactRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactRepositoryImpl';
@@ -23,7 +23,7 @@ import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../module
 
 // Application Services
 import { ArtifactFileSystemApplicationServiceImpl } from '../../modules/shared/application/ArtifactFileSystemApplicationServiceImpl';
-import { ArtifactTreeApplicationService, ArtifactTreeApplicationServiceImpl } from '../../domain/shared/artifact/application';
+import { ArtifactTreeApplicationService, ArtifactTreeApplicationServiceImpl } from '../../modules/shared/application';
 import { VaultApplicationServiceImpl } from '../../modules/shared/application/VaultApplicationServiceImpl';
 import { LookupApplicationServiceImpl } from '../../modules/lookup/application/LookupApplicationServiceImpl';
 import { DocumentApplicationServiceImpl } from '../../modules/document/application/DocumentApplicationServiceImpl';

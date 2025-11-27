@@ -259,7 +259,7 @@ export class DocumentCommands {
   /**
    * 根据名称查找 Vault
    */
-  private async findVaultByName(vaultName: string): Promise<import('../../../domain/shared/vault/Vault').Vault | null> {
+  private async findVaultByName(vaultName: string): Promise<import('../../shared/domain/vault').Vault | null> {
     const vaultResult = await this.vaultService.listVaults();
     if (!vaultResult.success) {
       return null;
@@ -270,7 +270,7 @@ export class DocumentCommands {
   /**
    * 验证并获取 Vault（检查是否存在且可写）
    */
-  private async validateAndGetVault(item?: DocumentTreeItem, operation = 'operation'): Promise<{ vault: import('../../../domain/shared/vault/Vault').Vault; vaultName: string } | null> {
+  private async validateAndGetVault(item?: DocumentTreeItem, operation = 'operation'): Promise<{ vault: import('../../shared/domain/vault').Vault; vaultName: string } | null> {
     const vaultName = await this.getSelectedVaultName(item);
     if (!vaultName) {
       vscode.window.showErrorMessage('Please select a vault or document');
@@ -365,7 +365,7 @@ export class DocumentCommands {
   private getWebviewDistPath(): string {
     const extensionPath = this.context.extensionPath;
     // 优先从 extension 目录读取（打包后的路径），否则从源码目录读取（开发环境）
-    const webviewPathInExtension = path.join(extensionPath, 'webview');
+    const webviewPathInExtension = path.join(extensionPath, 'dist', 'webview');
     const webviewPathInSource = path.join(extensionPath, '..', 'webview', 'dist');
     return fs.existsSync(webviewPathInExtension) 
       ? webviewPathInExtension 

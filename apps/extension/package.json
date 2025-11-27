@@ -13,7 +13,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./out/main.js",
+  "main": "./dist/extension/main.js",
   "contributes": {
     "views": {
       "explorer": [

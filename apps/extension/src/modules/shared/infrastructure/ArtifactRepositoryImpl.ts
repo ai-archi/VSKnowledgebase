@@ -1,14 +1,14 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { ArtifactRepository } from './ArtifactRepository';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
-import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
-import { ArtifactFileSystemAdapter } from '../../../infrastructure/storage/file/ArtifactFileSystemAdapter';
+import { Artifact } from '../domain/artifact';
+import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
+import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';
 import { VaultRepository } from './VaultRepository';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
+import { ArtifactMetadata } from '../domain/ArtifactMetadata';
 
 @injectable()
 export class ArtifactRepositoryImpl implements ArtifactRepository {

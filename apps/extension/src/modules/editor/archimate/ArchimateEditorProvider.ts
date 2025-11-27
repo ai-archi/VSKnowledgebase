@@ -39,7 +39,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     // 设置 Webview 内容
     // 获取 archimate-js 的路径（从 extension 目录读取打包后的路径）
     const extensionPath = this.context.extensionPath;
-    const archimateJsPath = path.join(extensionPath, 'archimate-js');
+    const archimateJsPath = path.join(extensionPath, 'dist', 'archimate-js');
     const archimateJsUri = vscode.Uri.file(archimateJsPath);
     
     webviewPanel.webview.options = {
@@ -123,7 +123,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
   ): string {
     // 获取 archimate-js 的路径
     const extensionPath = this.context.extensionPath;
-    const archimateJsPath = path.join(extensionPath, 'archimate-js');
+    const archimateJsPath = path.join(extensionPath, 'dist', 'archimate-js');
     const indexHtmlPath = path.join(archimateJsPath, 'index.html');
     
     // 检查构建产物是否存在

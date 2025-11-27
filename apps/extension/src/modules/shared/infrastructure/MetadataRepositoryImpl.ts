@@ -1,9 +1,9 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { MetadataRepository } from './MetadataRepository';
-import { ArtifactMetadata } from '../../../domain/shared/artifact/ArtifactMetadata';
-import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/shared/artifact/errors';
-import { YamlMetadataRepository } from '../../../infrastructure/storage/yaml/YamlMetadataRepository';
+import { ArtifactMetadata } from '../domain/ArtifactMetadata';
+import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
+import { YamlMetadataRepository } from './storage/yaml/YamlMetadataRepository';
 import { VaultRepository } from './VaultRepository';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 import * as fs from 'fs';

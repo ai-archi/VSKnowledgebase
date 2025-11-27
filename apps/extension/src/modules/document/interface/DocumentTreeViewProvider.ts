@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { DocumentApplicationService } from '../application/DocumentApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService } from '../../../domain/shared/artifact/application';
+import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
 import { Logger } from '../../../core/logger/Logger';
-import { Artifact } from '../../../domain/shared/artifact/Artifact';
+import { Artifact } from '../../shared/domain/artifact';
 import * as path from 'path';
 
 export class DocumentTreeItem extends vscode.TreeItem {
