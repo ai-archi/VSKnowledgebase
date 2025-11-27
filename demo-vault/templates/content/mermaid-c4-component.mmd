@@ -1,0 +1,14 @@
+C4Component
+    title 组件图
+    
+    Container_Boundary(api, "API服务") {
+        Component(auth, "认证组件", "处理用户认证")
+        Component(order, "订单组件", "处理订单业务")
+        Component(payment, "支付组件", "处理支付逻辑")
+        ComponentDb(repo, "数据仓库", "数据访问层")
+    }
+    
+    Rel(auth, repo, "查询用户")
+    Rel(order, repo, "读写订单")
+    Rel(payment, order, "获取订单信息")
+

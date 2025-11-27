@@ -1,0 +1,49 @@
+id: project-template
+name: 项目文档模板
+description: 用于创建完整项目文档的标准目录结构
+category: project
+viewType: document
+structure:
+  - type: directory
+    name: {{projectName}}
+    description: 项目根目录
+    children:
+      - type: directory
+        name: requirements
+        description: 需求文档
+        children:
+          - type: directory
+            name: functional
+          - type: directory
+            name: non-functional
+      - type: directory
+        name: design
+        description: 设计文档
+        children:
+          - type: directory
+            name: system-design
+          - type: directory
+            name: database-design
+          - type: directory
+            name: api-design
+      - type: directory
+        name: architecture
+        description: 架构文档
+        children:
+          - type: directory
+            name: overview
+          - type: directory
+            name: components
+          - type: directory
+            name: decisions
+      - type: file
+        name: README.md
+        template: demo-vault/templates/content/project-readme.md
+        description: 项目说明文档
+variables:
+  - projectName
+  - version
+  - description
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

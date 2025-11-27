@@ -58,7 +58,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
 
     // 处理来自 Webview 的消息：仅处理保存
     const changeDocumentSubscription = webviewPanel.webview.onDidReceiveMessage(
-      async (e) => {
+      async (e: any) => {
         switch (e.type) {
           case 'save':
             // 保存文档内容
@@ -86,7 +86,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
 
     // 监听文档变更：发送加载消息
     const changeDocumentSubscription2 = vscode.workspace.onDidChangeTextDocument(
-      (e) => {
+      (e: vscode.TextDocumentChangeEvent) => {
         if (e.document.uri.toString() === document.uri.toString()) {
           webviewPanel.webview.postMessage({
             type: 'load',
@@ -147,7 +147,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     // 1. 替换 CSS 文件路径
     htmlContent = htmlContent.replace(
       /<link[^>]*href=["']([^"']+\.css)["'][^>]*>/gi,
-      (match, cssPath) => {
+      (match: string, cssPath: string) => {
         // 跳过已经是绝对路径的（如 CDN）
         if (cssPath.startsWith('http://') || cssPath.startsWith('https://')) {
           return match;
@@ -159,7 +159,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     // 2. 替换所有 script 标签中的 JS 文件路径
     htmlContent = htmlContent.replace(
       /<script[^>]*src=["']([^"']+\.js)["'][^>]*><\/script>/gi,
-      (match, jsPath) => {
+      (match: string, jsPath: string) => {
         // 跳过已经是绝对路径的（如 CDN）
         if (jsPath.startsWith('http://') || jsPath.startsWith('https://')) {
           return match;

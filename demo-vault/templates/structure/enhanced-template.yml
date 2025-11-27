@@ -1,0 +1,72 @@
+id: enhanced-template
+name: 增强模板示例
+description: 展示文件类型和通配符功能的模板
+category: example
+viewType: document
+structure:
+  - type: directory
+    name: {{projectName}}
+    description: 项目根目录
+    children:
+      - type: directory
+        name: src
+        description: 源代码目录
+        children:
+          - type: directory
+            name: {{moduleName}}
+            description: 模块目录（使用变量）
+            children:
+              - type: file
+                name: {{moduleName}}.ts
+                fileType: ts
+                template: demo-vault/templates/content/module-template.ts
+                description: TypeScript 模块文件
+              - type: file
+                name: {{moduleName}}.test.ts
+                fileType: ts
+                description: 测试文件
+          - type: file
+            name: index.ts
+            fileType: ts
+            description: 入口文件
+      - type: directory
+        name: docs
+        description: 文档目录
+        children:
+          - type: file
+            name: README.md
+            fileType: md
+            template: demo-vault/templates/content/project-readme.md
+            description: 项目说明文档
+          - type: file
+            name: CHANGELOG.md
+            fileType: md
+            template: demo-vault/templates/content/changelog-template.md
+            description: 变更日志
+      - type: directory
+        name: config
+        description: 配置文件目录
+        children:
+          - type: file
+            name: {{projectName}}.config.json
+            fileType: json
+            template: demo-vault/templates/content/config-template.json
+            description: 项目配置文件
+          - type: file
+            name: .env.example
+            fileType: env
+            description: 环境变量示例文件
+      - type: file
+        name: package.json
+        fileType: json
+        template: demo-vault/templates/content/package-template.json
+        description: Node.js 包配置文件
+variables:
+  - projectName
+  - moduleName
+  - version
+  - description
+  - date
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

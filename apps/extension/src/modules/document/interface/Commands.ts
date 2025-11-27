@@ -7,7 +7,7 @@ import { VaultApplicationService } from '../../shared/application/VaultApplicati
 import { Logger } from '../../../core/logger/Logger';
 import { CommandAdapter } from '../../../core/vscode-api/CommandAdapter';
 import { DocumentTreeViewProvider, DocumentTreeItem } from './DocumentTreeViewProvider';
-import { WebviewAdapter } from '../../../core/vscode-api/WebviewAdapter';
+import { WebviewAdapter, WebviewMessage } from '../../../core/vscode-api/WebviewAdapter';
 
 export class DocumentCommands {
   // 树视图更新延迟配置
@@ -592,7 +592,7 @@ export class DocumentCommands {
 
     // 设置 webview 消息处理器
     panel.webview.onDidReceiveMessage(
-      async (message) => {
+      async (message: WebviewMessage) => {
         // 处理关闭请求
         if (message.method === 'close') {
           panel.dispose();
@@ -673,7 +673,7 @@ export class DocumentCommands {
 
     // 设置 webview 消息处理器
     panel.webview.onDidReceiveMessage(
-      async (message) => {
+      async (message: WebviewMessage) => {
         // 处理关闭请求
         if (message.method === 'close') {
           panel.dispose();
@@ -720,7 +720,7 @@ export class DocumentCommands {
       // 替换资源路径为 webview URI
       // 匹配所有 src 和 href 属性中的路径（包括 /path, ./path, path 等）
       // 排除已经是完整 URI 的路径（如 vscode-webview://, http://, https://, data: 等）
-      html = html.replace(/(src|href)=["']([^"']+)["']/g, (match, attr, resourcePath) => {
+      html = html.replace(/(src|href)=["']([^"']+)["']/g, (match: string, attr: string, resourcePath: string) => {
         // 跳过已经是完整 URI 的路径
         if (resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)) {
           return match;

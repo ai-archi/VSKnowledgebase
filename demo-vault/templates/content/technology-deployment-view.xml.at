@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-technology-deployment-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统技术部署图</archimate:name>
+  <archimate:documentation>技术部署图展示ERP系统的技术部署架构</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-node-1" type="Node">
+      <archimate:name>Web服务器节点</archimate:name>
+      <archimate:documentation>部署Web服务的节点</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-node-2" type="Node">
+      <archimate:name>应用服务器节点</archimate:name>
+      <archimate:documentation>部署应用服务的节点</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-node-3" type="Node">
+      <archimate:name>数据库服务器节点</archimate:name>
+      <archimate:documentation>部署数据库服务的节点</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-deployment-diagram">
+        <archimate:name>技术部署图 (Technology Deployment View)</archimate:name>
+        <archimate:documentation>ERP系统技术部署图 - 展示技术部署架构</archimate:documentation>
+        <archimate:node id="id-node-node-1" type="Element" elementRef="id-node-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="221" g="235" b="247" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-node-node-2" type="Element" elementRef="id-node-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="221" g="235" b="247" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-node-node-3" type="Element" elementRef="id-node-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="221" g="235" b="247" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-deployment-rel-1" type="CommunicationNetwork" source="id-node-1" target="id-node-2">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-deployment-rel-2" type="CommunicationNetwork" source="id-node-2" target="id-node-3">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

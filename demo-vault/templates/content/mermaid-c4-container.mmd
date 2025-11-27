@@ -1,0 +1,14 @@
+C4Container
+    title 容器图
+    
+    Person(user, "用户")
+    System_Boundary(system, "业务系统") {
+        Container(web, "Web应用", "React", "用户界面")
+        Container(api, "API服务", "Node.js", "业务逻辑")
+        ContainerDb(db, "数据库", "PostgreSQL", "数据存储")
+    }
+    
+    Rel(user, web, "使用")
+    Rel(web, api, "调用")
+    Rel(api, db, "读写")
+

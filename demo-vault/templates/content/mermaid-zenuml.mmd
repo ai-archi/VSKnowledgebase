@@ -1,0 +1,9 @@
+zenuml
+    title 用户登录流程
+    User -> AuthService: login(username, password)
+    AuthService -> Database: queryUser(username)
+    Database --> AuthService: userData
+    AuthService -> TokenService: generateToken(userData)
+    TokenService --> AuthService: token
+    AuthService --> User: return token
+

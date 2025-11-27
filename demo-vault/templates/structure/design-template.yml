@@ -1,0 +1,29 @@
+id: design-template
+name: 设计文档模板
+description: 用于创建设计文档的标准目录结构
+category: design
+viewType: document
+structure:
+  - type: directory
+    name: design
+    description: 设计文档根目录
+    children:
+      - type: directory
+        name: system-design
+        description: 系统设计
+      - type: directory
+        name: database-design
+        description: 数据库设计
+      - type: directory
+        name: api-design
+        description: API设计
+      - type: file
+        name: design-overview.md
+        template: design-overview.md
+        description: 设计概览文档
+variables:
+  - projectName
+  - systemName
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+
