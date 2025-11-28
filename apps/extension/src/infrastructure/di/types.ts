@@ -10,6 +10,7 @@ export const TYPES = {
   // Infrastructure Adapters
   ArtifactFileSystemAdapter: Symbol.for('ArtifactFileSystemAdapter'),
   VaultFileSystemAdapter: Symbol.for('VaultFileSystemAdapter'),
+  WorkspaceFileSystemAdapter: Symbol.for('WorkspaceFileSystemAdapter'),
   SqliteRuntimeIndex: Symbol.for('SqliteRuntimeIndex'),
   YamlMetadataRepository: Symbol.for('YamlMetadataRepository'),
   GitVaultAdapter: Symbol.for('GitVaultAdapter'),
@@ -25,6 +26,7 @@ export const TYPES = {
   // Application Services
   ArtifactFileSystemApplicationService: Symbol.for('ArtifactFileSystemApplicationService'),
   ArtifactTreeApplicationService: Symbol.for('ArtifactTreeApplicationService'),
+  CodeFileSystemApplicationService: Symbol.for('CodeFileSystemApplicationService'),
   VaultApplicationService: Symbol.for('VaultApplicationService'),
   LookupApplicationService: Symbol.for('LookupApplicationService'),
   DocumentApplicationService: Symbol.for('DocumentApplicationService'),

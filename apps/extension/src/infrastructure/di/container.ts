@@ -9,6 +9,8 @@ import { EventBus } from '../../core/eventbus/EventBus';
 // Infrastructure Adapters
 import { ArtifactFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/ArtifactFileSystemAdapter';
 import { VaultFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/VaultFileSystemAdapter';
+import { WorkspaceFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/WorkspaceFileSystemAdapter';
+import { WorkspaceFileSystemAdapterImpl } from '../../modules/shared/infrastructure/storage/file/WorkspaceFileSystemAdapterImpl';
 import { SqliteRuntimeIndex } from '../../modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { YamlMetadataRepository } from '../../modules/shared/infrastructure/storage/yaml/YamlMetadataRepository';
 import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/shared/infrastructure/storage/git/GitVaultAdapter';
@@ -24,6 +26,8 @@ import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../module
 // Application Services
 import { ArtifactFileSystemApplicationServiceImpl } from '../../modules/shared/application/ArtifactFileSystemApplicationServiceImpl';
 import { ArtifactTreeApplicationService, ArtifactTreeApplicationServiceImpl } from '../../modules/shared/application';
+import { CodeFileSystemApplicationService } from '../../modules/shared/application/CodeFileSystemApplicationService';
+import { CodeFileSystemApplicationServiceImpl } from '../../modules/shared/application/CodeFileSystemApplicationServiceImpl';
 import { VaultApplicationServiceImpl } from '../../modules/shared/application/VaultApplicationServiceImpl';
 import { LookupApplicationServiceImpl } from '../../modules/lookup/application/LookupApplicationServiceImpl';
 import { DocumentApplicationServiceImpl } from '../../modules/document/application/DocumentApplicationServiceImpl';
@@ -63,6 +67,8 @@ export function createContainer(
     .toConstantValue(new ArtifactFileSystemAdapter(architoolRoot));
   container.bind<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter)
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot));
+  container.bind<WorkspaceFileSystemAdapter>(TYPES.WorkspaceFileSystemAdapter)
+    .toConstantValue(new WorkspaceFileSystemAdapterImpl());
   container.bind<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex)
     .toConstantValue(new SqliteRuntimeIndex(dbPath, logger));
   // YamlMetadataRepository 现在由 MetadataRepositoryImpl 内部管理（每个 vault 一个实例）
@@ -99,6 +105,8 @@ export function createContainer(
     .to(ArtifactFileSystemApplicationServiceImpl).inSingletonScope();
   container.bind<ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService)
     .to(ArtifactTreeApplicationServiceImpl).inSingletonScope();
+  container.bind<CodeFileSystemApplicationService>(TYPES.CodeFileSystemApplicationService)
+    .to(CodeFileSystemApplicationServiceImpl).inSingletonScope();
   container.bind(TYPES.VaultApplicationService)
     .to(VaultApplicationServiceImpl).inSingletonScope();
   container.bind(TYPES.LookupApplicationService)

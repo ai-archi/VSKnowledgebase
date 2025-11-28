@@ -1,6 +1,6 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { ArtifactFileSystemApplicationService, CreateArtifactOpts, UpdateArtifactOpts } from './ArtifactFileSystemApplicationService';
+import { ArtifactFileSystemApplicationService, CreateArtifactOpts, UpdateArtifactOpts, FileFolderItem } from './ArtifactFileSystemApplicationService';
 import { Artifact } from '../domain/entity/artifact';
 import { ArtifactMetadata } from '../domain/ArtifactMetadata';
 import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../domain/errors';
@@ -9,6 +9,8 @@ import { ArtifactFileSystemAdapter } from '../infrastructure/storage/file/Artifa
 import { SqliteRuntimeIndex } from '../infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MetadataRepository } from '../infrastructure/MetadataRepository';
 import { VaultApplicationService } from './VaultApplicationService';
+import { ArtifactTreeApplicationService } from './ArtifactTreeApplicationService';
+import { VaultReference } from '../domain/value_object/VaultReference';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
@@ -22,6 +24,7 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
     @inject(TYPES.SqliteRuntimeIndex) private index: SqliteRuntimeIndex,
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
+    @inject(TYPES.ArtifactTreeApplicationService) private treeService: ArtifactTreeApplicationService,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
@@ -405,6 +408,21 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       // 应用查询选项（如果有）
       let filteredArtifacts = artifacts;
       if (options) {
+        // 按 query 字符串过滤（文件名/路径模糊搜索）
+        if (options.query && options.query.trim()) {
+          const query = options.query.trim().toLowerCase();
+          filteredArtifacts = filteredArtifacts.filter(a => {
+            const nameLower = a.name.toLowerCase();
+            const pathLower = a.path.toLowerCase();
+            const titleLower = (a.title || '').toLowerCase();
+            
+            // 检查文件名、路径或标题是否包含查询字符串
+            return nameLower.includes(query) || 
+                   pathLower.includes(query) || 
+                   titleLower.includes(query);
+          });
+        }
+
         // 按 viewType 过滤
         if (options.viewType) {
           filteredArtifacts = filteredArtifacts.filter(a => a.viewType === options.viewType);
@@ -476,6 +494,81 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       return {
         success: false,
         error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, `Failed to list artifacts: ${error.message}`, {}, error),
+      };
+    }
+  }
+
+  async listFilesAndFolders(vaultId?: string, options?: QueryOptions): Promise<Result<FileFolderItem[], ArtifactError>> {
+    try {
+      this.logger.info(`[BREAKPOINT] listFilesAndFolders called with vaultId: ${vaultId || 'undefined'}, options:`, options);
+      const items: FileFolderItem[] = [];
+
+      // 获取要扫描的 vault 列表
+      let vaultsToScan: Array<{ id: string; name: string }> = [];
+      
+      if (vaultId) {
+        const vaultResult = await this.vaultService.getVault(vaultId);
+        if (!vaultResult.success || !vaultResult.value) {
+          return { success: true, value: [] };
+        }
+        vaultsToScan = [{ id: vaultResult.value.id, name: vaultResult.value.name }];
+      } else {
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          return { success: true, value: [] };
+        }
+        vaultsToScan = vaultsResult.value.map(v => ({ id: v.id, name: v.name }));
+      }
+
+      // 扫描每个 vault 的 artifacts 目录
+      for (const vault of vaultsToScan) {
+        const vaultRef: VaultReference = { id: vault.id, name: vault.name };
+        
+        // 使用 treeService 列出 artifacts 目录下的所有文件和文件夹（递归，不限制文件类型）
+        const listResult = await this.treeService.listDirectory(vaultRef, 'artifacts', {
+          recursive: true,
+          includeHidden: false,
+          // 不指定 extensions，返回所有文件类型
+        });
+        
+        if (listResult.success) {
+          const query = options?.query?.trim().toLowerCase();
+          
+          for (const node of listResult.value) {
+            // listDirectory 返回的路径是相对于 vault 根目录的（包含 'artifacts/' 前缀）
+            // 去掉 'artifacts/' 前缀以得到相对于 artifacts 目录的路径
+            const relativePath = node.path.replace(/^artifacts\//, '');
+            
+            // 如果有查询条件，进行过滤
+            if (query) {
+              const nameLower = node.name.toLowerCase();
+              const pathLower = relativePath.toLowerCase();
+              const titleLower = (node.isFile ? node.name.replace(/\.[^/.]+$/, '') : node.name).toLowerCase();
+              
+              if (!nameLower.includes(query) && 
+                  !pathLower.includes(query) && 
+                  !titleLower.includes(query)) {
+                continue;
+              }
+            }
+            
+            items.push({
+              path: relativePath,
+              name: node.name,
+              title: node.isFile ? node.name.replace(/\.[^/.]+$/, '') : node.name,
+              type: node.isDirectory ? 'folder' : 'file',
+            });
+          }
+        }
+      }
+
+      this.logger.info(`Total files and folders found: ${items.length}`);
+      return { success: true, value: items };
+    } catch (error: any) {
+      this.logger.error('Failed to list files and folders', error);
+      return {
+        success: false,
+        error: new ArtifactError(ArtifactErrorCode.OPERATION_FAILED, `Failed to list files and folders: ${error.message}`, {}, error),
       };
     }
   }

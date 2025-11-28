@@ -42,7 +42,7 @@
           </template>
           <el-input
             v-model="formData.folderName"
-            placeholder="输入文件夹名称（支持模糊搜索）"
+            placeholder="输入文件夹名称或路径进行搜索（创建时仅支持单个文件夹名称）"
             clearable
             @input="handleFolderNameInput"
             :prefix-icon="Folder"
@@ -84,14 +84,14 @@
       </el-form>
     </div>
 
-    <!-- 下方：已选择文件和文件列表（上下结构） -->
+    <!-- 下方：已选择和检索结果（上下结构） -->
     <div class="bottom-section">
-      <!-- 已选择文件 -->
+      <!-- 已选择 -->
       <div class="file-panel selected-panel">
         <div class="panel-header">
           <h4>
             <el-icon><FolderChecked /></el-icon>
-            已选择文件 ({{ selectedFiles.length }})
+            已选择 ({{ selectedFiles.length }})
           </h4>
           <el-button
             v-if="selectedFiles.length > 0"
@@ -104,7 +104,7 @@
           </el-button>
         </div>
         <div class="panel-content">
-          <el-empty v-if="selectedFiles.length === 0" description="暂无已选择文件" :image-size="80" />
+          <el-empty v-if="selectedFiles.length === 0" description="暂无已选择" :image-size="80" />
           <div v-else class="file-list">
             <div
               v-for="file in selectedFiles"
@@ -132,12 +132,12 @@
         </div>
       </div>
 
-      <!-- 文件检索结果 -->
+      <!-- 检索结果 -->
       <div class="file-panel search-panel">
         <div class="panel-header">
           <h4>
             <el-icon><Files /></el-icon>
-            文件检索结果 ({{ filteredFiles.length }})
+            检索结果 ({{ filteredFiles.length }})
           </h4>
         </div>
         <div class="panel-content">
@@ -147,7 +147,7 @@
           </div>
           <el-empty
             v-else-if="filteredFiles.length === 0"
-            description="没有找到匹配的文件"
+            description="没有找到匹配的结果"
             :image-size="80"
           />
           <div v-else class="file-list">
@@ -274,10 +274,11 @@ const filteredFiles = computed(() => {
 });
 
 const canCreate = computed(() => {
+  // 基本条件检查：非空且有 vaultId
+  // 验证错误在创建时检查，不在输入时检查（允许输入路径进行搜索）
   return (
     formData.value.folderName.trim() !== '' &&
-    formData.value.vaultId !== '' &&
-    validationError.value === null
+    formData.value.vaultId !== ''
   );
 });
 
@@ -361,10 +362,12 @@ const loadFiles = async (query?: string) => {
     if (vaults.value.length > 0) {
       for (const vault of vaults.value) {
         try {
+          console.log('[CreateFolderForm] Calling document.list for vault:', vault.id, 'query:', query);
           const result = await extensionService.call<FileItem[]>('document.list', {
             vaultId: vault.id,
             query: query,
           });
+          console.log('[CreateFolderForm] document.list result:', result?.length || 0, 'items');
           if (result) {
             allResults.push(...result);
           }
@@ -396,7 +399,8 @@ const loadFiles = async (query?: string) => {
 };
 
 const handleFolderNameInput = () => {
-  validationError.value = validateFileName(formData.value.folderName);
+  // 清除之前的验证错误（允许输入路径进行过滤）
+  validationError.value = null;
   // 自动触发搜索（带防抖）
   triggerAutoSearch();
 };
@@ -423,8 +427,10 @@ const validateFileName = (value: string): string | null => {
   if (!value || value.trim().length === 0) {
     return '文件夹名称不能为空';
   }
-  if (/[<>:"/\\|?*]/.test(value)) {
-    return '文件夹名称包含非法字符';
+  // 文件夹名称不能包含路径分隔符和其他非法字符
+  // 注意：允许在搜索时输入路径，但创建时文件夹名称必须是单个名称
+  if (/[<>:"/\\|?*]/.test(value.trim())) {
+    return '文件夹名称包含非法字符（不能包含路径分隔符 / 或 \\）';
   }
   return null;
 };
@@ -635,7 +641,7 @@ const generatePrompt = (action: string) => {
 .vault-name,
 .template-name {
   font-weight: 500;
-  color: var(--vscode-editor-foreground, #cccccc);
+  color: var(--vscode-foreground, #cccccc);
 }
 
 .vault-description,
@@ -646,6 +652,158 @@ const generatePrompt = (action: string) => {
 
 .template-hint {
   margin-top: 4px;
+}
+
+/* Element Plus 组件样式覆盖，使用 VSCode 主题 */
+
+/* 输入框样式 */
+:deep(.el-input__wrapper) {
+  background-color: var(--vscode-input-background, #3c3c3c) !important;
+  border-color: var(--vscode-input-border, #3e3e3e) !important;
+  box-shadow: 0 0 0 1px var(--vscode-input-border, #3e3e3e) inset !important;
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: var(--vscode-inputOption-hoverBorder, #4ec9b0) !important;
+  box-shadow: 0 0 0 1px var(--vscode-inputOption-hoverBorder, #4ec9b0) inset !important;
+}
+
+:deep(.el-input.is-focus .el-input__wrapper) {
+  border-color: var(--vscode-inputOption-activeBorder, #4ec9b0) !important;
+  box-shadow: 0 0 0 1px var(--vscode-inputOption-activeBorder, #4ec9b0) inset !important;
+}
+
+:deep(.el-input__inner) {
+  color: var(--vscode-input-foreground, #cccccc) !important;
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: var(--vscode-input-placeholderForeground, #999999) !important;
+}
+
+/* 选择框样式 */
+:deep(.el-select .el-input__wrapper) {
+  background-color: var(--vscode-input-background, #3c3c3c) !important;
+  border-color: var(--vscode-input-border, #3e3e3e) !important;
+  box-shadow: 0 0 0 1px var(--vscode-input-border, #3e3e3e) inset !important;
+}
+
+:deep(.el-select .el-input__wrapper:hover) {
+  border-color: var(--vscode-inputOption-hoverBorder, #4ec9b0) !important;
+  box-shadow: 0 0 0 1px var(--vscode-inputOption-hoverBorder, #4ec9b0) inset !important;
+}
+
+:deep(.el-select.is-focus .el-input__wrapper) {
+  border-color: var(--vscode-inputOption-activeBorder, #4ec9b0) !important;
+  box-shadow: 0 0 0 1px var(--vscode-inputOption-activeBorder, #4ec9b0) inset !important;
+}
+
+:deep(.el-select .el-input__inner) {
+  color: var(--vscode-input-foreground, #cccccc) !important;
+}
+
+:deep(.el-select .el-input__suffix .el-icon) {
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+/* 按钮样式 */
+:deep(.el-button) {
+  background-color: var(--vscode-button-secondaryBackground, #3c3c3c) !important;
+  border-color: var(--vscode-button-border, #3e3e3e) !important;
+  color: var(--vscode-button-secondaryForeground, #cccccc) !important;
+}
+
+:deep(.el-button:hover) {
+  background-color: var(--vscode-button-secondaryHoverBackground, #4c4c4c) !important;
+  border-color: var(--vscode-button-hoverBorder, #4ec9b0) !important;
+  color: var(--vscode-button-secondaryForeground, #ffffff) !important;
+}
+
+:deep(.el-button:active) {
+  background-color: var(--vscode-button-secondaryHoverBackground, #2c2c2c) !important;
+}
+
+:deep(.el-button.is-disabled) {
+  background-color: var(--vscode-button-secondaryBackground, #2c2c2c) !important;
+  border-color: var(--vscode-button-border, #2e2e2e) !important;
+  color: var(--vscode-disabledForeground, #666666) !important;
+  opacity: 0.5;
+}
+
+:deep(.el-button--primary) {
+  background-color: var(--vscode-button-background, #0e639c) !important;
+  border-color: var(--vscode-button-background, #0e639c) !important;
+  color: var(--vscode-button-foreground, #ffffff) !important;
+}
+
+:deep(.el-button--primary:hover) {
+  background-color: var(--vscode-button-hoverBackground, #1177bb) !important;
+  border-color: var(--vscode-button-hoverBackground, #1177bb) !important;
+}
+
+:deep(.el-button--danger) {
+  background-color: var(--vscode-errorForeground, #f48771) !important;
+  border-color: var(--vscode-errorForeground, #f48771) !important;
+  color: #ffffff !important;
+}
+
+:deep(.el-button--danger:hover) {
+  background-color: var(--vscode-errorForeground, #ff6b5a) !important;
+  border-color: var(--vscode-errorForeground, #ff6b5a) !important;
+}
+
+/* 表单项标签样式 */
+:deep(.el-form-item__label) {
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+/* 标签样式 */
+:deep(.el-tag) {
+  background-color: var(--vscode-badge-background, #3c3c3c) !important;
+  border-color: var(--vscode-panel-border, #3e3e3e) !important;
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+:deep(.el-tag--success) {
+  background-color: var(--vscode-testing-iconPassed, #4ec9b0) !important;
+  border-color: var(--vscode-testing-iconPassed, #4ec9b0) !important;
+  color: #ffffff !important;
+}
+
+/* 空状态样式 */
+:deep(.el-empty) {
+  color: var(--vscode-descriptionForeground, #999999) !important;
+}
+
+:deep(.el-empty__description) {
+  color: var(--vscode-descriptionForeground, #999999) !important;
+}
+
+/* 增强下拉框样式，使用 VSCode 主题 */
+:deep(.el-select-dropdown) {
+  background-color: var(--vscode-editor-background, #1e1e1e) !important;
+  border-color: var(--vscode-panel-border, #3e3e3e) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+:deep(.el-select-dropdown__item) {
+  color: var(--vscode-foreground, #cccccc) !important;
+  background-color: transparent !important;
+}
+
+:deep(.el-select-dropdown__item:hover) {
+  color: var(--vscode-list-hoverForeground, var(--vscode-foreground, #ffffff)) !important;
+  background-color: var(--vscode-list-hoverBackground, #2a2d2e) !important;
+}
+
+:deep(.el-select-dropdown__item.is-selected) {
+  color: var(--vscode-list-activeSelectionForeground, #ffffff) !important;
+  background-color: var(--vscode-list-activeSelectionBackground, #094771) !important;
+}
+
+:deep(.el-select-dropdown__item.is-selected:hover) {
+  color: var(--vscode-list-activeSelectionForeground, #ffffff) !important;
+  background-color: var(--vscode-list-activeSelectionBackground, #094771) !important;
 }
 
 /* 下方区域 */

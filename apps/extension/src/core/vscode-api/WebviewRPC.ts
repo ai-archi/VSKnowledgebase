@@ -4,8 +4,7 @@ import { VaultApplicationService } from '../../modules/shared/application/VaultA
 import { DocumentApplicationService } from '../../modules/document/application/DocumentApplicationService';
 import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../modules/shared/application/ArtifactFileSystemApplicationService';
-import { ArtifactTreeApplicationService } from '../../modules/shared/application/ArtifactTreeApplicationService';
-import { VaultReference } from '../../modules/shared/domain/value_object/VaultReference';
+import { CodeFileSystemApplicationService } from '../../modules/shared/application/CodeFileSystemApplicationService';
 import { WebviewAdapter, WebviewMessage } from './WebviewAdapter';
 
 /**
@@ -21,7 +20,7 @@ export class WebviewRPC {
     private documentService: DocumentApplicationService,
     private templateService: TemplateApplicationService,
     private artifactService: ArtifactFileSystemApplicationService,
-    private treeService: ArtifactTreeApplicationService
+    private codeFileService: CodeFileSystemApplicationService
   ) {
     this.webviewAdapter = new WebviewAdapter(logger);
     this.registerAllMethods();
@@ -79,77 +78,32 @@ export class WebviewRPC {
 
     // Document 相关方法（不限制文件类型，支持查询）
     this.webviewAdapter.registerMethod('document.list', async (params: { vaultId?: string; query?: string }) => {
-      const items: Array<{
-        id?: string;
-        path: string;
-        name: string;
-        title?: string;
-        type?: 'file' | 'folder';
-        vault?: { id: string; name: string };
-      }> = [];
-
-      // 获取要扫描的 vault 列表
-      let vaultsToScan: Array<{ id: string; name: string }> = [];
+      this.logger.debug('document.list handler called', { vaultId: params.vaultId, query: params.query });
+      this.logger.info(`[DEBUG] document.list - artifactService type: ${this.artifactService.constructor.name}`);
+      // 调用应用服务层处理业务逻辑
+      this.logger.info(`[DEBUG] document.list - calling listFilesAndFolders with vaultId: ${params.vaultId}, query: ${params.query}`);
+      const result = await this.artifactService.listFilesAndFolders(params.vaultId, {
+        query: params.query,
+      });
+      this.logger.info(`[DEBUG] document.list - listFilesAndFolders returned, success: ${result.success}`);
       
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+
+      // 获取 vault 信息并添加到返回结果中
+      let vaultInfo: { id: string; name: string } | undefined;
       if (params.vaultId) {
         const vaultResult = await this.vaultService.getVault(params.vaultId);
-        if (!vaultResult.success || !vaultResult.value) {
-          return items;
+        if (vaultResult.success && vaultResult.value) {
+          vaultInfo = { id: vaultResult.value.id, name: vaultResult.value.name };
         }
-        vaultsToScan = [{ id: vaultResult.value.id, name: vaultResult.value.name }];
-      } else {
-        const vaultsResult = await this.vaultService.listVaults();
-        if (!vaultsResult.success) {
-          return items;
-        }
-        vaultsToScan = vaultsResult.value.map(v => ({ id: v.id, name: v.name }));
       }
 
-      // 扫描每个 vault 的 artifacts 目录
-      for (const vault of vaultsToScan) {
-        const vaultRef: VaultReference = { id: vault.id, name: vault.name };
-        
-        // 使用 treeService 列出 artifacts 目录下的所有文件和文件夹（递归，不限制文件类型）
-        const listResult = await this.treeService.listDirectory(vaultRef, 'artifacts', {
-          recursive: true,
-          includeHidden: false,
-          // 不指定 extensions，返回所有文件类型
-        });
-        
-        if (listResult.success) {
-          // 如果有查询条件，进行过滤
-          const query = params.query?.trim().toLowerCase();
-          
-          for (const node of listResult.value) {
-            // 构建相对于 artifacts 目录的路径
-            const relativePath = node.path.startsWith('artifacts/') 
-              ? node.path.substring('artifacts/'.length)
-              : node.path;
-            
-            // 如果有查询条件，检查是否匹配
-            if (query) {
-              const nameLower = node.name.toLowerCase();
-              const pathLower = relativePath.toLowerCase();
-              const titleLower = (node.isFile ? node.name.replace(/\.[^/.]+$/, '') : node.name).toLowerCase();
-              
-              // 检查文件名、路径或标题是否包含查询字符串
-              if (!nameLower.includes(query) && 
-                  !pathLower.includes(query) && 
-                  !titleLower.includes(query)) {
-                continue; // 不匹配，跳过
-              }
-            }
-            
-            items.push({
-              path: relativePath,
-              name: node.name,
-              title: node.isFile ? node.name.replace(/\.[^/.]+$/, '') : node.name,
-              type: node.isDirectory ? 'folder' : 'file',
-              vault: { id: vault.id, name: vault.name },
-            });
-      }
-        }
-      }
+      const items = result.value.map(item => ({
+        ...item,
+        vault: vaultInfo,
+      }));
 
       return items;
     });
@@ -257,117 +211,25 @@ export class WebviewRPC {
 
     // Workspace 相关方法
     this.webviewAdapter.registerMethod('workspace.listFiles', async (params?: { query?: string }) => {
-      const items: Array<{
-        id?: string;
-        path: string;
-        name: string;
-        title?: string;
-        type?: 'file' | 'folder';
-        vault?: { id: string; name: string };
-      }> = [];
-
-      // 获取工作区中的所有文件和文件夹
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders || workspaceFolders.length === 0) {
-        return items;
+      this.logger.info(`[WebviewRPC] workspace.listFiles handler called`, { 
+        query: params?.query,
+        codeFileServiceType: this.codeFileService?.constructor?.name 
+      });
+      // 调用应用服务层处理业务逻辑
+      this.logger.info(`[WebviewRPC] Calling codeFileService.listWorkspaceFiles`);
+      const result = await this.codeFileService.listWorkspaceFiles({
+        query: params?.query,
+      });
+      this.logger.info(`[WebviewRPC] codeFileService.listWorkspaceFiles returned`, { 
+        success: result.success,
+        itemCount: result.success ? result.value.length : 0
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error.message);
       }
 
-      // 遍历所有工作区文件夹
-      for (const folder of workspaceFolders) {
-        try {
-          // 构建搜索模式（如果有查询条件）
-          let searchPattern = '**/*';
-          if (params?.query && params.query.trim()) {
-            // 使用通配符模式进行文件名搜索
-            const query = params.query.trim();
-            // 转义特殊字符，但保留 * 和 ?
-            const escapedQuery = query.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-            searchPattern = `**/*${escapedQuery}*`;
-          }
-
-          // 使用 VSCode API 查找文件
-          // VSCode 会自动使用 .gitignore 规则进行过滤
-          const pattern = new vscode.RelativePattern(folder, searchPattern);
-          // 不指定 exclude 模式，让 VSCode 使用 .gitignore
-          // 增加文件数量限制到 10000
-          const uris = await vscode.workspace.findFiles(pattern, null, 10000);
-          
-          // 收集所有路径，用于识别文件夹
-          const allPaths = new Set<string>();
-          const filePaths = new Set<string>();
-          
-          for (const uri of uris) {
-            const relativePath = vscode.workspace.asRelativePath(uri);
-            const fileName = uri.fsPath.split(/[/\\]/).pop() || '';
-            
-            // 不限制文件类型，包含所有文件
-              filePaths.add(relativePath);
-              items.push({
-                path: relativePath,
-                name: fileName,
-                title: fileName.replace(/\.[^/.]+$/, ''), // 移除扩展名作为标题
-                type: 'file',
-              });
-            
-            // 收集所有路径的父目录
-            const pathParts = relativePath.split(/[/\\]/);
-            for (let i = 1; i < pathParts.length; i++) {
-              const dirPath = pathParts.slice(0, i).join('/');
-              allPaths.add(dirPath);
-            }
-          }
-          
-          // 如果没有查询条件，也列出所有文件夹
-          if (!params?.query || !params.query.trim()) {
-            // 使用 listDirectory 获取文件夹列表
-            try {
-              const dirUri = folder.uri;
-              const dirEntries = await vscode.workspace.fs.readDirectory(dirUri);
-              
-              // 递归获取所有子目录
-              const scanDirs = async (baseUri: vscode.Uri, basePath = ''): Promise<void> => {
-                try {
-                  const entries = await vscode.workspace.fs.readDirectory(baseUri);
-                  for (const [name, type] of entries) {
-                    if (type === vscode.FileType.Directory) {
-                      const dirPath = basePath ? `${basePath}/${name}` : name;
-                      if (!filePaths.has(dirPath)) {
-                        allPaths.add(dirPath);
-                        // 递归扫描子目录
-                        const subUri = vscode.Uri.joinPath(baseUri, name);
-                        await scanDirs(subUri, dirPath);
-                      }
-                    }
-                  }
-                } catch (error) {
-                  // 忽略无法访问的目录（可能被 .gitignore 排除）
-                }
-              };
-              
-              await scanDirs(dirUri);
-            } catch (error) {
-              // 如果无法读取目录，继续处理文件
-            }
-          }
-          
-          // 添加文件夹（排除已经是文件的路径）
-          for (const dirPath of allPaths) {
-            if (!filePaths.has(dirPath)) {
-              const dirName = dirPath.split(/[/\\]/).pop() || dirPath;
-              items.push({
-                path: dirPath,
-                name: dirName,
-                title: dirName,
-                type: 'folder',
-              });
-            }
-          }
-        } catch (error: any) {
-          this.logger.warn(`Failed to list files in workspace folder: ${folder.uri.fsPath}`, error);
-        }
-      }
-
-      return items;
+      return result.value;
     });
 
     this.logger.info('All Webview RPC methods registered');

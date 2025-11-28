@@ -10,8 +10,10 @@
         "--extensionDevelopmentPath=${workspaceFolder}/apps/extension"
       ],
       "outFiles": [
-        "${workspaceFolder}/apps/extension/dist/extension/**/*.js"
+        "${workspaceFolder}/apps/extension/dist/extension/**/*.js",
+        "${workspaceFolder}/apps/extension/dist/**/*.js"
       ],
+      "sourceMaps": true,
       "skipFiles": [
         "<node_internals>/**/*.js",
         "${workspaceFolder}/**/node_modules/mocha/**/*.js"
@@ -21,7 +23,8 @@
         "VSCODE_DEBUGGING_EXTENSION": "architool",
         "LOG_LEVEL": "debug"
       },
-      "preLaunchTask": "Build All"
+      "preLaunchTask": "Build All",
+      "trace": true
     }
 	]
 }

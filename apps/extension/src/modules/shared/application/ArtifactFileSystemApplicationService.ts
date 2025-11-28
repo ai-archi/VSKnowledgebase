@@ -23,6 +23,16 @@ export interface UpdateArtifactOpts {
   category?: string;
 }
 
+/**
+ * 文件/文件夹项（用于列表展示）
+ */
+export interface FileFolderItem {
+  path: string;
+  name: string;
+  title?: string;
+  type: 'file' | 'folder';
+}
+
 export interface ArtifactFileSystemApplicationService {
   createArtifact(opts: CreateArtifactOpts): Promise<Result<Artifact, ArtifactError>>;
   getArtifact(vaultId: string, artifactId: string): Promise<Result<Artifact, ArtifactError>>;
@@ -31,6 +41,12 @@ export interface ArtifactFileSystemApplicationService {
   deleteArtifact(vaultId: string, artifactId: string): Promise<Result<void, ArtifactError>>;
   listArtifacts(vaultId?: string, options?: QueryOptions): Promise<Result<Artifact[], ArtifactError>>;
   updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>>;
+  /**
+   * 列出 vault 中的所有文件和文件夹（不限制文件类型）
+   * @param vaultId Vault ID（可选，不指定则列出所有 vault）
+   * @param options 查询选项
+   */
+  listFilesAndFolders(vaultId?: string, options?: QueryOptions): Promise<Result<FileFolderItem[], ArtifactError>>;
 }
 
 

@@ -98,5 +98,7 @@ export interface QueryOptions {
   filter?: Record<string, any>;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  // 查询字符串，用于文件名/路径模糊搜索
+  query?: string;
 }
 

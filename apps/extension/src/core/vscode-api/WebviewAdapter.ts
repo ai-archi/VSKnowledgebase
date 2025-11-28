@@ -123,9 +123,15 @@ export class WebviewAdapter {
    */
   async handleMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
     try {
+      this.logger.info(`[WebviewAdapter] handleMessage called with method: ${message.method}`, { 
+        id: message.id, 
+        params: message.params,
+        handlerCount: this.messageHandlers.size,
+        registeredMethods: Array.from(this.messageHandlers.keys())
+      });
       const handler = this.messageHandlers.get(message.method);
       if (!handler) {
-        this.logger.warn(`No handler found for method: ${message.method}`);
+        this.logger.warn(`[WebviewAdapter] No handler found for method: ${message.method}. Registered methods: ${Array.from(this.messageHandlers.keys()).join(', ')}`);
         this.postMessage(webview, {
           id: message.id,
           error: {
@@ -136,6 +142,7 @@ export class WebviewAdapter {
         return;
       }
 
+      this.logger.debug(`Calling handler for method: ${message.method}`);
       const result = await handler(message.params);
       this.postMessage(webview, {
         id: message.id,

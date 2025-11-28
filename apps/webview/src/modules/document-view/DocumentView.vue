@@ -25,12 +25,6 @@
         </div>
       </div>
     </div>
-    
-    <!-- 创建文件弹窗 -->
-    <CreateFileDialog
-      v-model="createDialogVisible"
-      @created="handleFileCreated"
-    />
   </div>
 </template>
 
@@ -39,7 +33,6 @@ import { ref, onMounted } from 'vue';
 import { ElButton } from 'element-plus';
 import { Plus, Refresh } from '@element-plus/icons-vue';
 import { extensionService } from '../../services/ExtensionService';
-import CreateFileDialog from '../../components/CreateFileDialog.vue';
 
 interface Document {
   id: string;
@@ -56,7 +49,6 @@ interface Document {
 const documents = ref<Document[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
-const createDialogVisible = ref(false);
 
 const loadDocuments = async () => {
   loading.value = true;
@@ -87,13 +79,15 @@ const openDocument = async (document: Document) => {
   }
 };
 
-const showCreateDialog = () => {
-  createDialogVisible.value = true;
-};
-
-const handleFileCreated = (artifact: any) => {
-  // 刷新文档列表
-  loadDocuments();
+const showCreateDialog = async () => {
+  // 通过后端命令打开创建文件对话框
+  try {
+    await extensionService.call('document.addFile', {});
+    // 刷新文档列表
+    loadDocuments();
+  } catch (err: any) {
+    console.error('Failed to open create file dialog', err);
+  }
 };
 
 onMounted(() => {

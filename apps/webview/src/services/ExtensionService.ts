@@ -56,10 +56,14 @@ export class ExtensionService {
       id,
     };
 
+    // 添加前端调试日志
+    console.log('[ExtensionService] Sending message:', { method, params, id });
+
     return new Promise<T>((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
 
       // 发送消息到 Extension
+      console.log('[ExtensionService] postMessage called with:', message);
       this.vscode.postMessage(message);
 
       // 设置超时

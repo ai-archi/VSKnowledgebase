@@ -395,6 +395,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     // 设置 webview 消息处理器
     panel.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
+        this.logger.info(`[BaseFileTreeCommands] Received message in createFolder dialog: ${message.method}`, { id: message.id, params: message.params });
         if (message.method === 'close') {
           panel.dispose();
           return;
@@ -408,6 +409,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           }
           return;
         }
+        this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`);
         await this.webviewAdapter.handleMessage(panel.webview, message);
       },
       null,
