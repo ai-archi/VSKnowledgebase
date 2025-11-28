@@ -429,10 +429,19 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           return;
         }
         if (message.method === 'folderCreated') {
-          const { vaultName, folderPath } = message.params || {};
+          const { vaultName, folderPath, parentFolderPath } = message.params || {};
           if (vaultName) {
+            this.logger.info('[BaseFileTreeCommands] Folder created, refreshing view', {
+              vaultName,
+              folderPath,
+              parentFolderPath
+            });
             this.treeViewProvider.refresh();
-            await this.expandNode(vaultName, folderPath);
+            // 展开父文件夹或新创建的文件夹
+            const pathToExpand = parentFolderPath || folderPath || '';
+            if (pathToExpand) {
+              await this.expandNode(vaultName, pathToExpand);
+            }
             this.treeViewProvider.refresh();
           }
           return;

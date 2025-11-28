@@ -509,12 +509,15 @@ const handleCreate = async () => {
     if (window.acquireVsCodeApi) {
       const vscode = window.acquireVsCodeApi();
       const vault = vaults.value.find(v => v.id === formData.value.vaultId);
-      const folderPath = initialFolderPath.value || '';
+      // 使用创建结果中的路径，这是相对于 artifacts 目录的路径
+      const createdFolderPath = result?.folderPath || result?.path || '';
+      const parentFolderPath = initialFolderPath.value || '';
       vscode.postMessage({ 
         method: 'folderCreated',
         params: {
           vaultName: vault?.name,
-          folderPath: folderPath,
+          folderPath: createdFolderPath,
+          parentFolderPath: parentFolderPath,
         }
       });
     }

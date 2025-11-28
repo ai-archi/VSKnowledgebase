@@ -51,6 +51,18 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         this.treeViewProvider.refresh();
       }
     });
+
+    // 监听文件夹创建事件，自动刷新视图
+    eventBus.on('folder:created', async (data: { vaultName: string; folderPath: string; parentFolderPath: string }) => {
+      this.logger.info('Folder created event received, refreshing view', data);
+      this.treeViewProvider.refresh();
+      if (data.vaultName) {
+        // 展开父文件夹或新创建的文件夹
+        const pathToExpand = data.parentFolderPath || data.folderPath;
+        await this.expandNode(data.vaultName, pathToExpand);
+        this.treeViewProvider.refresh();
+      }
+    });
       }
 
   // ==================== 实现抽象方法 ====================

@@ -147,6 +147,23 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       ? folderName
       : `${folderPath}/${folderName}`;
 
+    // 如果创建成功，发送事件通知视图刷新
+    if (createResult.success) {
+      this.logger.info('[DocumentApplicationService] Folder created successfully', {
+        vaultName: vaultResult.value.name,
+        relativePath
+      });
+      this.eventBus.emit('folder:created', {
+        vaultName: vaultResult.value.name,
+        folderPath: relativePath,
+        parentFolderPath: folderPath,
+      });
+      this.logger.info('[DocumentApplicationService] folder:created event emitted', {
+        vaultName: vaultResult.value.name,
+        folderPath: relativePath
+      });
+    }
+
     return { success: true, value: relativePath };
   }
 
