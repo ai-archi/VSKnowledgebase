@@ -57,7 +57,7 @@ export class TemplateTreeDataProvider extends BaseArtifactTreeViewProvider<Templ
       filePath,
       contextValue
     );
-  }
+        }
 
   protected getItemContextValue(
     item: TemplateTreeItem | undefined,
@@ -88,7 +88,7 @@ export class TemplateTreeDataProvider extends BaseArtifactTreeViewProvider<Templ
       return new vscode.ThemeIcon('file-code');
     } else if (ext === '.md') {
       return new vscode.ThemeIcon('markdown');
-    } else {
+        } else {
       return new vscode.ThemeIcon('file');
     }
   }

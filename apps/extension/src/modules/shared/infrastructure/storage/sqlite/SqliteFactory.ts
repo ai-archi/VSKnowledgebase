@@ -2,6 +2,7 @@ import knex, { Knex } from 'knex';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Logger } from '../../../../../core/logger/Logger';
+import { getKnexConfig } from './knexfile';
 
 /**
  * SQLite 连接工厂
@@ -28,12 +29,9 @@ export class SqliteFactory {
 
     try {
       // 使用 Knex 的 better-sqlite3 客户端
+      const config = getKnexConfig(dbPath);
       const knexInstance = knex({
-        client: 'better-sqlite3',
-        connection: {
-          filename: dbPath,
-        },
-        useNullAsDefault: true,
+        ...config,
         log: {
           warn: (message) => logger?.warn(message),
           error: (message) => logger?.error(message),
@@ -55,6 +53,39 @@ export class SqliteFactory {
       }
       throw error;
     }
+  }
+
+  /**
+   * 执行数据库迁移
+   * @param dbPath 数据库文件路径
+   * @param logger 日志记录器
+   */
+  static async runMigrations(dbPath: string, logger?: Logger): Promise<void> {
+    const knexInstance = this.createConnection(dbPath, logger);
+    
+    try {
+      logger?.info('Running database migrations...');
+      const [batchNo, log] = await knexInstance.migrate.latest();
+      
+      if (log.length === 0) {
+        logger?.info('Database is up to date. No migrations to run.');
+      } else {
+        logger?.info(`Migrations completed. Batch: ${batchNo}, Files: ${log.join(', ')}`);
+      }
+    } catch (error: any) {
+      logger?.error('Migration failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取迁移状态
+   * @param dbPath 数据库文件路径
+   * @param logger 日志记录器
+   */
+  static async getMigrationStatus(dbPath: string, logger?: Logger): Promise<any> {
+    const knexInstance = this.createConnection(dbPath, logger);
+    return await knexInstance.migrate.status();
   }
 
   /**

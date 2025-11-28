@@ -25,40 +25,10 @@ export class Fts5SearchUtils {
     }
     this.knex = SqliteFactory.createConnection(this.dbPath, this.logger);
 
-    // 创建 FTS5 虚拟表
-    await this.knex.raw(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS artifact_fts USING fts5(
-        artifact_id UNINDEXED,
-        title,
-        description,
-        content='artifact_metadata_index',
-        content_rowid='rowid',
-        tokenize='unicode61'
-      )
-    `);
-
-    // 创建触发器保持 FTS5 表与主表同步
-    await this.knex.raw(`
-      CREATE TRIGGER IF NOT EXISTS artifact_fts_insert AFTER INSERT ON artifact_metadata_index BEGIN
-        INSERT INTO artifact_fts(rowid, artifact_id, title, description) 
-        VALUES (new.rowid, new.artifact_id, new.title, new.description);
-      END
-    `);
-
-    await this.knex.raw(`
-      CREATE TRIGGER IF NOT EXISTS artifact_fts_delete AFTER DELETE ON artifact_metadata_index BEGIN
-        DELETE FROM artifact_fts WHERE rowid = old.rowid;
-      END
-    `);
-
-    await this.knex.raw(`
-      CREATE TRIGGER IF NOT EXISTS artifact_fts_update AFTER UPDATE ON artifact_metadata_index BEGIN
-        DELETE FROM artifact_fts WHERE rowid = old.rowid;
-        INSERT INTO artifact_fts(rowid, artifact_id, title, description) 
-        VALUES (new.rowid, new.artifact_id, new.title, new.description);
-      END
-    `);
-
+    // FTS5 虚拟表和触发器已通过迁移创建
+    // 这里只需要确保连接已建立，并同步现有数据到 FTS5 索引
+    // 如果表已存在，同步操作是安全的（不会重复插入）
+    
     this.initialized = true;
     this.logger?.info('FTS5 search initialized successfully.');
   }

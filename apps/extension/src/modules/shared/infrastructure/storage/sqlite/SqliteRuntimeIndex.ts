@@ -22,90 +22,14 @@ export class SqliteRuntimeIndex {
 
   async initialize(): Promise<void> {
     this.knex = SqliteFactory.createConnection(this.dbPath, this.logger);
-    await this.createTables();
+    
+    // 使用 Knex 迁移系统初始化数据库结构
+    await SqliteFactory.runMigrations(this.dbPath, this.logger);
+    
+    // FTS5 初始化（迁移已创建表结构，这里只需要确保连接）
     await this.fts5SearchUtils.initialize();
+    
     this.logger?.info('SqliteRuntimeIndex initialized successfully.');
-  }
-
-  private async createTables(): Promise<void> {
-    if (!this.knex) {
-      throw new Error('Database not initialized');
-    }
-    this.logger?.info('Creating SQLite tables...');
-
-    // 创建元数据索引表
-    await this.knex.schema.createTableIfNotExists('artifact_metadata_index', (table) => {
-      table.string('id').primary();
-      table.string('artifact_id').notNullable();
-      table.string('vault_id').notNullable();
-      table.string('vault_name').notNullable();
-      table.string('type');
-      table.string('category');
-      table.text('tags'); // SQLite 使用 TEXT 存储 JSON
-      table.text('links');
-      table.text('related_artifacts');
-      table.text('related_code_paths');
-      table.text('related_components');
-      table.string('author');
-      table.string('owner');
-      table.text('reviewers');
-      table.text('properties');
-      table.timestamp('created_at').notNullable();
-      table.timestamp('updated_at').notNullable();
-      table.string('metadata_file_path').notNullable();
-      table.string('title'); // 新增：用于 FTS5 搜索
-      table.text('description'); // 新增：用于 FTS5 搜索
-    });
-
-    // 创建索引（如果不存在）
-    await this.createIndexIfNotExists('artifact_metadata_index', 'artifact_id');
-    await this.createIndexIfNotExists('artifact_metadata_index', 'vault_id');
-    await this.createIndexIfNotExists('artifact_metadata_index', 'type');
-    await this.createIndexIfNotExists('artifact_metadata_index', 'category');
-
-    // 创建链接索引表
-    await this.knex.schema.createTableIfNotExists('artifact_links', (table) => {
-      table.string('id').primary();
-      table.string('source_artifact_id').notNullable();
-      table.string('target_type').notNullable();
-      table.string('target_id');
-      table.string('target_path');
-      table.string('target_url');
-      table.string('link_type').notNullable();
-      table.string('description');
-      table.string('strength');
-      table.text('code_location'); // SQLite 使用 TEXT 存储 JSON
-      table.string('vault_id').notNullable();
-      table.timestamp('created_at').notNullable();
-      table.timestamp('updated_at').notNullable();
-    });
-
-    // 创建索引（如果不存在）
-    await this.createIndexIfNotExists('artifact_links', 'source_artifact_id');
-    await this.createIndexIfNotExists('artifact_links', 'target_path');
-    await this.createIndexIfNotExists('artifact_links', 'link_type');
-    await this.createIndexIfNotExists('artifact_links', 'vault_id');
-
-    this.logger?.info('SQLite tables created.');
-  }
-
-  /**
-   * 创建索引（如果不存在）
-   * 使用 SQL 的 CREATE INDEX IF NOT EXISTS 语法，保证等幂性
-   */
-  private async createIndexIfNotExists(tableName: string, columnName: string): Promise<void> {
-    if (!this.knex) {
-      throw new Error('Database not initialized');
-    }
-
-    const indexName = `${tableName}_${columnName}_index`;
-
-    // 使用 SQL 原生语法 CREATE INDEX IF NOT EXISTS，保证等幂性
-    await this.knex.raw(
-      `CREATE INDEX IF NOT EXISTS ?? ON ?? (??)`,
-      [indexName, tableName, columnName]
-    );
-    this.logger?.debug(`Index ${indexName} ensured (created if not exists).`);
   }
 
   async syncFromYaml(
