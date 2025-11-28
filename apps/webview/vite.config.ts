@@ -16,7 +16,6 @@ export default defineConfig({
     assetsInlineLimit: 0, // 不内联资源，确保所有资源文件都被复制
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
         'create-file-dialog': resolve(__dirname, 'create-file-dialog.html'),
         'create-folder-dialog': resolve(__dirname, 'create-folder-dialog.html'),
       },

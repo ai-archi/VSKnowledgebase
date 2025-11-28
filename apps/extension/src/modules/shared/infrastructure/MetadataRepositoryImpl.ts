@@ -1,11 +1,14 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { MetadataRepository } from './MetadataRepository';
+import { MetadataRepository, CreateMetadataOptions } from './MetadataRepository';
 import { ArtifactMetadata } from '../domain/ArtifactMetadata';
 import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { YamlMetadataRepository } from './storage/yaml/YamlMetadataRepository';
 import { VaultRepository } from './VaultRepository';
 import { ConfigManager } from '../../../core/config/ConfigManager';
+import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';
+import { SqliteRuntimeIndex } from './storage/sqlite/SqliteRuntimeIndex';
+import { Logger } from '../../../core/logger/Logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -15,14 +18,23 @@ export class MetadataRepositoryImpl implements MetadataRepository {
   private yamlRepos: Map<string, YamlMetadataRepository> = new Map(); // vaultName -> YamlMetadataRepository
   private vaultRepository: VaultRepository;
   private configManager: ConfigManager;
+  private fileAdapter: ArtifactFileSystemAdapter;
+  private index: SqliteRuntimeIndex;
+  private logger?: Logger;
   private metadataCache: Map<string, ArtifactMetadata> = new Map();
 
   constructor(
     @inject(TYPES.VaultRepository) vaultRepository: VaultRepository,
-    @inject(TYPES.ConfigManager) configManager: ConfigManager
+    @inject(TYPES.ConfigManager) configManager: ConfigManager,
+    @inject(TYPES.ArtifactFileSystemAdapter) fileAdapter: ArtifactFileSystemAdapter,
+    @inject(TYPES.SqliteRuntimeIndex) index: SqliteRuntimeIndex,
+    @inject(TYPES.Logger) logger?: Logger
   ) {
     this.vaultRepository = vaultRepository;
     this.configManager = configManager;
+    this.fileAdapter = fileAdapter;
+    this.index = index;
+    this.logger = logger;
   }
 
   /**
@@ -218,7 +230,7 @@ export class MetadataRepositoryImpl implements MetadataRepository {
     }
   }
 
-  async create(metadata: ArtifactMetadata): Promise<Result<ArtifactMetadata, ArtifactError>> {
+  async create(metadata: ArtifactMetadata, options?: CreateMetadataOptions): Promise<Result<ArtifactMetadata, ArtifactError>> {
     // 从 metadata 中获取 vaultName
     const vaultName = metadata.vaultName;
     if (!vaultName) {
@@ -231,16 +243,33 @@ export class MetadataRepositoryImpl implements MetadataRepository {
       };
     }
 
+    // 持久化到YAML文件（Infrastructure层职责）
     const yamlRepo = this.getYamlRepoForVault(vaultName);
-    const result = await yamlRepo.writeMetadata(metadata);
-    if (result.success) {
-      this.metadataCache.set(metadata.id, metadata);
-      return { success: true, value: metadata };
+    const writeResult = await yamlRepo.writeMetadata(metadata);
+    if (!writeResult.success) {
+      return { success: false, error: writeResult.error };
     }
-    return { success: false, error: result.error };
+
+    // 同步到索引（Infrastructure层职责）
+    try {
+      const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadata.id);
+      await this.index.syncFromYaml(
+        metadata,
+        metadataPath,
+        options?.title,
+        options?.description
+      );
+    } catch (error: any) {
+      this.logger?.warn('Failed to sync metadata to index', error);
+      // 索引同步失败不影响元数据持久化，只记录警告
+    }
+
+    // 更新缓存
+    this.metadataCache.set(metadata.id, metadata);
+    return { success: true, value: metadata };
   }
 
-  async update(metadata: ArtifactMetadata): Promise<Result<ArtifactMetadata, ArtifactError>> {
+  async update(metadata: ArtifactMetadata, options?: CreateMetadataOptions): Promise<Result<ArtifactMetadata, ArtifactError>> {
     // 从 metadata 中获取 vaultName
     const vaultName = metadata.vaultName;
     if (!vaultName) {
@@ -255,25 +284,55 @@ export class MetadataRepositoryImpl implements MetadataRepository {
           ),
         };
       }
+      // 持久化到YAML文件（Infrastructure层职责）
       const yamlRepo = this.getYamlRepoForVault(foundVaultName);
-      const result = await yamlRepo.writeMetadata(metadata);
-      if (result.success) {
-        this.metadataCache.set(metadata.id, metadata);
-        return { success: true, value: metadata };
+      const writeResult = await yamlRepo.writeMetadata(metadata);
+      if (!writeResult.success) {
+        return { success: false, error: writeResult.error };
       }
-      return { success: false, error: result.error };
-    }
 
-    const yamlRepo = this.getYamlRepoForVault(vaultName);
-    const result = await yamlRepo.writeMetadata(metadata);
-    if (result.success) {
+      // 同步到索引（Infrastructure层职责）
+      try {
+        const metadataPath = this.fileAdapter.getMetadataPath(foundVaultName, metadata.id);
+        await this.index.syncFromYaml(
+          metadata,
+          metadataPath,
+          options?.title,
+          options?.description
+        );
+      } catch (error: any) {
+        this.logger?.warn('Failed to sync metadata to index', error);
+      }
+
       this.metadataCache.set(metadata.id, metadata);
       return { success: true, value: metadata };
     }
-    return { success: false, error: result.error };
+
+    // 持久化到YAML文件（Infrastructure层职责）
+    const yamlRepo = this.getYamlRepoForVault(vaultName);
+    const writeResult = await yamlRepo.writeMetadata(metadata);
+    if (!writeResult.success) {
+      return { success: false, error: writeResult.error };
+    }
+
+    // 同步到索引（Infrastructure层职责）
+    try {
+      const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadata.id);
+      await this.index.syncFromYaml(
+        metadata,
+        metadataPath,
+        options?.title,
+        options?.description
+      );
+    } catch (error: any) {
+      this.logger?.warn('Failed to sync metadata to index', error);
+    }
+
+    this.metadataCache.set(metadata.id, metadata);
+    return { success: true, value: metadata };
   }
 
-  async delete(metadataId: string): Promise<Result<void, ArtifactError>> {
+  async delete(metadataId: string, artifactId?: string): Promise<Result<void, ArtifactError>> {
     // 查找 metadata 所在的 vault
     const vaultName = await this.findVaultForMetadata(metadataId);
     if (!vaultName) {
@@ -283,12 +342,25 @@ export class MetadataRepositoryImpl implements MetadataRepository {
       };
     }
 
+    // 从YAML文件删除（Infrastructure层职责）
     const yamlRepo = this.getYamlRepoForVault(vaultName);
-    const result = await yamlRepo.deleteMetadata(metadataId);
-    if (result.success) {
-      this.metadataCache.delete(metadataId);
+    const deleteResult = await yamlRepo.deleteMetadata(metadataId);
+    if (!deleteResult.success) {
+      return deleteResult;
     }
-    return result;
+
+    // 从索引中删除（Infrastructure层职责）
+    if (artifactId) {
+      try {
+        await this.index.removeFromIndex(artifactId);
+      } catch (error: any) {
+        this.logger?.warn('Failed to remove metadata from index', error);
+        // 索引删除失败不影响元数据删除，只记录警告
+      }
+    }
+
+    this.metadataCache.delete(metadataId);
+    return { success: true, value: undefined };
   }
 }
 

@@ -4,19 +4,19 @@
     <div class="header-section">
       <div class="action-buttons-section">
         <el-button-group>
-          <el-button @click="generatePrompt('summarize')" :disabled="selectedFiles.length === 0">
+          <el-button @click="generatePrompt('summarize')" :disabled="!canCreate">
             总结
           </el-button>
-          <el-button @click="generatePrompt('refactor')" :disabled="selectedFiles.length === 0">
+          <el-button @click="generatePrompt('refactor')" :disabled="!canCreate">
             重构
           </el-button>
-          <el-button @click="generatePrompt('review')" :disabled="selectedFiles.length === 0">
+          <el-button @click="generatePrompt('review')" :disabled="!canCreate">
             检查
           </el-button>
-          <el-button @click="generatePrompt('analyze')" :disabled="selectedFiles.length === 0">
+          <el-button @click="generatePrompt('analyze')" :disabled="!canCreate">
             分析
           </el-button>
-          <el-button @click="generatePrompt('optimize')" :disabled="selectedFiles.length === 0">
+          <el-button @click="generatePrompt('optimize')" :disabled="!canCreate">
             优化
           </el-button>
         </el-button-group>
@@ -38,7 +38,7 @@
       <el-form :model="formData" label-width="100px" label-position="left">
         <el-form-item label="文件夹名称" :required="true">
           <template #label>
-            <span>文件夹名称<span style="color: var(--vscode-inputValidation-errorForeground, #f14c4c); margin-left: 4px;">*</span></span>
+            <span>文件夹名称</span>
           </template>
           <el-input
             v-model="formData.folderName"
@@ -187,8 +187,6 @@ import {
   ElOption,
   ElForm,
   ElFormItem,
-  ElRow,
-  ElCol,
   ElIcon,
   ElEmpty,
   ElTag,
@@ -537,8 +535,8 @@ const handleCreate = async () => {
 };
 
 const generatePrompt = (action: string) => {
-  if (selectedFiles.value.length === 0) {
-    ElMessage.warning('请先选择文件');
+  if (!canCreate.value) {
+    ElMessage.warning('请先输入文件夹名称并选择 Vault');
     return;
   }
 
@@ -551,28 +549,41 @@ const generatePrompt = (action: string) => {
   };
 
   const actionName = actionMap[action] || action;
-  const fileNames = selectedFiles.value.map(f => f.title || f.name).join('、');
-  const filePaths = selectedFiles.value.map(f => f.path).join('\n');
+  
+  let fileNames = '';
+  let filePaths = '';
+  let targetInfo = '';
+
+  if (selectedFiles.value.length > 0) {
+    // 如果有选中的文件，使用选中的文件
+    fileNames = selectedFiles.value.map(f => f.title || f.name).join('、');
+    filePaths = selectedFiles.value.map(f => f.path).join('\n');
+    targetInfo = `文件：${fileNames}\n\n路径：\n${filePaths}`;
+  } else if (formData.value.folderName.trim() !== '') {
+    // 如果输入框有内容，使用输入框的内容
+    const folderName = formData.value.folderName.trim();
+    targetInfo = `文件夹/路径：${folderName}`;
+  }
 
   let prompt = '';
   switch (action) {
     case 'summarize':
-      prompt = `请总结以下文件的内容：\n\n文件：${fileNames}\n\n路径：\n${filePaths}`;
+      prompt = `请总结以下内容：\n\n${targetInfo}`;
       break;
     case 'refactor':
-      prompt = `请重构以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请提供重构建议和优化方案。`;
+      prompt = `请重构以下内容：\n\n${targetInfo}\n\n请提供重构建议和优化方案。`;
       break;
     case 'review':
-      prompt = `请检查以下文件的代码质量和潜在问题：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请提供代码审查意见。`;
+      prompt = `请检查以下内容的代码质量和潜在问题：\n\n${targetInfo}\n\n请提供代码审查意见。`;
       break;
     case 'analyze':
-      prompt = `请分析以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请分析文件结构、依赖关系和设计模式。`;
+      prompt = `请分析以下内容：\n\n${targetInfo}\n\n请分析文件结构、依赖关系和设计模式。`;
       break;
     case 'optimize':
-      prompt = `请优化以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请提供性能优化和代码优化建议。`;
+      prompt = `请优化以下内容：\n\n${targetInfo}\n\n请提供性能优化和代码优化建议。`;
       break;
     default:
-      prompt = `${actionName}以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}`;
+      prompt = `${actionName}以下内容：\n\n${targetInfo}`;
   }
 
   // 复制到剪贴板
@@ -652,158 +663,6 @@ const generatePrompt = (action: string) => {
 
 .template-hint {
   margin-top: 4px;
-}
-
-/* Element Plus 组件样式覆盖，使用 VSCode 主题 */
-
-/* 输入框样式 */
-:deep(.el-input__wrapper) {
-  background-color: var(--vscode-input-background, #3c3c3c) !important;
-  border-color: var(--vscode-input-border, #3e3e3e) !important;
-  box-shadow: 0 0 0 1px var(--vscode-input-border, #3e3e3e) inset !important;
-}
-
-:deep(.el-input__wrapper:hover) {
-  border-color: var(--vscode-inputOption-hoverBorder, #4ec9b0) !important;
-  box-shadow: 0 0 0 1px var(--vscode-inputOption-hoverBorder, #4ec9b0) inset !important;
-}
-
-:deep(.el-input.is-focus .el-input__wrapper) {
-  border-color: var(--vscode-inputOption-activeBorder, #4ec9b0) !important;
-  box-shadow: 0 0 0 1px var(--vscode-inputOption-activeBorder, #4ec9b0) inset !important;
-}
-
-:deep(.el-input__inner) {
-  color: var(--vscode-input-foreground, #cccccc) !important;
-}
-
-:deep(.el-input__inner::placeholder) {
-  color: var(--vscode-input-placeholderForeground, #999999) !important;
-}
-
-/* 选择框样式 */
-:deep(.el-select .el-input__wrapper) {
-  background-color: var(--vscode-input-background, #3c3c3c) !important;
-  border-color: var(--vscode-input-border, #3e3e3e) !important;
-  box-shadow: 0 0 0 1px var(--vscode-input-border, #3e3e3e) inset !important;
-}
-
-:deep(.el-select .el-input__wrapper:hover) {
-  border-color: var(--vscode-inputOption-hoverBorder, #4ec9b0) !important;
-  box-shadow: 0 0 0 1px var(--vscode-inputOption-hoverBorder, #4ec9b0) inset !important;
-}
-
-:deep(.el-select.is-focus .el-input__wrapper) {
-  border-color: var(--vscode-inputOption-activeBorder, #4ec9b0) !important;
-  box-shadow: 0 0 0 1px var(--vscode-inputOption-activeBorder, #4ec9b0) inset !important;
-}
-
-:deep(.el-select .el-input__inner) {
-  color: var(--vscode-input-foreground, #cccccc) !important;
-}
-
-:deep(.el-select .el-input__suffix .el-icon) {
-  color: var(--vscode-foreground, #cccccc) !important;
-}
-
-/* 按钮样式 */
-:deep(.el-button) {
-  background-color: var(--vscode-button-secondaryBackground, #3c3c3c) !important;
-  border-color: var(--vscode-button-border, #3e3e3e) !important;
-  color: var(--vscode-button-secondaryForeground, #cccccc) !important;
-}
-
-:deep(.el-button:hover) {
-  background-color: var(--vscode-button-secondaryHoverBackground, #4c4c4c) !important;
-  border-color: var(--vscode-button-hoverBorder, #4ec9b0) !important;
-  color: var(--vscode-button-secondaryForeground, #ffffff) !important;
-}
-
-:deep(.el-button:active) {
-  background-color: var(--vscode-button-secondaryHoverBackground, #2c2c2c) !important;
-}
-
-:deep(.el-button.is-disabled) {
-  background-color: var(--vscode-button-secondaryBackground, #2c2c2c) !important;
-  border-color: var(--vscode-button-border, #2e2e2e) !important;
-  color: var(--vscode-disabledForeground, #666666) !important;
-  opacity: 0.5;
-}
-
-:deep(.el-button--primary) {
-  background-color: var(--vscode-button-background, #0e639c) !important;
-  border-color: var(--vscode-button-background, #0e639c) !important;
-  color: var(--vscode-button-foreground, #ffffff) !important;
-}
-
-:deep(.el-button--primary:hover) {
-  background-color: var(--vscode-button-hoverBackground, #1177bb) !important;
-  border-color: var(--vscode-button-hoverBackground, #1177bb) !important;
-}
-
-:deep(.el-button--danger) {
-  background-color: var(--vscode-errorForeground, #f48771) !important;
-  border-color: var(--vscode-errorForeground, #f48771) !important;
-  color: #ffffff !important;
-}
-
-:deep(.el-button--danger:hover) {
-  background-color: var(--vscode-errorForeground, #ff6b5a) !important;
-  border-color: var(--vscode-errorForeground, #ff6b5a) !important;
-}
-
-/* 表单项标签样式 */
-:deep(.el-form-item__label) {
-  color: var(--vscode-foreground, #cccccc) !important;
-}
-
-/* 标签样式 */
-:deep(.el-tag) {
-  background-color: var(--vscode-badge-background, #3c3c3c) !important;
-  border-color: var(--vscode-panel-border, #3e3e3e) !important;
-  color: var(--vscode-foreground, #cccccc) !important;
-}
-
-:deep(.el-tag--success) {
-  background-color: var(--vscode-testing-iconPassed, #4ec9b0) !important;
-  border-color: var(--vscode-testing-iconPassed, #4ec9b0) !important;
-  color: #ffffff !important;
-}
-
-/* 空状态样式 */
-:deep(.el-empty) {
-  color: var(--vscode-descriptionForeground, #999999) !important;
-}
-
-:deep(.el-empty__description) {
-  color: var(--vscode-descriptionForeground, #999999) !important;
-}
-
-/* 增强下拉框样式，使用 VSCode 主题 */
-:deep(.el-select-dropdown) {
-  background-color: var(--vscode-editor-background, #1e1e1e) !important;
-  border-color: var(--vscode-panel-border, #3e3e3e) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-}
-
-:deep(.el-select-dropdown__item) {
-  color: var(--vscode-foreground, #cccccc) !important;
-  background-color: transparent !important;
-}
-
-:deep(.el-select-dropdown__item:hover) {
-  color: var(--vscode-list-hoverForeground, var(--vscode-foreground, #ffffff)) !important;
-  background-color: var(--vscode-list-hoverBackground, #2a2d2e) !important;
-}
-
-:deep(.el-select-dropdown__item.is-selected) {
-  color: var(--vscode-list-activeSelectionForeground, #ffffff) !important;
-  background-color: var(--vscode-list-activeSelectionBackground, #094771) !important;
-}
-
-:deep(.el-select-dropdown__item.is-selected:hover) {
-  color: var(--vscode-list-activeSelectionForeground, #ffffff) !important;
-  background-color: var(--vscode-list-activeSelectionBackground, #094771) !important;
 }
 
 /* 下方区域 */

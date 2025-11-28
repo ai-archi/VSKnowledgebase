@@ -78,16 +78,13 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       updatedAt: now,
     };
 
-    const metadataResult = await this.metadataRepo.create(metadata);
+    // Repository负责完整的持久化流程（包括文件持久化和索引同步）
+    const metadataResult = await this.metadataRepo.create(metadata, {
+      title: artifact.title,
+      description: artifact.description,
+    });
     if (!metadataResult.success) {
       return metadataResult;
-    }
-
-    try {
-      const metadataPath = this.fileAdapter.getMetadataPath(opts.vault.name, metadataId);
-      await this.index.syncFromYaml(metadata, metadataPath, artifact.title, artifact.description);
-    } catch (error: any) {
-      this.logger.warn('Failed to sync to index', error);
     }
 
     return { success: true, value: artifact };
@@ -335,20 +332,13 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       }
 
       // 删除 metadata 文件（如果存在）
+      // Repository负责完整的删除流程（包括从索引中删除）
       if (artifact.metadataId) {
-        const metadataResult = await this.metadataRepo.delete(artifact.metadataId);
+        const metadataResult = await this.metadataRepo.delete(artifact.metadataId, artifact.id);
         if (!metadataResult.success) {
           // metadata 删除失败不影响主流程，只记录日志
           this.logger.warn(`Failed to delete metadata: ${artifact.metadataId}`, metadataResult.error);
         }
-      }
-
-      // 从索引中删除
-      try {
-        await this.index.removeFromIndex(artifact.id);
-      } catch (error: any) {
-        // 索引删除失败不影响主流程，只记录日志
-        this.logger.warn(`Failed to delete artifact from index: ${artifact.id}`, error);
       }
 
       this.logger.info(`Artifact deleted: ${artifact.path} (${artifact.id})`);

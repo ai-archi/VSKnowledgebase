@@ -1,6 +1,8 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import ElementPlus from 'element-plus';
+// 先导入 VSCode 主题样式，覆盖 Element Plus 的 CSS 变量
+import './styles/vscode-theme.css';
 import 'element-plus/dist/index.css';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import CreateFileDialogPage from './CreateFileDialogPage.vue';
