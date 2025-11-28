@@ -5,7 +5,7 @@ category: project
 viewType: document
 structure:
   - type: directory
-    name: {{folderName}}
+    name: "{{folderName}}"
     description: 项目根目录
     children:
       - type: directory

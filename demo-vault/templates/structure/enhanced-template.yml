@@ -5,7 +5,7 @@ category: example
 viewType: document
 structure:
   - type: directory
-    name: {{folderName}}
+    name: "{{folderName}}"
     description: 项目根目录
     children:
       - type: directory
@@ -48,7 +48,7 @@ structure:
         description: 配置文件目录
         children:
           - type: file
-            name: {{folderName}}.config.json
+            name: "{{folderName}}.config.json"
             fileType: json
             template: demo-vault/templates/content/config-template.json
             description: 项目配置文件
