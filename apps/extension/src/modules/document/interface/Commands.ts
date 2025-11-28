@@ -11,6 +11,7 @@ import { BaseFileTreeCommands } from '../../shared/interface/commands/BaseFileTr
 import { FileTreeDomainService } from '../../shared/domain/services/FileTreeDomainService';
 import { FileOperationDomainService } from '../../shared/domain/services/FileOperationDomainService';
 import { PathUtils } from '../../shared/infrastructure/utils/PathUtils';
+import { EventBus } from '../../../core/eventbus/EventBus';
 import * as path from 'path';
 
 export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
@@ -25,7 +26,8 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     context: vscode.ExtensionContext,
     treeViewProvider: DocumentTreeViewProvider,
     treeView: vscode.TreeView<vscode.TreeItem>,
-    webviewAdapter: WebviewAdapter
+    webviewAdapter: WebviewAdapter,
+    eventBus: EventBus
   ) {
     super(
       vaultService,
@@ -39,6 +41,16 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       treeView,
       webviewAdapter
     );
+
+    // 监听文档创建事件，自动刷新视图
+    eventBus.on('document:created', async (data: { artifact: any; vaultName: string; folderPath: string }) => {
+      this.logger.info('Document created event received, refreshing view', data);
+      this.treeViewProvider.refresh();
+      if (data.vaultName && data.folderPath) {
+        await this.expandNode(data.vaultName, data.folderPath);
+        this.treeViewProvider.refresh();
+      }
+    });
       }
 
   // ==================== 实现抽象方法 ====================

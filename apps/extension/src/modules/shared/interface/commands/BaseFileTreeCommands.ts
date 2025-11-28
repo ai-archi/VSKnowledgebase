@@ -294,15 +294,32 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     let initialFolderPath: string | undefined;
 
     if (item) {
-      if (item.vaultName) {
+      // 优先使用 item.vaultId，如果没有则通过 vaultName 查找
+      if (item.vaultId) {
+        initialVaultId = item.vaultId;
+      } else if (item.vaultName) {
         const vault = await this.findVaultByName(item.vaultName);
         if (vault) {
           initialVaultId = vault.id;
         }
       }
-      if (item.folderPath) {
+      // 只有在文件夹节点或文件节点时才设置 folderPath
+      // vault 节点的 folderPath 应该是 undefined
+      // 明确检查：只有当 folderPath 是有效的非空字符串时才设置
+      if (item.folderPath !== undefined && item.folderPath !== null && item.folderPath !== '') {
         initialFolderPath = item.folderPath;
+      } else {
+        // 确保 vault 节点时 folderPath 是 undefined
+        initialFolderPath = undefined;
       }
+      
+      this.logger.info('[BaseFileTreeCommands] Creating file dialog with context', {
+        vaultId: initialVaultId,
+        vaultName: item.vaultName,
+        itemFolderPath: item.folderPath,
+        initialFolderPath,
+        isVault: item.folderPath === undefined && item.filePath === undefined
+      });
     }
 
     // 创建新的 webview panel
@@ -322,10 +339,21 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     // 设置 webview 消息处理器
     panel.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
+        this.logger.info(`[BaseFileTreeCommands] Received message in createFile dialog: ${message.method}`, { id: message.id, params: message.params });
         if (message.method === 'close') {
           panel.dispose();
           return;
         }
+        if (message.method === 'fileCreated') {
+          const { vaultName, folderPath } = message.params || {};
+          if (vaultName) {
+            this.treeViewProvider.refresh();
+            await this.expandNode(vaultName, folderPath);
+            this.treeViewProvider.refresh();
+          }
+          return;
+        }
+        this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`);
         await this.webviewAdapter.handleMessage(panel.webview, message);
       },
       null,

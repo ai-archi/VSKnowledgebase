@@ -140,6 +140,7 @@ export async function activate(context: vscode.ExtensionContext) {
     artifactService,
     codeFileService
   );
+  const eventBus = container.get<import('./core/eventbus/EventBus').EventBus>(TYPES.EventBus);
   const documentCommands = new DocumentCommands(
     documentService,
     artifactService,
@@ -151,7 +152,8 @@ export async function activate(context: vscode.ExtensionContext) {
     context,
     documentTreeViewProvider,
     documentTreeView,
-    webviewRPC.getAdapter()
+    webviewRPC.getAdapter(),
+    eventBus
   );
   documentCommands.register(commandAdapter);
 

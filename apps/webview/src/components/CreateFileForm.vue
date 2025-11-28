@@ -305,9 +305,18 @@ onMounted(() => {
     if (initialData.vaultId) {
       formData.value.vaultId = initialData.vaultId;
     }
-    if (initialData.folderPath) {
+    // 只有当 folderPath 是有效的非空字符串时才设置
+    // vault 节点的 folderPath 应该是 undefined 或 null
+    if (initialData.folderPath && typeof initialData.folderPath === 'string' && initialData.folderPath.trim() !== '') {
       initialFolderPath.value = initialData.folderPath;
+    } else {
+      initialFolderPath.value = undefined;
     }
+    console.log('[CreateFileForm] Initial data loaded', {
+      vaultId: initialData.vaultId,
+      folderPath: initialData.folderPath,
+      initialFolderPath: initialFolderPath.value
+    });
   }
   loadVaults();
   // 如果有初始 vaultId，加载模板和文件
@@ -442,30 +451,105 @@ const handleCreate = async () => {
 
   try {
     creating.value = true;
-    // 构建文件路径，如果有初始文件夹路径，则包含它
-    let filePath = `${formData.value.fileType}/${formData.value.fileName}.md`;
-    if (initialFolderPath.value) {
-      filePath = `${initialFolderPath.value}/${filePath}`;
+    // 根据文件类型确定扩展名
+    const getExtension = (fileType: string): string => {
+      switch (fileType) {
+        case 'document':
+          return 'md';
+        case 'diagram':
+          return 'mmd';
+        case 'design':
+          return 'md';
+        default:
+          return 'md';
+      }
+    };
+    
+    const extension = getExtension(formData.value.fileType);
+    const fileName = formData.value.fileName.trim();
+    
+    // 构建文件路径：如果有初始文件夹路径，在文件夹下创建；否则在根目录创建
+    let filePath: string;
+    // 确保 initialFolderPath 是有效的非空字符串
+    const folderPath = initialFolderPath.value && typeof initialFolderPath.value === 'string' && initialFolderPath.value.trim() !== ''
+      ? initialFolderPath.value.trim()
+      : undefined;
+    
+    if (folderPath) {
+      // 在文件夹下创建：文件夹路径/文件名.扩展名
+      filePath = `${folderPath}/${fileName}.${extension}`;
+    } else {
+      // 在 vault 根目录创建：文件名.扩展名
+      filePath = `${fileName}.${extension}`;
     }
+    
+    console.log('[CreateFileForm] Path building', {
+      initialFolderPath: initialFolderPath.value,
+      folderPath,
+      fileName,
+      extension,
+      finalPath: filePath
+    });
+    
+    console.log('[CreateFileForm] Creating document', {
+      vaultId: formData.value.vaultId,
+      path: filePath,
+      title: formData.value.fileName,
+      hasTemplate: !!formData.value.templateId
+    });
+    
+    const content = formData.value.templateId
+      ? await getTemplateContent(formData.value.templateId)
+      : `# ${formData.value.fileName.trim()}\n\n`;
+    
+    console.log('[CreateFileForm] Calling document.create', {
+      vaultId: formData.value.vaultId,
+      path: filePath,
+      title: formData.value.fileName,
+      contentLength: content.length
+    });
     
     const result = await extensionService.call('document.create', {
       vaultId: formData.value.vaultId,
       path: filePath,
       title: formData.value.fileName,
-      content: formData.value.templateId
-        ? await getTemplateContent(formData.value.templateId)
-        : `# ${formData.value.fileName.trim()}\n\n`,
+      content: content,
     });
 
+    console.log('[CreateFileForm] Document created successfully', result);
     ElMessage.success('文件创建成功');
     emit('created', result);
-    // 通知后端关闭 webview
+    
+    // 通知后端刷新和展开
     if (window.acquireVsCodeApi) {
       const vscode = window.acquireVsCodeApi();
-      vscode.postMessage({ method: 'close' });
+      const vault = vaults.value.find(v => v.id === formData.value.vaultId);
+      const folderPath = initialFolderPath.value || '';
+      vscode.postMessage({ 
+        method: 'fileCreated',
+        params: {
+          vaultName: vault?.name,
+          folderPath: folderPath,
+          filePath: filePath,
+        }
+      });
     }
+    
+    // 延迟关闭，确保刷新完成
+    setTimeout(() => {
+      if (window.acquireVsCodeApi) {
+        const vscode = window.acquireVsCodeApi();
+        vscode.postMessage({ method: 'close' });
+      }
+    }, 100);
   } catch (err: any) {
-    console.error('Failed to create document', err);
+    console.error('[CreateFileForm] Failed to create document', {
+      error: err,
+      message: err.message,
+      stack: err.stack,
+      vaultId: formData.value.vaultId,
+      fileName: formData.value.fileName
+    });
     ElMessage.error(`创建文件失败: ${err.message || '未知错误'}`);
   } finally {
     creating.value = false;

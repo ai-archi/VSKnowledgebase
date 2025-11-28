@@ -9,6 +9,7 @@ import { VaultReference } from '../../shared/domain/value_object/VaultReference'
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
+import { EventBus } from '../../../core/eventbus/EventBus';
 
 @injectable()
 export class DocumentApplicationServiceImpl implements DocumentApplicationService {
@@ -20,7 +21,9 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     @inject(TYPES.ArtifactTreeApplicationService)
     private treeService: ArtifactTreeApplicationService,
     @inject(TYPES.Logger)
-    private logger: Logger
+    private logger: Logger,
+    @inject(TYPES.EventBus)
+    private eventBus: EventBus
   ) {}
 
   async listDocuments(vaultId: string): Promise<Result<Artifact[], ArtifactError>> {
@@ -37,15 +40,28 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     title: string,
     content: string
   ): Promise<Result<Artifact, ArtifactError>> {
+    this.logger.info('[DocumentApplicationService] createDocument called', {
+      vaultId,
+      artifactPath,
+      title,
+      contentLength: content.length
+    });
+
     const vaultResult = await this.vaultService.getVault(vaultId);
     if (!vaultResult.success) {
+      this.logger.error('[DocumentApplicationService] Vault not found', { vaultId });
       return {
         success: false,
         error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
       };
     }
 
-    return this.artifactService.createArtifact({
+    this.logger.info('[DocumentApplicationService] Creating artifact', {
+      vaultName: vaultResult.value.name,
+      artifactPath
+    });
+
+    const result = await this.artifactService.createArtifact({
       vault: {
         id: vaultResult.value.id,
         name: vaultResult.value.name,
@@ -55,6 +71,32 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       content,
       viewType: 'document',
     });
+
+    if (result.success) {
+      this.logger.info('[DocumentApplicationService] Artifact created successfully', {
+        id: result.value.id,
+        path: result.value.path
+      });
+      // 如果创建成功，发送事件通知视图刷新
+      const folderPath = artifactPath.substring(0, artifactPath.lastIndexOf('/')) || '';
+      this.eventBus.emit('document:created', {
+        artifact: result.value,
+        vaultName: vaultResult.value.name,
+        folderPath,
+      });
+      this.logger.info('[DocumentApplicationService] document:created event emitted', {
+        vaultName: vaultResult.value.name,
+        folderPath
+      });
+    } else {
+      this.logger.error('[DocumentApplicationService] Failed to create artifact', {
+        error: result.error.message,
+        errorCode: result.error.code,
+        artifactPath
+      });
+    }
+
+    return result;
   }
 
   async createFolder(

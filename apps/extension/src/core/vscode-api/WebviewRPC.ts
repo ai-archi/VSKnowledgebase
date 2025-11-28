@@ -114,22 +114,46 @@ export class WebviewRPC {
       title: string;
       content: string;
     }) => {
-      const result = await this.documentService.createDocument(
-        params.vaultId,
-        params.path,
-        params.title,
-        params.content
-      );
-      if (!result.success) {
-        throw new Error(result.error.message);
+      this.logger.info('[WebviewRPC] document.create called', { 
+        vaultId: params.vaultId, 
+        path: params.path, 
+        title: params.title 
+      });
+      try {
+        const result = await this.documentService.createDocument(
+          params.vaultId,
+          params.path,
+          params.title,
+          params.content
+        );
+        if (!result.success) {
+          this.logger.error('[WebviewRPC] document.create failed', { 
+            error: result.error.message,
+            vaultId: params.vaultId,
+            path: params.path
+          });
+          throw new Error(result.error.message);
+        }
+        this.logger.info('[WebviewRPC] document.create succeeded', { 
+          id: result.value.id,
+          path: result.value.path
+        });
+        return {
+          id: result.value.id,
+          path: result.value.path,
+          name: result.value.name,
+          title: result.value.title,
+          vault: result.value.vault,
+        };
+      } catch (error: any) {
+        this.logger.error('[WebviewRPC] document.create exception', { 
+          error: error.message,
+          stack: error.stack,
+          vaultId: params.vaultId,
+          path: params.path
+        });
+        throw error;
       }
-      return {
-        id: result.value.id,
-        path: result.value.path,
-        name: result.value.name,
-        title: result.value.title,
-        vault: result.value.vault,
-      };
     });
 
     this.webviewAdapter.registerMethod('document.createFolder', async (params: {
