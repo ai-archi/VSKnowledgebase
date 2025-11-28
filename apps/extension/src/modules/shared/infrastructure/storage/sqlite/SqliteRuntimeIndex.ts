@@ -55,13 +55,13 @@ export class SqliteRuntimeIndex {
       table.string('metadata_file_path').notNullable();
       table.string('title'); // 新增：用于 FTS5 搜索
       table.text('description'); // 新增：用于 FTS5 搜索
-
-      // 创建索引
-      table.index('artifact_id');
-      table.index('vault_id');
-      table.index('type');
-      table.index('category');
     });
+
+    // 创建索引（如果不存在）
+    await this.createIndexIfNotExists('artifact_metadata_index', 'artifact_id');
+    await this.createIndexIfNotExists('artifact_metadata_index', 'vault_id');
+    await this.createIndexIfNotExists('artifact_metadata_index', 'type');
+    await this.createIndexIfNotExists('artifact_metadata_index', 'category');
 
     // 创建链接索引表
     await this.knex.schema.createTableIfNotExists('artifact_links', (table) => {
@@ -78,15 +78,34 @@ export class SqliteRuntimeIndex {
       table.string('vault_id').notNullable();
       table.timestamp('created_at').notNullable();
       table.timestamp('updated_at').notNullable();
-
-      // 创建索引
-      table.index('source_artifact_id');
-      table.index('target_path');
-      table.index('link_type');
-      table.index('vault_id');
     });
 
+    // 创建索引（如果不存在）
+    await this.createIndexIfNotExists('artifact_links', 'source_artifact_id');
+    await this.createIndexIfNotExists('artifact_links', 'target_path');
+    await this.createIndexIfNotExists('artifact_links', 'link_type');
+    await this.createIndexIfNotExists('artifact_links', 'vault_id');
+
     this.logger?.info('SQLite tables created.');
+  }
+
+  /**
+   * 创建索引（如果不存在）
+   * 使用 SQL 的 CREATE INDEX IF NOT EXISTS 语法，保证等幂性
+   */
+  private async createIndexIfNotExists(tableName: string, columnName: string): Promise<void> {
+    if (!this.knex) {
+      throw new Error('Database not initialized');
+    }
+
+    const indexName = `${tableName}_${columnName}_index`;
+
+    // 使用 SQL 原生语法 CREATE INDEX IF NOT EXISTS，保证等幂性
+    await this.knex.raw(
+      `CREATE INDEX IF NOT EXISTS ?? ON ?? (??)`,
+      [indexName, tableName, columnName]
+    );
+    this.logger?.debug(`Index ${indexName} ensured (created if not exists).`);
   }
 
   async syncFromYaml(

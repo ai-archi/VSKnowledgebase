@@ -1,4 +1,4 @@
-import { ArtifactLink } from '../domain/ArtifactLink';
+import { ArtifactLink } from '../domain/entity/ArtifactLink';
 import { Result } from '../../../core/types/Result';
 import { ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { VaultFileSystemAdapter } from './storage/file/VaultFileSystemAdapter';

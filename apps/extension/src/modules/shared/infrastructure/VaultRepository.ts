@@ -1,4 +1,4 @@
-import { Vault } from '../domain/vault';
+import { Vault } from '../domain/entity/vault';
 import { Result, VaultError } from '../domain/errors';
 
 export interface VaultRepository {

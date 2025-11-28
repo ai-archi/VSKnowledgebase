@@ -26,7 +26,7 @@ import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
-import { RemoteEndpoint } from './modules/shared/domain/RemoteEndpoint';
+import { RemoteEndpoint } from './modules/shared/domain/value_object/RemoteEndpoint';
 import { GitVaultAdapter } from './modules/shared/infrastructure/storage/git/GitVaultAdapter';
 import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
@@ -127,7 +127,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 7. 初始化文档视图
   const documentTreeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
-  const documentTreeViewProvider = new DocumentTreeViewProvider(documentService, vaultService, documentTreeService, logger);
+  const fileTreeDomainService = container.get<import('./modules/shared/domain/services/FileTreeDomainService').FileTreeDomainService>(TYPES.FileTreeDomainService);
+  const fileOperationDomainService = container.get<import('./modules/shared/domain/services/FileOperationDomainService').FileOperationDomainService>(TYPES.FileOperationDomainService);
+  const documentTreeViewProvider = new DocumentTreeViewProvider(vaultService, documentTreeService, logger);
   const documentTreeView = vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
   const webviewRPC = new WebviewRPC(
     logger,
@@ -136,7 +138,19 @@ export async function activate(context: vscode.ExtensionContext) {
     templateService,
     artifactService
   );
-  const documentCommands = new DocumentCommands(documentService, artifactService, vaultService, logger, context, documentTreeViewProvider, documentTreeView, webviewRPC.getAdapter());
+  const documentCommands = new DocumentCommands(
+    documentService,
+    artifactService,
+    documentTreeService,
+    vaultService,
+    fileTreeDomainService,
+    fileOperationDomainService,
+    logger,
+    context,
+    documentTreeViewProvider,
+    documentTreeView,
+    webviewRPC.getAdapter()
+  );
   documentCommands.register(commandAdapter);
 
   // 8. 初始化任务视图
@@ -157,9 +171,8 @@ export async function activate(context: vscode.ExtensionContext) {
   viewpointCommands.registerCommands(context);
 
   // 10. 初始化模板视图
-  const vaultAdapter = container.get<import('./modules/shared/infrastructure/storage/file/VaultFileSystemAdapter').VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
-  const treeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
-  const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, treeService, vaultAdapter, logger);
+  const templateTreeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, templateTreeService, logger);
   vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
   const templateCommands = new TemplateCommands(templateService, vaultService, logger);
   templateCommands.registerCommands(context);

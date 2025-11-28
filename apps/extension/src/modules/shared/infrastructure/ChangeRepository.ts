@@ -1,4 +1,4 @@
-import { ArtifactChange } from '../domain/ArtifactChange';
+import { ArtifactChange } from '../domain/entity/ArtifactChange';
 import { Result } from '../../../core/types/Result';
 import { ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { VaultFileSystemAdapter } from './storage/file/VaultFileSystemAdapter';

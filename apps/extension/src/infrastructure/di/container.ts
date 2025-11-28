@@ -40,6 +40,10 @@ import { MCPServerStarter } from '../../modules/mcp/MCPServerStarter';
 import { MCPTools, MCPToolsImpl } from '../../modules/mcp/MCPTools';
 import { MCPResources, MCPResourcesImpl } from '../../modules/mcp/MCPResources';
 
+// Domain Services
+import { FileTreeDomainService, FileTreeDomainServiceImpl } from '../../modules/shared/domain/services/FileTreeDomainService';
+import { FileOperationDomainService, FileOperationDomainServiceImpl } from '../../modules/shared/domain/services/FileOperationDomainService';
+
 export function createContainer(
   architoolRoot: string,
   dbPath: string
@@ -119,6 +123,14 @@ export function createContainer(
     .inSingletonScope();
   container.bind(TYPES.MCPServerStarter)
     .to(MCPServerStarter).inSingletonScope();
+
+  // Domain Services
+  container.bind<FileTreeDomainService>(TYPES.FileTreeDomainService)
+    .to(FileTreeDomainServiceImpl)
+    .inSingletonScope();
+  container.bind<FileOperationDomainService>(TYPES.FileOperationDomainService)
+    .to(FileOperationDomainServiceImpl)
+    .inSingletonScope();
 
   return container;
 }

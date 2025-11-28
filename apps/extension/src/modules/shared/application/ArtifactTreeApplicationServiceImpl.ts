@@ -7,7 +7,7 @@ import {
   ListDirectoryOptions,
 } from './ArtifactTreeApplicationService';
 import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
-import { VaultReference } from '../domain/VaultReference';
+import { VaultReference } from '../domain/value_object/VaultReference';
 import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';
 import * as fs from 'fs';

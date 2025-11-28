@@ -1,4 +1,4 @@
-import { Artifact } from './artifact';
+import { Artifact } from './entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from './errors';
 
 /**

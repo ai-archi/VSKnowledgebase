@@ -1,4 +1,4 @@
-import { RemoteEndpoint } from './RemoteEndpoint';
+import { RemoteEndpoint } from '../value_object/RemoteEndpoint';
 
 /**
  * Vault 实体

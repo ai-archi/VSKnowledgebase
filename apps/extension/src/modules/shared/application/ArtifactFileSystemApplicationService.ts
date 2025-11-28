@@ -1,8 +1,8 @@
 import { Result, ArtifactError, QueryOptions } from '../domain/errors';
-import { Artifact } from '../domain/artifact';
+import { Artifact } from '../domain/entity/artifact';
 import { ArtifactMetadata } from '../domain/ArtifactMetadata';
 import { ArtifactViewType } from '../domain/types';
-import { VaultReference } from '../domain/VaultReference';
+import { VaultReference } from '../domain/value_object/VaultReference';
 
 export interface CreateArtifactOpts {
   vault: VaultReference;

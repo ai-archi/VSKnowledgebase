@@ -1,4 +1,4 @@
-import { ChangeType } from './types';
+import { ChangeType } from '../types';
 
 /**
  * ArtifactChange 实体

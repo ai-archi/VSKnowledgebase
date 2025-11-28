@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { VaultRepository } from './VaultRepository';
-import { Vault } from '../domain/vault';
+import { Vault } from '../domain/entity/vault';
 import { Result, VaultError, VaultErrorCode } from '../domain/errors';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 import * as fs from 'fs';

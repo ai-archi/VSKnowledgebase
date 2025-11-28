@@ -1,485 +1,73 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
 import { DocumentApplicationService } from '../application/DocumentApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 import { CommandAdapter } from '../../../core/vscode-api/CommandAdapter';
 import { DocumentTreeViewProvider, DocumentTreeItem } from './DocumentTreeViewProvider';
-import { WebviewAdapter, WebviewMessage } from '../../../core/vscode-api/WebviewAdapter';
+import { WebviewAdapter } from '../../../core/vscode-api/WebviewAdapter';
+import { BaseFileTreeCommands } from '../../shared/interface/commands/BaseFileTreeCommands';
+import { FileTreeDomainService } from '../../shared/domain/services/FileTreeDomainService';
+import { FileOperationDomainService } from '../../shared/domain/services/FileOperationDomainService';
+import { PathUtils } from '../../shared/infrastructure/utils/PathUtils';
+import * as path from 'path';
 
-export class DocumentCommands {
-  // 树视图更新延迟配置
-  private static readonly TREE_UPDATE_DELAY_MS = 50;
-  private static readonly VAULT_EXPAND_DELAY_MS = 150;
-  private createFileWebviewPanel: vscode.WebviewPanel | null = null;
-  private createFolderWebviewPanel: vscode.WebviewPanel | null = null;
-
+export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
   constructor(
     private documentService: DocumentApplicationService,
-    private artifactService: ArtifactFileSystemApplicationService,
-    private vaultService: VaultApplicationService,
-    private logger: Logger,
-    private context: vscode.ExtensionContext,
-    private treeViewProvider: DocumentTreeViewProvider,
-    private treeView: vscode.TreeView<vscode.TreeItem>,
-    private webviewAdapter: WebviewAdapter
-  ) {}
-
-  register(commandAdapter: CommandAdapter): void {
-    commandAdapter.registerCommands([
-      {
-        command: 'archi.document.refresh',
-        callback: () => {
-          this.treeViewProvider.refresh();
-        },
-      },
-      {
-        command: 'archi.document.create',
-        callback: async () => {
-          const vaultsResult = await this.vaultService.listVaults();
-          if (!vaultsResult.success || vaultsResult.value.length === 0) {
-            vscode.window.showErrorMessage('No vaults available');
-            return;
-          }
-
-          const vaultItems = vaultsResult.value.map(v => ({
-            label: v.name,
-            description: v.description,
-            id: v.id,
-          }));
-
-          const selectedVault = await vscode.window.showQuickPick(vaultItems, {
-            placeHolder: 'Select a vault',
-          });
-
-          if (!selectedVault) {
-            return;
-          }
-
-          const documentName = await vscode.window.showInputBox({
-            prompt: 'Enter document name',
-          });
-
-          if (!documentName) {
-            return;
-          }
-
-          const result = await this.documentService.createDocument(
-            selectedVault.id,
-            `note/${documentName}.md`,
-            documentName,
-            `# ${documentName}\n\n`
-          );
-
-          if (result.success) {
-            vscode.window.showInformationMessage(`Document created: ${documentName}`);
-            this.treeViewProvider.refresh();
-            const doc = await vscode.workspace.openTextDocument(result.value.contentLocation);
-            await vscode.window.showTextDocument(doc);
-          } else {
-            vscode.window.showErrorMessage(`Failed to create document: ${result.error.message}`);
-          }
-        },
-      },
-      {
-        command: 'archi.document.expandAll',
-        callback: async () => {
-          await this.expandAll();
-        },
-      },
-      {
-        command: 'archi.document.collapseAll',
-        callback: async () => {
-          await this.collapseAll();
-        },
-      },
-      {
-        command: 'archi.document.addFile',
-        callback: async (item?: DocumentTreeItem) => {
-          await this.showCreateFileDialog(item);
-        },
-      },
-      {
-        command: 'archi.document.addFolder',
-        callback: async (item?: DocumentTreeItem) => {
-          await this.addFolder(item);
-        },
-      },
-      {
-        command: 'archi.document.addDiagram',
-        callback: async (item?: DocumentTreeItem) => {
-          await this.addDiagram(item);
-        },
-      },
-      {
-        command: 'archi.document.delete',
-        callback: async (item?: DocumentTreeItem) => {
-          await this.deleteItem(item);
-        },
-      },
-    ]);
+    artifactService: ArtifactFileSystemApplicationService,
+    treeService: ArtifactTreeApplicationService,
+    vaultService: VaultApplicationService,
+    fileTreeDomainService: FileTreeDomainService,
+    fileOperationDomainService: FileOperationDomainService,
+    logger: Logger,
+    context: vscode.ExtensionContext,
+    treeViewProvider: DocumentTreeViewProvider,
+    treeView: vscode.TreeView<vscode.TreeItem>,
+    webviewAdapter: WebviewAdapter
+  ) {
+    super(
+      vaultService,
+      treeService,
+      artifactService,
+      fileTreeDomainService,
+      fileOperationDomainService,
+      logger,
+      context,
+      treeViewProvider,
+      treeView,
+      webviewAdapter
+    );
   }
 
-  /**
-   * 展开所有节点
-   */
-  private async expandAll(): Promise<void> {
-    try {
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        return;
-      }
+  // ==================== 实现抽象方法 ====================
 
-      // 先刷新视图以确保所有节点都已加载
-      this.treeViewProvider.refresh();
-      
-      // 等待一小段时间让视图更新
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // 展开所有 vault 节点
-      for (const vault of vaultsResult.value) {
-        const vaultItem = await this.treeViewProvider.findTreeItem(
-          undefined,
-          (item) => item.isVault(vault.name)
-        );
-        if (vaultItem) {
-          try {
-            await this.treeView.reveal(vaultItem, { expand: true });
-          } catch (error) {
-            // 忽略单个节点展开失败
-          }
-        }
-      }
-    } catch (error: any) {
-      this.logger.error('Failed to expand all nodes', error);
-    }
+  protected getRefreshCommandName(): string {
+    return 'archi.document.refresh';
   }
 
-  /**
-   * 折叠所有节点
-   */
-  private async collapseAll(): Promise<void> {
-    try {
-      // VSCode TreeView 没有直接的 collapseAll API
-      // 最简单的方法是通过刷新视图来折叠所有节点
-      // 刷新后所有节点默认是折叠状态
-      this.treeViewProvider.refresh();
-    } catch (error: any) {
-      this.logger.error('Failed to collapse all nodes', error);
-    }
+  protected getExpandAllCommandName(): string {
+    return 'archi.document.expandAll';
   }
 
-  /**
-   * 展开指定的节点（vault 和/或文件夹）
-   */
-  private async expandNode(vaultName: string, folderPath?: string): Promise<void> {
-    if (!vaultName) {
-      return;
-    }
-
-    // 等待树视图更新完成
-    await new Promise(resolve => setTimeout(resolve, DocumentCommands.TREE_UPDATE_DELAY_MS));
-
-    try {
-      // 从根节点开始查找 vault 节点
-      const rootChildren = await this.treeViewProvider.getChildren(undefined);
-      const vaultItem = rootChildren.find(item => item.isVault(vaultName));
-
-      if (!vaultItem) {
-        this.logger.debug(`Vault node not found in root: ${vaultName}`);
-        return;
-      }
-
-      // 展开 vault 节点
-      try {
-        await this.treeView.reveal(vaultItem, { expand: true });
-        this.logger.debug(`Vault node expanded: ${vaultName}`);
-      } catch (error: any) {
-        this.logger.warn(`Failed to reveal vault node: ${vaultName}`, error?.message || String(error));
-        return;
-      }
-
-      // 如果需要展开文件夹
-      if (folderPath !== undefined) {
-        // 等待 vault 展开完成，让子节点加载
-        await new Promise(resolve => setTimeout(resolve, DocumentCommands.VAULT_EXPAND_DELAY_MS));
-        
-        // 从 vault 的子节点中查找文件夹
-        const vaultChildren = await this.treeViewProvider.getChildren(vaultItem);
-        const folderItem = vaultChildren.find(item => item.isFolder(vaultName, folderPath));
-        
-        if (folderItem) {
-          try {
-            await this.treeView.reveal(folderItem, { expand: true });
-            this.logger.debug(`Folder node expanded: ${vaultName}/${folderPath}`);
-          } catch (error: any) {
-            this.logger.warn(`Failed to reveal folder node: ${folderPath}`, error?.message || String(error));
-          }
-        } else {
-          this.logger.debug(`Folder node not found: ${vaultName}/${folderPath}`);
-        }
-      }
-    } catch (error: any) {
-      this.logger.warn('Failed to expand node', error?.message || String(error));
-    }
+  protected getCollapseAllCommandName(): string {
+    return 'archi.document.collapseAll';
   }
 
-  /**
-   * 获取选中的 vault 名称
-   */
-  private async getSelectedVaultName(item?: DocumentTreeItem): Promise<string | null> {
-    // 如果直接传入了 item，使用它
-    if (item) {
-      if (item.vaultName) {
-        return item.vaultName;
-      }
-      if (item.artifact) {
-        return item.artifact.vault.name;
-      }
-      // 对于未索引的文件，vaultName 应该已经设置
-    }
-
-    // 否则从当前选中的项获取
-    const selection = this.treeView.selection;
-    if (selection.length > 0) {
-      const selectedItem = selection[0] as DocumentTreeItem;
-      if (selectedItem.vaultName) {
-        return selectedItem.vaultName;
-      }
-      if (selectedItem.artifact) {
-        return selectedItem.artifact.vault.name;
-      }
-    }
-
-    return null;
+  protected getCreateFileCommandName(): string {
+    return 'archi.document.addFile';
   }
 
-  /**
-   * 根据名称查找 Vault
-   */
-  private async findVaultByName(vaultName: string): Promise<import('../../shared/domain/vault').Vault | null> {
-    const vaultResult = await this.vaultService.listVaults();
-    if (!vaultResult.success) {
-      return null;
-    }
-    return vaultResult.value.find(v => v.name === vaultName) || null;
+  protected getCreateFolderCommandName(): string {
+    return 'archi.document.addFolder';
   }
 
-  /**
-   * 验证并获取 Vault（检查是否存在且可写）
-   */
-  private async validateAndGetVault(item?: DocumentTreeItem, operation = 'operation'): Promise<{ vault: import('../../shared/domain/vault').Vault; vaultName: string } | null> {
-    const vaultName = await this.getSelectedVaultName(item);
-    if (!vaultName) {
-      vscode.window.showErrorMessage('Please select a vault or document');
-      return null;
-    }
-
-    const vaultResult = await this.vaultService.listVaults();
-    if (!vaultResult.success) {
-      vscode.window.showErrorMessage('Failed to get vaults');
-      return null;
-    }
-
-    const vault = vaultResult.value.find(v => v.name === vaultName);
-    if (!vault) {
-      vscode.window.showErrorMessage(`Vault not found: ${vaultName}`);
-      return null;
-    }
-
-    if (vault.readOnly) {
-      vscode.window.showErrorMessage(`Cannot ${operation} to read-only vault: ${vaultName}`);
-      return null;
-    }
-
-    return { vault, vaultName };
+  protected getDeleteCommandName(): string {
+    return 'archi.document.delete';
   }
 
-  /**
-   * 验证文件名
-   */
-  private validateFileName(value: string): string | null {
-    if (!value || value.trim().length === 0) {
-      return 'Name cannot be empty';
-    }
-    if (/[<>:"/\\|?*]/.test(value)) {
-      return 'Name contains invalid characters';
-    }
-    return null;
-  }
-
-  /**
-   * 计算目标路径
-   */
-  private calculateTargetPath(item: DocumentTreeItem | undefined, fileName: string, extension?: string): { targetPath: string; targetFolderPath: string | undefined } {
-    const fileExtension = extension ? `.${extension}` : '.md';
-    
-    if (item?.folderPath !== undefined) {
-      // 如果是在文件夹节点上右键，在该文件夹下创建
-      const targetPath = item.folderPath === '' ? `${fileName}${fileExtension}` : `${item.folderPath}/${fileName}${fileExtension}`;
-      const targetFolderPath = item.folderPath === '' ? undefined : item.folderPath;
-      return { targetPath, targetFolderPath };
-    } else if (item?.artifact || item?.filePath) {
-      // 如果是在文档节点上右键，在同一个目录下创建
-      const artifactPath = item.artifact?.path || item.filePath!;
-      const dir = path.dirname(artifactPath);
-      const targetPath = dir === '.' || dir === '' ? `${fileName}${fileExtension}` : `${dir}/${fileName}${fileExtension}`;
-      const targetFolderPath = dir === '.' || dir === '' ? undefined : dir;
-      return { targetPath, targetFolderPath };
-    } else {
-      // 如果是在 vault 节点上右键，在根目录下创建
-      return { targetPath: `${fileName}${fileExtension}`, targetFolderPath: undefined };
-    }
-  }
-
-  /**
-   * 处理创建成功后的操作
-   */
-  private async handleCreateSuccess(
-    itemName: string,
-    vaultName: string,
-    contentLocation: string,
-    targetFolderPath: string | undefined,
-    openFile = true
-  ): Promise<void> {
-    vscode.window.showInformationMessage(`${itemName} created`);
-    
-    // 刷新视图
-    this.treeViewProvider.refresh();
-    
-    // 展开相关节点
-    await this.expandNode(vaultName, targetFolderPath);
-    
-    // 打开新创建的文件
-    if (openFile) {
-      const doc = await vscode.workspace.openTextDocument(contentLocation);
-      await vscode.window.showTextDocument(doc);
-    }
-  }
-
-  /**
-   * 获取 Webview 分发路径
-   */
-  private getWebviewDistPath(): string {
-    const extensionPath = this.context.extensionPath;
-    // 优先从 extension 目录读取（打包后的路径），否则从源码目录读取（开发环境）
-    const webviewPathInExtension = path.join(extensionPath, 'dist', 'webview');
-    const webviewPathInSource = path.join(extensionPath, '..', 'webview', 'dist');
-    return fs.existsSync(webviewPathInExtension) 
-      ? webviewPathInExtension 
-      : webviewPathInSource;
-  }
-
-  /**
-   * 添加文件夹
-   */
-  private async addFolder(item?: DocumentTreeItem): Promise<void> {
-    await this.showCreateFolderDialog(item);
-  }
-
-  /**
-   * 添加设计图
-   */
-  private async addDiagram(item?: DocumentTreeItem): Promise<void> {
-    try {
-      const vaultInfo = await this.validateAndGetVault(item, 'add diagram');
-      if (!vaultInfo) {
-        return;
-      }
-      const { vault, vaultName } = vaultInfo;
-
-      const diagramName = await vscode.window.showInputBox({
-        prompt: 'Enter diagram name (without extension)',
-        validateInput: this.validateFileName.bind(this)
-      });
-
-      if (!diagramName) return;
-
-      // 选择图表类型
-      const diagramType = await vscode.window.showQuickPick([
-        { label: 'Mermaid', value: 'mermaid', description: 'Mermaid diagram (.mmd)' },
-        { label: 'PlantUML', value: 'puml', description: 'PlantUML diagram (.puml)' },
-        { label: 'Archimate', value: 'archimate', description: 'Archimate diagram (.archimate)' },
-      ], {
-        placeHolder: 'Select diagram type'
-      });
-
-      if (!diagramType) return;
-
-      // 确定文件路径和扩展名
-      const extension = diagramType.value === 'mermaid' ? 'mmd' : diagramType.value === 'puml' ? 'puml' : 'archimate';
-      let diagramPath: string;
-      let targetFolderPath: string | undefined;
-      
-      if (item?.folderPath !== undefined || item?.artifact) {
-        // 如果在文件夹或文档节点上右键，使用标准路径计算
-        const pathInfo = this.calculateTargetPath(item, diagramName, extension);
-        diagramPath = pathInfo.targetPath;
-        targetFolderPath = pathInfo.targetFolderPath;
-      } else {
-        // 如果是在 vault 节点上右键，在 diagrams 文件夹下创建
-        diagramPath = `diagrams/${diagramName}.${extension}`;
-        targetFolderPath = 'diagrams';
-      }
-
-      // 创建设计图文件
-      const content = this.getDiagramTemplate(diagramType.value, diagramName);
-      const result = await this.artifactService.createArtifact({
-        vault: {
-          id: vault.id,
-          name: vault.name,
-        },
-        path: diagramPath,
-        title: diagramName,
-        content,
-        viewType: 'design',
-        format: extension,
-      });
-
-      if (result.success) {
-        await this.handleCreateSuccess(`Diagram '${diagramName}'`, vaultName, result.value.contentLocation, targetFolderPath);
-      } else {
-        vscode.window.showErrorMessage(`Failed to create diagram: ${result.error.message}`);
-      }
-    } catch (error: any) {
-      this.logger.error('Failed to add diagram', error);
-      vscode.window.showErrorMessage(`Failed to add diagram: ${error.message}`);
-    }
-  }
-
-  /**
-   * 获取图表模板
-   */
-  private getDiagramTemplate(type: string, name: string): string {
-    switch (type) {
-      case 'mermaid':
-        return `# ${name}\n\n\`\`\`mermaid\ngraph TD\n    A[Start] --> B[End]\n\`\`\`\n`;
-      case 'puml':
-        return `@startuml\n!theme plain\n\ntitle ${name}\n\n[Component1] --> [Component2]\n\n@enduml\n`;
-      case 'archimate':
-        return `# ${name}\n\nArchimate diagram content\n`;
-      default:
-        return `# ${name}\n\n`;
-    }
-  }
-
-  /**
-   * 删除项
-   */
-  private async deleteItem(item?: DocumentTreeItem): Promise<void> {
-    try {
-      if (!item) {
-        // 从当前选中的项获取
-        const selection = this.treeView.selection;
-        if (selection.length === 0) {
-          vscode.window.showErrorMessage('Please select an item to delete');
-          return;
-        }
-        item = selection[0] as DocumentTreeItem;
-      }
-
+  protected async handleDelete(item: DocumentTreeItem): Promise<void> {
       if (item.vaultName) {
         // 删除 vault
         const confirm = await vscode.window.showWarningMessage(
@@ -537,253 +125,154 @@ export class DocumentCommands {
         }
       } else {
         vscode.window.showErrorMessage('Please select a vault or document to delete');
+    }
+  }
+
+  // ==================== 注册特定命令 ====================
+
+  protected registerSpecificCommands(commandAdapter: CommandAdapter): void {
+    // 注册文档特定命令
+    commandAdapter.registerCommands([
+      {
+        command: 'archi.document.create',
+        callback: async () => {
+          const vaultsResult = await this.vaultService.listVaults();
+          if (!vaultsResult.success || vaultsResult.value.length === 0) {
+            vscode.window.showErrorMessage('No vaults available');
+      return;
+    }
+
+          const vaultItems = vaultsResult.value.map(v => ({
+            label: v.name,
+            description: v.description,
+            id: v.id,
+          }));
+
+          const selectedVault = await vscode.window.showQuickPick(vaultItems, {
+            placeHolder: 'Select a vault',
+          });
+
+          if (!selectedVault) {
+            return;
+          }
+
+          const documentName = await vscode.window.showInputBox({
+            prompt: 'Enter document name',
+          });
+
+          if (!documentName) {
+            return;
+          }
+
+          const result = await this.documentService.createDocument(
+            selectedVault.id,
+            `note/${documentName}.md`,
+            documentName,
+            `# ${documentName}\n\n`
+          );
+
+          if (result.success) {
+            vscode.window.showInformationMessage(`Document created: ${documentName}`);
+            this.treeViewProvider.refresh();
+            const doc = await vscode.workspace.openTextDocument(result.value.contentLocation);
+            await vscode.window.showTextDocument(doc);
+          } else {
+            vscode.window.showErrorMessage(`Failed to create document: ${result.error.message}`);
+          }
+        },
+      },
+      {
+        command: 'archi.document.addDiagram',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.addDiagram(item);
+        },
+      },
+    ]);
+  }
+
+  /**
+   * 添加设计图（文档特定命令）
+   */
+  private async addDiagram(item?: DocumentTreeItem): Promise<void> {
+    try {
+      const vaultInfo = await this.validateAndGetVault(item, 'add diagram');
+      if (!vaultInfo) {
+      return;
+      }
+      const { vault, vaultName } = vaultInfo;
+
+      const diagramName = await vscode.window.showInputBox({
+        prompt: 'Enter diagram name (without extension)',
+        validateInput: (value) => PathUtils.validateFileName(value),
+      });
+
+      if (!diagramName) return;
+
+      // 选择图表类型
+      const diagramType = await vscode.window.showQuickPick(
+        [
+          { label: 'Mermaid', value: 'mermaid', description: 'Mermaid diagram (.mmd)' },
+          { label: 'PlantUML', value: 'puml', description: 'PlantUML diagram (.puml)' },
+          { label: 'Archimate', value: 'archimate', description: 'Archimate diagram (.archimate)' },
+        ],
+        {
+          placeHolder: 'Select diagram type',
+        }
+      );
+
+      if (!diagramType) return;
+
+      // 确定文件路径和扩展名
+      const extension =
+        diagramType.value === 'mermaid'
+          ? 'mmd'
+          : diagramType.value === 'puml'
+          ? 'puml'
+          : 'archimate';
+      let diagramPath: string;
+      let targetFolderPath: string | undefined;
+
+      if (item?.folderPath !== undefined || item?.artifact) {
+        // 如果在文件夹或文档节点上右键，使用标准路径计算
+        const pathInfo = this.fileTreeDomainService.calculateTargetPath(item, diagramName, extension);
+        diagramPath = pathInfo.targetPath;
+        targetFolderPath = pathInfo.targetFolderPath;
+      } else {
+        // 如果是在 vault 节点上右键，在 diagrams 文件夹下创建
+        diagramPath = `diagrams/${diagramName}.${extension}`;
+        targetFolderPath = 'diagrams';
+      }
+
+      // 创建设计图文件
+      const content = this.fileOperationDomainService.generateDefaultContent(
+        diagramName,
+        diagramType.value
+      );
+      const result = await this.fileOperationService.createArtifact({
+        vault: {
+          id: vault.id,
+          name: vault.name,
+        },
+        path: diagramPath,
+        title: diagramName,
+        content,
+        viewType: 'design',
+        format: extension,
+      });
+
+      if (result.success) {
+        await this.handleCreateSuccess(
+          `Diagram '${diagramName}'`,
+          vaultName,
+          result.value.contentLocation,
+          targetFolderPath
+        );
+      } else {
+        vscode.window.showErrorMessage(`Failed to create diagram: ${result.error.message}`);
       }
     } catch (error: any) {
-      this.logger.error('Failed to delete item', error);
-      vscode.window.showErrorMessage(`Failed to delete: ${error.message}`);
+      this.logger.error('Failed to add diagram', error);
+      vscode.window.showErrorMessage(`Failed to add diagram: ${error.message}`);
     }
-  }
-
-  /**
-   * 显示创建文件夹对话框（Webview）
-   */
-  private async showCreateFolderDialog(item?: DocumentTreeItem): Promise<void> {
-    // 如果已经打开，直接显示
-    if (this.createFolderWebviewPanel) {
-      this.createFolderWebviewPanel.reveal();
-      return;
-    }
-
-    // 获取当前选中的 vault 信息
-    let initialVaultId: string | undefined;
-    let initialFolderPath: string | undefined;
-    
-    if (item) {
-      if (item.vaultName) {
-        // 从 vaultName 获取 vaultId
-        const vault = await this.findVaultByName(item.vaultName);
-        if (vault) {
-          initialVaultId = vault.id;
-        }
-      }
-      if (item.folderPath !== undefined) {
-        initialFolderPath = item.folderPath;
-      } else if (item.artifact || item.filePath) {
-        // 如果是在文档节点上右键，在同一个目录下创建
-        const artifactPath = item.artifact?.path || item.filePath!;
-        const dir = path.dirname(artifactPath);
-        initialFolderPath = dir === '.' || dir === '' ? undefined : dir;
-      }
-    }
-
-    // 创建新的 webview panel
-    const webviewDistPath = this.getWebviewDistPath();
-    
-    const panel = vscode.window.createWebviewPanel(
-      'createFolderDialog',
-      '创建文件夹',
-      vscode.ViewColumn.Beside, // 在侧边打开，不替换当前编辑器
-      {
-        enableScripts: true,
-        retainContextWhenHidden: false, // 关闭时释放资源
-        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
-      }
-    );
-
-    // 设置 webview 消息处理器
-    panel.webview.onDidReceiveMessage(
-      async (message: WebviewMessage) => {
-        // 处理关闭请求
-        if (message.method === 'close') {
-          panel.dispose();
-          return;
-        }
-        // 处理创建成功后的刷新和展开
-        if (message.method === 'folderCreated') {
-          const { vaultName, folderPath } = message.params || {};
-          if (vaultName) {
-            this.treeViewProvider.refresh();
-            await this.expandNode(vaultName, folderPath);
-            // 再次刷新以确保新文件夹显示
-            this.treeViewProvider.refresh();
-          }
-          return;
-        }
-        // 处理其他 RPC 消息
-        await this.webviewAdapter.handleMessage(panel.webview, message);
-      },
-      null,
-      this.context.subscriptions
-    );
-
-    // 加载 webview 内容，并传递初始数据
-    const htmlContent = await this.getWebviewContent(panel.webview, 'create-folder-dialog.html', initialVaultId, initialFolderPath);
-    panel.webview.html = htmlContent;
-
-    // 监听面板关闭事件
-    panel.onDidDispose(() => {
-      this.createFolderWebviewPanel = null;
-    });
-
-    this.createFolderWebviewPanel = panel;
-  }
-
-  /**
-   * 显示创建文件对话框（Webview）
-   */
-  private async showCreateFileDialog(item?: DocumentTreeItem): Promise<void> {
-    // 如果已经打开，直接显示
-    if (this.createFileWebviewPanel) {
-      this.createFileWebviewPanel.reveal();
-      return;
-    }
-
-    // 获取当前选中的 vault 信息
-    let initialVaultId: string | undefined;
-    let initialFolderPath: string | undefined;
-    
-    if (item) {
-      if (item.vaultName) {
-        // 从 vaultName 获取 vaultId
-        const vault = await this.findVaultByName(item.vaultName);
-          if (vault) {
-            initialVaultId = vault.id;
-        }
-      }
-      if (item.folderPath) {
-        initialFolderPath = item.folderPath;
-      }
-    }
-
-    // 创建新的 webview panel（弹窗模式）
-    const webviewDistPath = this.getWebviewDistPath();
-    
-    // 创建标准表单页面（不使用弹窗，直接全屏显示）
-    // 注意：VSCode 的 webview panel 只能在编辑区显示，所以我们使用标准表单页面
-    const panel = vscode.window.createWebviewPanel(
-      'createFileDialog',
-      '创建文件',
-      vscode.ViewColumn.Beside, // 在侧边打开，不替换当前编辑器
-      {
-        enableScripts: true,
-        retainContextWhenHidden: false, // 关闭时释放资源
-        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
-      }
-    );
-
-    // 设置 webview 消息处理器
-    panel.webview.onDidReceiveMessage(
-      async (message: WebviewMessage) => {
-        // 处理关闭请求
-        if (message.method === 'close') {
-          panel.dispose();
-          return;
-        }
-        // 处理其他 RPC 消息
-        await this.webviewAdapter.handleMessage(panel.webview, message);
-      },
-      null,
-      this.context.subscriptions
-    );
-
-    // 加载 webview 内容，并传递初始数据
-    const htmlContent = await this.getWebviewContent(panel.webview, 'create-file-dialog.html', initialVaultId, initialFolderPath);
-    panel.webview.html = htmlContent;
-
-    // 监听面板关闭事件
-    panel.onDidDispose(() => {
-      this.createFileWebviewPanel = null;
-    });
-
-    this.createFileWebviewPanel = panel;
-  }
-
-  /**
-   * 获取 Webview HTML 内容
-   */
-  private async getWebviewContent(webview: vscode.Webview, htmlFileName: string, initialVaultId?: string, initialFolderPath?: string): Promise<string> {
-    const webviewDistPath = this.getWebviewDistPath();
-
-    this.logger.info(`Webview dist path: ${webviewDistPath}`);
-    this.logger.info(`Webview dist exists: ${fs.existsSync(webviewDistPath)}`);
-
-    // 构建 HTML 文件路径
-    const htmlPath = path.join(webviewDistPath, htmlFileName);
-
-    this.logger.info(`HTML path: ${htmlPath}`);
-    this.logger.info(`HTML file exists: ${fs.existsSync(htmlPath)}`);
-
-    if (fs.existsSync(htmlPath)) {
-      // 读取构建后的 HTML
-      let html = fs.readFileSync(htmlPath, 'utf-8');
-      
-      // 替换资源路径为 webview URI
-      // 匹配所有 src 和 href 属性中的路径（包括 /path, ./path, path 等）
-      // 排除已经是完整 URI 的路径（如 vscode-webview://, http://, https://, data: 等）
-      html = html.replace(/(src|href)=["']([^"']+)["']/g, (match: string, attr: string, resourcePath: string) => {
-        // 跳过已经是完整 URI 的路径
-        if (resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)) {
-          return match;
-        }
-        
-        // 处理相对路径和绝对路径
-        let normalizedPath = resourcePath;
-        // 移除开头的 ./ 或 /
-        if (normalizedPath.startsWith('./')) {
-          normalizedPath = normalizedPath.substring(2);
-        } else if (normalizedPath.startsWith('/')) {
-          normalizedPath = normalizedPath.substring(1);
-        }
-        
-        // 构建资源文件的完整路径（相对于 webviewDistPath）
-        const resourceFile = path.join(webviewDistPath, normalizedPath);
-        
-        // 检查文件是否存在
-        if (fs.existsSync(resourceFile)) {
-          // 转换为 webview URI
-          const resourceUri = webview.asWebviewUri(vscode.Uri.file(resourceFile));
-          return `${attr}="${resourceUri}"`;
-        }
-        
-        // 如果文件不存在，保持原样（可能是外部资源）
-        return match;
-      });
-      
-      // 注入 VSCode API 和初始数据
-      const initialData = {
-        vaultId: initialVaultId,
-        folderPath: initialFolderPath,
-      };
-      const vscodeScript = `
-        <script>
-          const vscode = acquireVsCodeApi();
-          window.acquireVsCodeApi = () => vscode;
-          window.initialData = ${JSON.stringify(initialData)};
-        </script>
-      `;
-      html = html.replace('</head>', `${vscodeScript}</head>`);
-      
-      return html;
-    }
-
-    // 如果构建文件不存在，返回一个简单的 HTML，提示需要构建
-    const title = htmlFileName === 'create-folder-dialog.html' ? 'Create Folder' : 'Create File';
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>${title}</title>
-        </head>
-        <body>
-          <div style="padding: 20px; text-align: center;">
-            <h2>Webview 未构建</h2>
-            <p>请先运行 <code>cd apps/webview && pnpm build</code> 构建 webview</p>
-          </div>
-        </body>
-      </html>
-    `;
   }
 }
-

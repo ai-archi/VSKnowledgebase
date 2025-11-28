@@ -1,5 +1,5 @@
 import { Result, ArtifactError } from '../domain/errors';
-import { VaultReference } from '../domain/VaultReference';
+import { VaultReference } from '../domain/value_object/VaultReference';
 
 /**
  * 文件树节点信息

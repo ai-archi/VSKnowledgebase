@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { Vault } from '../../modules/shared/domain/vault';
+import { Vault } from '../../modules/shared/domain/entity/vault';
 import { Result, VaultError, VaultErrorCode } from '../../modules/shared/domain/errors';
 import { Logger } from '../logger/Logger';
 

@@ -1,4 +1,4 @@
-import { RemoteEndpoint } from '../../../domain/RemoteEndpoint';
+import { RemoteEndpoint } from '../../../domain/value_object/RemoteEndpoint';
 import { Result } from '../../../../../core/types/Result';
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import * as fs from 'fs';

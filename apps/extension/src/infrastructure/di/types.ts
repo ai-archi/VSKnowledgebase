@@ -48,5 +48,9 @@ export const TYPES = {
   TaskTreeDataProvider: Symbol.for('TaskTreeDataProvider'),
   ViewpointTreeDataProvider: Symbol.for('ViewpointTreeDataProvider'),
   TemplateTreeDataProvider: Symbol.for('TemplateTreeDataProvider'),
+
+  // Domain Services
+  FileTreeDomainService: Symbol.for('FileTreeDomainService'),
+  FileOperationDomainService: Symbol.for('FileOperationDomainService'),
 };
 

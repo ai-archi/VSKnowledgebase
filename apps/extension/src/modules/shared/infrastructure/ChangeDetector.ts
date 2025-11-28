@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { Artifact } from '../domain/artifact';
-import { ArtifactChange } from '../domain/ArtifactChange';
+import { Artifact } from '../domain/entity/artifact';
+import { ArtifactChange } from '../domain/entity/ArtifactChange';
 import { ChangeType } from '../domain/types';
 import { VaultFileSystemAdapter } from './storage/file/VaultFileSystemAdapter';
 import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';

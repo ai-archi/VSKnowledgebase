@@ -1,4 +1,4 @@
-import { ArtifactLinkInfo } from './ArtifactLinkInfo';
+import { ArtifactLinkInfo } from './value_object/ArtifactLinkInfo';
 
 /**
  * ArtifactMetadata 值对象

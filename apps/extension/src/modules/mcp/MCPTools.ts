@@ -4,8 +4,8 @@ import { ArtifactFileSystemApplicationService } from '../shared/application/Arti
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
 import { ArtifactLinkRepository } from '../shared/infrastructure/ArtifactLinkRepository';
 import { SqliteRuntimeIndex } from '../shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
-import { Artifact } from '../shared/domain/artifact';
-import { ArtifactLink } from '../shared/domain/ArtifactLink';
+import { Artifact } from '../shared/domain/entity/artifact';
+import { ArtifactLink } from '../shared/domain/entity/ArtifactLink';
 import { Logger } from '../../core/logger/Logger';
 
 /**

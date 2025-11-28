@@ -8,7 +8,7 @@ import {
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
-import { Artifact } from '../../shared/domain/artifact';
+import { Artifact } from '../../shared/domain/entity/artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../shared/domain/errors';
 import { VaultFileSystemAdapter } from '../../shared/infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';

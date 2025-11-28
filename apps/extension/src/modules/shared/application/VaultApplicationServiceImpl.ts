@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { VaultApplicationService, AddLocalVaultOpts, AddVaultFromGitOpts } from './VaultApplicationService';
-import { Vault } from '../domain/vault';
+import { Vault } from '../domain/entity/vault';
 import { Result, VaultError, VaultErrorCode } from '../domain/errors';
 import { VaultRepository } from '../infrastructure/VaultRepository';
 import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';

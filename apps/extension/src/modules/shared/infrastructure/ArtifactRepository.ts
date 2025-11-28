@@ -1,4 +1,4 @@
-import { Artifact } from '../domain/artifact';
+import { Artifact } from '../domain/entity/artifact';
 import { Result, ArtifactError } from '../domain/errors';
 
 export interface ArtifactRepository {

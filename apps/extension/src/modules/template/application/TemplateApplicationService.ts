@@ -1,5 +1,5 @@
 import { Result } from '../../../core/types/Result';
-import { Artifact } from '../../shared/domain/artifact';
+import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError } from '../../shared/domain/errors';
 import { ArtifactViewType } from '../../shared/domain/types';
 

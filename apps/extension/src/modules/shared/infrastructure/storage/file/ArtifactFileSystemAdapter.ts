@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Artifact } from '../../../domain/artifact';
+import { Artifact } from '../../../domain/entity/artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/errors';
 
 export class ArtifactFileSystemAdapter {

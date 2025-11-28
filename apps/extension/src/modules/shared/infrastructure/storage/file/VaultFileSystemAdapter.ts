@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Vault } from '../../../domain/vault';
+import { Vault } from '../../../domain/entity/vault';
 
 export class VaultFileSystemAdapter {
   private architoolRoot: string;

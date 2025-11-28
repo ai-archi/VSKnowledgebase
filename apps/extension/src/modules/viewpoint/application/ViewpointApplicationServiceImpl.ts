@@ -12,7 +12,7 @@ import { ArtifactFileSystemApplicationService } from '../../shared/application/A
 import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
 import { ArtifactRepository } from '../../shared/infrastructure/ArtifactRepository';
 import { VaultRepository } from '../../shared/infrastructure/VaultRepository';
-import { Artifact } from '../../shared/domain/artifact';
+import { Artifact } from '../../shared/domain/entity/artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../shared/domain/errors';
 import { VaultFileSystemAdapter } from '../../shared/infrastructure/storage/file/VaultFileSystemAdapter';
 import { Logger } from '../../../core/logger/Logger';

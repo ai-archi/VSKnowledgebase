@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { ArtifactRepository } from './ArtifactRepository';
-import { Artifact } from '../domain/artifact';
+import { Artifact } from '../domain/entity/artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';
 import { VaultRepository } from './VaultRepository';

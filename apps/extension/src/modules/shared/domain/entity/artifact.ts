@@ -1,5 +1,5 @@
-import { VaultReference } from './VaultReference';
-import { ArtifactViewType, ArtifactStatus, ArtifactNodeType } from './types';
+import { VaultReference } from '../value_object/VaultReference';
+import { ArtifactViewType, ArtifactStatus, ArtifactNodeType } from '../types';
 
 /**
  * Artifact 核心实体

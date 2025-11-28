@@ -1,6 +1,6 @@
 import { Result, VaultError } from '../domain/errors';
-import { Vault } from '../domain/vault';
-import { RemoteEndpoint } from '../domain/RemoteEndpoint';
+import { Vault } from '../domain/entity/vault';
+import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
 
 export interface AddLocalVaultOpts {
   name: string;

@@ -1,5 +1,5 @@
-import { LinkType, TargetType, LinkStrength } from './types';
-import { CodeLocation } from './CodeLocation';
+import { LinkType, TargetType, LinkStrength } from '../types';
+import { CodeLocation } from '../value_object/CodeLocation';
 
 /**
  * ArtifactLink 实体

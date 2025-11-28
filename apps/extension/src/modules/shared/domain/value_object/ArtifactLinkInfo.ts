@@ -1,4 +1,4 @@
-import { ArtifactLinkInfoType } from './types';
+import { ArtifactLinkInfoType } from '../types';
 
 /**
  * ArtifactLinkInfo

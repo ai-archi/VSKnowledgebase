@@ -3,7 +3,7 @@ import { TYPES } from '../../../infrastructure/di/types';
 import { LookupApplicationService, QuickCreateOptions } from './LookupApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { Artifact } from '../../shared/domain/artifact';
+import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
 

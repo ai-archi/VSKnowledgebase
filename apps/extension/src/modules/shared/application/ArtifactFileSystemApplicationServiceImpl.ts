@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { ArtifactFileSystemApplicationService, CreateArtifactOpts, UpdateArtifactOpts } from './ArtifactFileSystemApplicationService';
-import { Artifact } from '../domain/artifact';
+import { Artifact } from '../domain/entity/artifact';
 import { ArtifactMetadata } from '../domain/ArtifactMetadata';
 import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../domain/errors';
 import { ArtifactValidator } from '../domain/ArtifactValidator';

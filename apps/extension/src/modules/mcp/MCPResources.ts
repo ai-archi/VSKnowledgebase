@@ -2,8 +2,8 @@ import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types';
 import { ArtifactFileSystemApplicationService } from '../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
-import { Artifact } from '../shared/domain/artifact';
-import { Vault } from '../shared/domain/vault';
+import { Artifact } from '../shared/domain/entity/artifact';
+import { Vault } from '../shared/domain/entity/vault';
 import { Logger } from '../../core/logger/Logger';
 
 /**
