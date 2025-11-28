@@ -9,7 +9,6 @@ import { VaultReference } from '../../shared/domain/value_object/VaultReference'
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
-import * as path from 'path';
 
 @injectable()
 export class DocumentApplicationServiceImpl implements DocumentApplicationService {
@@ -89,11 +88,16 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     }
 
     // 如果有模板，根据模板创建目录结构
-    if (template && template.structure) {
-      // TODO: 实现根据模板创建目录结构的逻辑
-      // 这里需要递归创建目录和文件
-      // 暂时只创建主文件夹，模板功能后续实现
-      this.logger.info('Template structure creation not yet implemented');
+    if (template) {
+      const structureResult = await this.artifactService.createFolderStructureFromTemplate(
+        vault,
+        targetFolderPath,
+        template
+      );
+      if (!structureResult.success) {
+        this.logger.warn(`Failed to create structure from template: ${structureResult.error?.message}`);
+        // 即使模板结构创建失败，也继续返回成功（至少主文件夹已创建）
+      }
     }
 
     // 返回创建的文件夹路径（相对于 artifacts 目录）

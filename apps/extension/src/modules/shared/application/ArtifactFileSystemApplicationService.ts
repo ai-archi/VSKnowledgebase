@@ -47,6 +47,18 @@ export interface ArtifactFileSystemApplicationService {
    * @param options 查询选项
    */
   listFilesAndFolders(vaultId?: string, options?: QueryOptions): Promise<Result<FileFolderItem[], ArtifactError>>;
+  /**
+   * 根据模板创建文件夹结构
+   * @param vault Vault 引用
+   * @param basePath 基础路径（相对于 artifacts 目录）
+   * @param template 模板内容
+   * @returns 创建结果
+   */
+  createFolderStructureFromTemplate(
+    vault: VaultReference,
+    basePath: string,
+    template: any
+  ): Promise<Result<void, ArtifactError>>;
 }
 
 

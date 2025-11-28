@@ -12,6 +12,7 @@ import { VaultApplicationService } from './VaultApplicationService';
 import { ArtifactTreeApplicationService } from './ArtifactTreeApplicationService';
 import { VaultReference } from '../domain/value_object/VaultReference';
 import { Logger } from '../../../core/logger/Logger';
+import { TemplateStructureDomainServiceImpl, TemplateStructureItem } from '../domain/services/TemplateStructureDomainService';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -840,6 +841,107 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
           error
         ),
       };
+    }
+  }
+
+  async createFolderStructureFromTemplate(
+    vault: VaultReference,
+    basePath: string,
+    template: any
+  ): Promise<Result<void, ArtifactError>> {
+    try {
+      // 使用领域服务解析模板结构
+      const templateStructureService = new TemplateStructureDomainServiceImpl();
+      const structureItems = templateStructureService.parseTemplateStructure(template);
+
+      if (!structureItems || structureItems.length === 0) {
+        this.logger.warn('Template structure is empty or invalid, skipping structure creation');
+        return { success: true, value: undefined };
+      }
+
+      // 递归创建结构项
+      for (const item of structureItems) {
+        const itemResult = await this.createStructureItem(vault, basePath, item);
+        if (!itemResult.success) {
+          return itemResult;
+        }
+      }
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to create folder structure from template: ${error.message}`,
+          { vaultId: vault.id, basePath },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 创建结构项（目录或文件）
+   */
+  private async createStructureItem(
+    vault: VaultReference,
+    basePath: string,
+    item: TemplateStructureItem
+  ): Promise<Result<void, ArtifactError>> {
+    const itemName = item.name;
+    const itemPath = path.join(basePath, itemName);
+
+    if (item.type === 'directory') {
+      // 创建目录
+      const createDirResult = await this.treeService.createDirectory(vault, itemPath);
+      if (!createDirResult.success) {
+        return createDirResult;
+      }
+
+      // 递归处理子项
+      if (item.children && Array.isArray(item.children)) {
+        for (const child of item.children) {
+          const childResult = await this.createStructureItem(vault, itemPath, child);
+          if (!childResult.success) {
+            return childResult;
+          }
+        }
+      }
+
+      return { success: true, value: undefined };
+    } else if (item.type === 'file') {
+      // 创建文件
+      let fileContent = '';
+
+      // 如果有模板文件，读取模板内容
+      if (item.template) {
+        const templatePath = item.template;
+        // 模板路径可能是相对路径（相对于 vault 根目录）或绝对路径
+        const templateFullPath = templatePath.startsWith('/') || templatePath.startsWith('templates/')
+          ? templatePath
+          : `templates/content/${templatePath}`;
+
+        const readResult = await this.treeService.readFile(vault, templateFullPath);
+        if (readResult.success) {
+          fileContent = readResult.value;
+        } else {
+          // 如果读取模板失败，使用空内容或默认内容
+          this.logger.warn(`Failed to read template file: ${templateFullPath}, using empty content`);
+          fileContent = '';
+        }
+      }
+
+      // 写入文件
+      const writeResult = await this.treeService.writeFile(vault, itemPath, fileContent);
+      if (!writeResult.success) {
+        return writeResult;
+      }
+
+      return { success: true, value: undefined };
+    } else {
+      this.logger.warn(`Unknown structure item type: ${item.type}, skipping`);
+      return { success: true, value: undefined };
     }
   }
 }
