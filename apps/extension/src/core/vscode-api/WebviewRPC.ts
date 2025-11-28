@@ -160,13 +160,13 @@ export class WebviewRPC {
       vaultId: string;
       folderPath: string;
       folderName: string;
-      template?: any; // 模板内容（structure 类型）
+      templateId?: string; // 模板 ID，后端会根据 ID 读取模板文件
     }) => {
       const result = await this.documentService.createFolder(
         params.vaultId,
         params.folderPath,
         params.folderName,
-        params.template
+        params.templateId
       );
       if (!result.success) {
         throw new Error(result.error.message);
@@ -223,11 +223,18 @@ export class WebviewRPC {
         return template.content;
       }
       
-      // 如果是结构模板，返回结构定义（转换为字符串）
+      // 如果是结构模板，返回结构定义（返回对象，不要序列化为字符串）
       if (template.type === 'structure' && template.structure) {
-        return typeof template.structure === 'string' 
-          ? template.structure 
-          : JSON.stringify(template.structure, null, 2);
+        // 直接返回结构对象，让前端和后端都能正确处理
+        let structure = typeof template.structure === 'string' 
+          ? JSON.parse(template.structure)
+          : template.structure;
+        
+        // 修复 YAML 解析时可能出现的对象序列化问题
+        // 确保所有 name 字段都是字符串
+        structure = this.fixStructureNames(structure);
+        
+        return structure;
       }
       
       return '';
@@ -257,6 +264,60 @@ export class WebviewRPC {
     });
 
     this.logger.info('All Webview RPC methods registered');
+  }
+
+  /**
+   * 修复结构中的 name 字段（处理 YAML 解析时可能出现的对象序列化问题）
+   */
+  private fixStructureNames(structure: any): any {
+    if (Array.isArray(structure)) {
+      return structure.map(item => this.fixStructureNames(item));
+    } else if (structure && typeof structure === 'object') {
+      // 如果是结构数组（structure 字段）
+      if (structure.structure && Array.isArray(structure.structure)) {
+        return {
+          ...structure,
+          structure: structure.structure.map((item: any) => this.fixStructureNames(item))
+        };
+      }
+      
+      // 修复单个结构项
+      const fixed: any = { ...structure };
+      
+      // 修复 name 字段
+      if (fixed.name && typeof fixed.name === 'object') {
+        // 如果 name 是对象，尝试提取字符串值
+        const objKeys = Object.keys(fixed.name);
+        if (objKeys.length > 0) {
+          // 检查是否是 {{variable}} 格式被错误解析
+          const firstKey = objKeys[0];
+          if (firstKey === '[object Object]' || firstKey.includes('object')) {
+            // 尝试从对象值中恢复
+            const objValue = fixed.name[firstKey];
+            if (objValue === null || objValue === undefined) {
+              // 可能是 {{folderName}} 被解析成了 {folderName: null}
+              // 尝试从键名恢复
+              fixed.name = firstKey.replace(/\[object Object\]/g, '').trim() || '{{folderName}}';
+            } else {
+              fixed.name = String(objValue);
+            }
+          } else {
+            fixed.name = firstKey;
+          }
+        } else {
+          fixed.name = '{{folderName}}'; // 默认值
+        }
+      }
+      
+      // 递归处理 children
+      if (fixed.children && Array.isArray(fixed.children)) {
+        fixed.children = fixed.children.map((child: any) => this.fixStructureNames(child));
+      }
+      
+      return fixed;
+    }
+    
+    return structure;
   }
 }
 

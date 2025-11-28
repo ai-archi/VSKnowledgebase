@@ -52,12 +52,13 @@ export interface ArtifactFileSystemApplicationService {
    * @param vault Vault 引用
    * @param basePath 基础路径（相对于 artifacts 目录）
    * @param template 模板内容
+   * @param variables 变量映射（用于替换模板中的变量，如 {{folderName}}）
    * @returns 创建结果
    */
   createFolderStructureFromTemplate(
     vault: VaultReference,
     basePath: string,
-    template: any
+    template: import('../domain/entity/ArtifactTemplate').ArtifactTemplate
   ): Promise<Result<void, ArtifactError>>;
 }
 

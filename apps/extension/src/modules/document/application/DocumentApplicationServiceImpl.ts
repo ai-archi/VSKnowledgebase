@@ -4,12 +4,16 @@ import { DocumentApplicationService } from './DocumentApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
+import { TemplateApplicationService } from '../../template/application/TemplateApplicationService';
 import { VaultReference } from '../../shared/domain/value_object/VaultReference';
 // Remove duplicate Result import - use the one from errors
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
 import { EventBus } from '../../../core/eventbus/EventBus';
+import { TemplateStructureDomainServiceImpl } from '../../shared/domain/services/TemplateStructureDomainService';
+import { ArtifactTemplate } from '../../shared/domain/entity/ArtifactTemplate';
+import * as yaml from 'js-yaml';
 
 @injectable()
 export class DocumentApplicationServiceImpl implements DocumentApplicationService {
@@ -20,6 +24,8 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     private vaultService: VaultApplicationService,
     @inject(TYPES.ArtifactTreeApplicationService)
     private treeService: ArtifactTreeApplicationService,
+    @inject(TYPES.TemplateApplicationService)
+    private templateService: TemplateApplicationService,
     @inject(TYPES.Logger)
     private logger: Logger,
     @inject(TYPES.EventBus)
@@ -103,7 +109,7 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     vaultId: string,
     folderPath: string,
     folderName: string,
-    template?: any
+    templateId?: string
   ): Promise<Result<string, ArtifactError>> {
     const vaultResult = await this.vaultService.getVault(vaultId);
     if (!vaultResult.success) {
@@ -129,16 +135,88 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       return createResult;
     }
 
-    // 如果有模板，根据模板创建目录结构
-    if (template) {
-      const structureResult = await this.artifactService.createFolderStructureFromTemplate(
-        vault,
-        targetFolderPath,
-        template
-      );
-      if (!structureResult.success) {
-        this.logger.warn(`Failed to create structure from template: ${structureResult.error?.message}`);
-        // 即使模板结构创建失败，也继续返回成功（至少主文件夹已创建）
+    // 如果有模板 ID，读取模板文件并根据模板创建目录结构
+    if (templateId) {
+      // 读取模板
+      const templateResult = await this.templateService.getTemplate(templateId, vaultId);
+      if (!templateResult.success || templateResult.value.type !== 'structure') {
+        this.logger.warn(`Template not found or not a structure template: ${templateId}`);
+      } else {
+        const template = templateResult.value;
+        
+        // 准备变量映射（支持 folderName 变量）
+        const variables = {
+          folderName: folderName,
+        };
+
+        // 读取模板文件内容（YAML 格式）
+        const templatePath = `templates/structure/${templateId}.yml`;
+        const templateContentResult = await this.treeService.readFile(vault, templatePath);
+        
+        if (templateContentResult.success) {
+          // 使用 jinja2 模板语言替换变量（处理 YAML 中的 {{variable}}）
+          const templateStructureService = new TemplateStructureDomainServiceImpl();
+          const renderedYaml = templateStructureService.renderTemplate(templateContentResult.value, variables);
+          
+          // 解析 YAML 为对象
+          try {
+            const yamlData = yaml.load(renderedYaml) as any;
+            const structureArray = yamlData?.structure || (Array.isArray(yamlData) ? yamlData : null);
+            
+            if (structureArray && Array.isArray(structureArray)) {
+              // 直接使用解析后的 YAML 数据创建 ArtifactTemplate 对象
+              // 变量已经在 YAML 渲染时替换过了
+              const artifactTemplate = new ArtifactTemplate(
+                structureArray as any,
+                variables,
+                templateContentResult.value
+              );
+              
+              if (artifactTemplate.isValid()) {
+                // 使用 ArtifactTemplate 创建文件夹结构
+                const structureResult = await this.artifactService.createFolderStructureFromTemplate(
+                  vault,
+                  targetFolderPath,
+                  artifactTemplate
+                );
+                
+                if (!structureResult.success) {
+                  this.logger.error(`Failed to create structure from template: ${structureResult.error?.message}`, {
+                    vaultId: vault.id,
+                    folderName,
+                    templateId,
+                    error: structureResult.error
+                  });
+                }
+              } else {
+                this.logger.error('Failed to parse template structure', {
+                  vaultId: vault.id,
+                  folderName,
+                  templateId
+                });
+              }
+            } else {
+              this.logger.error('Template structure is not an array', {
+                vaultId: vault.id,
+                folderName,
+                templateId
+              });
+            }
+          } catch (yamlError: any) {
+            this.logger.error(`Failed to parse rendered YAML: ${yamlError.message}`, {
+              vaultId: vault.id,
+              folderName,
+              templateId,
+              error: yamlError
+            });
+          }
+        } else {
+          this.logger.warn(`Failed to read template file: ${templatePath}`, {
+            vaultId: vault.id,
+            templateId,
+            error: templateContentResult.error
+          });
+        }
       }
     }
 

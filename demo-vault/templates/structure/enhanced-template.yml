@@ -5,7 +5,7 @@ category: example
 viewType: document
 structure:
   - type: directory
-    name: {{projectName}}
+    name: {{folderName}}
     description: 项目根目录
     children:
       - type: directory
@@ -13,16 +13,16 @@ structure:
         description: 源代码目录
         children:
           - type: directory
-            name: {{moduleName}}
-            description: 模块目录（使用变量）
+            name: module
+            description: 模块目录
             children:
               - type: file
-                name: {{moduleName}}.ts
+                name: module.ts
                 fileType: ts
                 template: demo-vault/templates/content/module-template.ts
                 description: TypeScript 模块文件
               - type: file
-                name: {{moduleName}}.test.ts
+                name: module.test.ts
                 fileType: ts
                 description: 测试文件
           - type: file
@@ -48,7 +48,7 @@ structure:
         description: 配置文件目录
         children:
           - type: file
-            name: {{projectName}}.config.json
+            name: {{folderName}}.config.json
             fileType: json
             template: demo-vault/templates/content/config-template.json
             description: 项目配置文件
@@ -61,12 +61,6 @@ structure:
         fileType: json
         template: demo-vault/templates/content/package-template.json
         description: Node.js 包配置文件
-variables:
-  - projectName
-  - moduleName
-  - version
-  - description
-  - date
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z
 

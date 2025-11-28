@@ -582,7 +582,7 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
     }
 
     // 递归扫描 artifacts 目录
-    const scanDirectory = (dir: string, basePath: string = ''): void => {
+    const scanDirectory = (dir: string, basePath = ''): void => {
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         this.logger.info(`Scanning directory: ${dir}, found ${entries.length} entries`);
@@ -847,21 +847,41 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   async createFolderStructureFromTemplate(
     vault: VaultReference,
     basePath: string,
-    template: any
+    artifactTemplate: import('../domain/entity/ArtifactTemplate').ArtifactTemplate
   ): Promise<Result<void, ArtifactError>> {
     try {
-      // 使用领域服务解析模板结构
-      const templateStructureService = new TemplateStructureDomainServiceImpl();
-      const structureItems = templateStructureService.parseTemplateStructure(template);
-
-      if (!structureItems || structureItems.length === 0) {
-        this.logger.warn('Template structure is empty or invalid, skipping structure creation');
-        return { success: true, value: undefined };
+      if (!artifactTemplate || !artifactTemplate.isValid()) {
+        const errorMessage = 'Template structure is empty or invalid. Please check the template file format.';
+        this.logger.error(errorMessage, { 
+          vaultId: vault.id, 
+          basePath
+        });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            errorMessage,
+            { vaultId: vault.id, basePath }
+          ),
+        };
       }
 
-      // 递归创建结构项
+      // 从 ArtifactTemplate 对象获取已应用变量的结构项
+      const structureItems = artifactTemplate.structure;
+
+      this.logger.info('Creating folder structure from ArtifactTemplate', {
+        vaultId: vault.id,
+        basePath,
+        itemCount: structureItems.length,
+        firstItem: structureItems[0] ? {
+          type: structureItems[0].type,
+          name: structureItems[0].name
+        } : null
+      });
+
+      // 递归创建结构项（变量已在 ArtifactTemplate 中应用）
       for (const item of structureItems) {
-        const itemResult = await this.createStructureItem(vault, basePath, item);
+        const itemResult = await this.createStructureItem(vault, basePath, item, artifactTemplate.variables);
         if (!itemResult.success) {
           return itemResult;
         }
@@ -869,6 +889,12 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
 
       return { success: true, value: undefined };
     } catch (error: any) {
+      this.logger.error('Failed to create folder structure from template', {
+        error: error.message,
+        stack: error.stack,
+        vaultId: vault.id,
+        basePath
+      });
       return {
         success: false,
         error: new ArtifactError(
@@ -887,7 +913,8 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
   private async createStructureItem(
     vault: VaultReference,
     basePath: string,
-    item: TemplateStructureItem
+    item: TemplateStructureItem,
+    variables?: { [key: string]: string }
   ): Promise<Result<void, ArtifactError>> {
     const itemName = item.name;
     const itemPath = path.join(basePath, itemName);
@@ -899,10 +926,10 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
         return createDirResult;
       }
 
-      // 递归处理子项
+      // 递归处理子项（子项已经在外部替换过变量，这里直接使用）
       if (item.children && Array.isArray(item.children)) {
         for (const child of item.children) {
-          const childResult = await this.createStructureItem(vault, itemPath, child);
+          const childResult = await this.createStructureItem(vault, itemPath, child, variables);
           if (!childResult.success) {
             return childResult;
           }
@@ -925,10 +952,23 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
         const readResult = await this.treeService.readFile(vault, templateFullPath);
         if (readResult.success) {
           fileContent = readResult.value;
+          // 在文件内容中也替换变量（使用类似 Jinja2 的模板语法）
+          if (variables) {
+            const templateStructureService = new TemplateStructureDomainServiceImpl();
+            fileContent = templateStructureService.renderTemplate(fileContent, variables);
+          }
         } else {
-          // 如果读取模板失败，使用空内容或默认内容
-          this.logger.warn(`Failed to read template file: ${templateFullPath}, using empty content`);
-          fileContent = '';
+          // 如果读取模板失败，记录错误并返回失败
+          const errorMessage = `Failed to read template file: ${templateFullPath}`;
+          this.logger.error(errorMessage, { vaultId: vault.id, templatePath: item.template });
+          return {
+            success: false,
+            error: new ArtifactError(
+              ArtifactErrorCode.OPERATION_FAILED,
+              errorMessage,
+              { vaultId: vault.id, templatePath: item.template }
+            ),
+          };
         }
       }
 

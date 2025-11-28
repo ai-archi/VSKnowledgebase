@@ -21,9 +21,6 @@ structure:
         name: architecture-overview.md
         template: architecture-overview.md
         description: 架构概览文档
-variables:
-  - projectName
-  - architectureType
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z
 

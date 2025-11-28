@@ -18,9 +18,6 @@ structure:
         name: overview.md
         template: requirement-overview.md
         description: 需求概览文档
-variables:
-  - projectName
-  - version
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z
 

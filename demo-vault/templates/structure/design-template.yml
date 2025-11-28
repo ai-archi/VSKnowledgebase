@@ -21,9 +21,6 @@ structure:
         name: design-overview.md
         template: design-overview.md
         description: 设计概览文档
-variables:
-  - projectName
-  - systemName
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z
 

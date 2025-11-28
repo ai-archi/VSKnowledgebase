@@ -5,7 +5,7 @@ category: project
 viewType: document
 structure:
   - type: directory
-    name: {{projectName}}
+    name: {{folderName}}
     description: 项目根目录
     children:
       - type: directory
@@ -40,10 +40,6 @@ structure:
         name: README.md
         template: demo-vault/templates/content/project-readme.md
         description: 项目说明文档
-variables:
-  - projectName
-  - version
-  - description
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z
 

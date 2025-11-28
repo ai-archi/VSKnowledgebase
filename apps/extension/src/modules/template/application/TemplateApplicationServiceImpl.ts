@@ -141,6 +141,9 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
             
             // 如果包含 structure 字段，则为结构模板
             if (templateData && typeof templateData === 'object' && templateData.structure) {
+              // 修复 YAML 解析时可能出现的对象序列化问题（如 {{folderName}} 被解析成对象）
+              const fixedStructure = this.fixYamlStructureNames(templateData.structure);
+              
               templates.push({
                 id: templateData.id || uuidv4(),
                 name: templateData.name || path.basename(fileNode.name, path.extname(fileNode.name)),
@@ -148,7 +151,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
                 type: 'structure',
                 category: templateData.category,
                 viewType: templateData.viewType,
-                structure: templateData.structure,
+                structure: fixedStructure,
                 variables: templateData.variables || [],
                 createdAt: templateData.createdAt || new Date().toISOString(),
                 updatedAt: templateData.updatedAt || new Date().toISOString(),
@@ -610,6 +613,48 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
     }
 
     return processed;
+  }
+
+  /**
+   * 修复 YAML 解析时可能出现的对象序列化问题
+   * 例如：{{folderName}} 可能被解析成 {"[object Object]": null} 或类似的对象
+   */
+  private fixYamlStructureNames(structure: any): any {
+    if (Array.isArray(structure)) {
+      return structure.map(item => this.fixYamlStructureNames(item));
+    } else if (structure && typeof structure === 'object') {
+      const fixed: any = { ...structure };
+      
+      // 修复 name 字段
+      if (fixed.name && typeof fixed.name === 'object') {
+        // 如果 name 是对象，可能是 YAML 解析错误
+        const objKeys = Object.keys(fixed.name);
+        if (objKeys.length > 0) {
+          const firstKey = objKeys[0];
+          // 检查是否是 {{variable}} 格式被错误解析
+          if (firstKey.includes('object') || firstKey.includes('Object')) {
+            // 尝试从原始 YAML 内容中恢复（如果可能）
+            // 否则使用默认的变量名
+            fixed.name = '{{folderName}}';
+          } else {
+            // 尝试使用第一个键作为名称
+            fixed.name = firstKey;
+          }
+        } else {
+          // 空对象，使用默认变量名
+          fixed.name = '{{folderName}}';
+        }
+      }
+      
+      // 递归处理 children
+      if (fixed.children && Array.isArray(fixed.children)) {
+        fixed.children = fixed.children.map((child: any) => this.fixYamlStructureNames(child));
+      }
+      
+      return fixed;
+    }
+    
+    return structure;
   }
 }
 

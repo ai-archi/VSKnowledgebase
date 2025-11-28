@@ -479,27 +479,12 @@ const handleCreate = async () => {
     // 确定文件夹路径
     const folderPath = initialFolderPath.value || '';
     
-    // 如果有模板，需要获取模板内容并创建文件夹结构
-    let templateContent: any = null;
-    if (formData.value.templateId) {
-      const template = folderTemplates.value.find(t => t.id === formData.value.templateId);
-      if (template) {
-        try {
-          templateContent = await extensionService.call<any>('template.getContent', {
-            templateId: formData.value.templateId,
-            vaultId: formData.value.vaultId,
-          });
-        } catch (err: any) {
-          console.error('Failed to get template content', err);
-        }
-      }
-    }
-    
+    // 只传递模板 ID，后端会读取模板文件并处理
     const result = await extensionService.call('document.createFolder', {
       vaultId: formData.value.vaultId,
       folderPath: folderPath,
       folderName: formData.value.folderName.trim(),
-      template: templateContent, // 传递模板内容用于创建文件夹结构
+      templateId: formData.value.templateId || undefined, // 只传递模板 ID
     });
 
     ElMessage.success('文件夹创建成功');
