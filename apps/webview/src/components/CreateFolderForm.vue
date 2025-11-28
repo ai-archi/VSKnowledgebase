@@ -268,17 +268,9 @@ const selectedVault = computed(() => {
   return vaults.value.find(v => v.id === formData.value.vaultId);
 });
 
+// 文件过滤现在由后端 API 实时处理，这里直接返回结果
 const filteredFiles = computed(() => {
-  if (!formData.value.folderName.trim()) {
     return allFiles.value;
-  }
-  const query = formData.value.folderName.toLowerCase();
-  return allFiles.value.filter(
-    (file) =>
-      file.name.toLowerCase().includes(query) ||
-      file.title?.toLowerCase().includes(query) ||
-      file.path.toLowerCase().includes(query)
-  );
 });
 
 const canCreate = computed(() => {
@@ -360,17 +352,18 @@ const loadTemplates = async (vaultId: string) => {
   }
 };
 
-const loadFiles = async () => {
+const loadFiles = async (query?: string) => {
   try {
     loadingFiles.value = true;
     const allResults: FileItem[] = [];
     
-    // 同时加载所有 vault 的文件
+    // 同时加载所有 vault 的文件（使用 document.list，支持查询）
     if (vaults.value.length > 0) {
       for (const vault of vaults.value) {
         try {
           const result = await extensionService.call<FileItem[]>('document.list', {
             vaultId: vault.id,
+            query: query,
           });
           if (result) {
             allResults.push(...result);
@@ -381,9 +374,11 @@ const loadFiles = async () => {
       }
     }
     
-    // 同时加载 workspace 的文件
+    // 同时加载 workspace 的文件（支持查询）
     try {
-      const workspaceResult = await extensionService.call<FileItem[]>('workspace.listFiles', {});
+      const workspaceResult = await extensionService.call<FileItem[]>('workspace.listFiles', {
+        query: query,
+      });
       if (workspaceResult) {
         allResults.push(...workspaceResult);
       }
@@ -413,10 +408,13 @@ const triggerAutoSearch = () => {
   }
   // 设置新的定时器，300ms 后执行搜索
   searchDebounceTimer.value = window.setTimeout(() => {
-    if (formData.value.folderName.trim()) {
-      loadFiles();
+    const query = formData.value.folderName.trim();
+    if (query) {
+      // 使用 VSCode API 实时过滤，传入查询条件
+      loadFiles(query);
     } else {
-      allFiles.value = [];
+      // 如果没有查询条件，加载所有文件
+      loadFiles();
     }
   }, 300);
 };

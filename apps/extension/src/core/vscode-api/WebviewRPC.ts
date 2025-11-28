@@ -4,6 +4,8 @@ import { VaultApplicationService } from '../../modules/shared/application/VaultA
 import { DocumentApplicationService } from '../../modules/document/application/DocumentApplicationService';
 import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
 import { ArtifactFileSystemApplicationService } from '../../modules/shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactTreeApplicationService } from '../../modules/shared/application/ArtifactTreeApplicationService';
+import { VaultReference } from '../../modules/shared/domain/value_object/VaultReference';
 import { WebviewAdapter, WebviewMessage } from './WebviewAdapter';
 
 /**
@@ -18,7 +20,8 @@ export class WebviewRPC {
     private vaultService: VaultApplicationService,
     private documentService: DocumentApplicationService,
     private templateService: TemplateApplicationService,
-    private artifactService: ArtifactFileSystemApplicationService
+    private artifactService: ArtifactFileSystemApplicationService,
+    private treeService: ArtifactTreeApplicationService
   ) {
     this.webviewAdapter = new WebviewAdapter(logger);
     this.registerAllMethods();
@@ -74,35 +77,81 @@ export class WebviewRPC {
       }));
     });
 
-    // Document 相关方法
-    this.webviewAdapter.registerMethod('document.list', async (params: { vaultId?: string }) => {
+    // Document 相关方法（不限制文件类型，支持查询）
+    this.webviewAdapter.registerMethod('document.list', async (params: { vaultId?: string; query?: string }) => {
+      const items: Array<{
+        id?: string;
+        path: string;
+        name: string;
+        title?: string;
+        type?: 'file' | 'folder';
+        vault?: { id: string; name: string };
+      }> = [];
+
+      // 获取要扫描的 vault 列表
+      let vaultsToScan: Array<{ id: string; name: string }> = [];
+      
       if (params.vaultId) {
-        // 从指定 Vault 获取文档
-        const result = await this.documentService.listDocuments(params.vaultId);
-        if (!result.success) {
-          throw new Error(result.error.message);
+        const vaultResult = await this.vaultService.getVault(params.vaultId);
+        if (!vaultResult.success || !vaultResult.value) {
+          return items;
         }
-        return result.value.map(artifact => ({
-          id: artifact.id,
-          path: artifact.path,
-          name: artifact.name,
-          title: artifact.title,
-          vault: artifact.vault,
-        }));
+        vaultsToScan = [{ id: vaultResult.value.id, name: vaultResult.value.name }];
       } else {
-        // 从所有 Vault 获取文档
-        const result = await this.artifactService.listArtifacts();
-        if (!result.success) {
-          throw new Error(result.error.message);
+        const vaultsResult = await this.vaultService.listVaults();
+        if (!vaultsResult.success) {
+          return items;
         }
-        return result.value.map(artifact => ({
-          id: artifact.id,
-          path: artifact.path,
-          name: artifact.name,
-          title: artifact.title,
-          vault: artifact.vault,
-        }));
+        vaultsToScan = vaultsResult.value.map(v => ({ id: v.id, name: v.name }));
       }
+
+      // 扫描每个 vault 的 artifacts 目录
+      for (const vault of vaultsToScan) {
+        const vaultRef: VaultReference = { id: vault.id, name: vault.name };
+        
+        // 使用 treeService 列出 artifacts 目录下的所有文件和文件夹（递归，不限制文件类型）
+        const listResult = await this.treeService.listDirectory(vaultRef, 'artifacts', {
+          recursive: true,
+          includeHidden: false,
+          // 不指定 extensions，返回所有文件类型
+        });
+        
+        if (listResult.success) {
+          // 如果有查询条件，进行过滤
+          const query = params.query?.trim().toLowerCase();
+          
+          for (const node of listResult.value) {
+            // 构建相对于 artifacts 目录的路径
+            const relativePath = node.path.startsWith('artifacts/') 
+              ? node.path.substring('artifacts/'.length)
+              : node.path;
+            
+            // 如果有查询条件，检查是否匹配
+            if (query) {
+              const nameLower = node.name.toLowerCase();
+              const pathLower = relativePath.toLowerCase();
+              const titleLower = (node.isFile ? node.name.replace(/\.[^/.]+$/, '') : node.name).toLowerCase();
+              
+              // 检查文件名、路径或标题是否包含查询字符串
+              if (!nameLower.includes(query) && 
+                  !pathLower.includes(query) && 
+                  !titleLower.includes(query)) {
+                continue; // 不匹配，跳过
+              }
+            }
+            
+            items.push({
+              path: relativePath,
+              name: node.name,
+              title: node.isFile ? node.name.replace(/\.[^/.]+$/, '') : node.name,
+              type: node.isDirectory ? 'folder' : 'file',
+              vault: { id: vault.id, name: vault.name },
+            });
+      }
+        }
+      }
+
+      return items;
     });
 
     this.webviewAdapter.registerMethod('document.create', async (params: {
@@ -135,37 +184,28 @@ export class WebviewRPC {
       folderName: string;
       template?: any; // 模板内容（structure 类型）
     }) => {
-      // 创建文件夹（通过创建一个占位文件）
-      const targetFolderPath = params.folderPath === '' 
-        ? params.folderName
-        : `${params.folderPath}/${params.folderName}`;
-      const placeholderPath = `${targetFolderPath}/.keep`;
-      
-      const result = await this.documentService.createDocument(
+      const result = await this.documentService.createFolder(
         params.vaultId,
-        placeholderPath,
+        params.folderPath,
         params.folderName,
-        `# ${params.folderName}\n\nThis folder contains documents.\n`
+        params.template
       );
       if (!result.success) {
         throw new Error(result.error.message);
       }
 
-      // 如果有模板，根据模板创建目录结构
-      if (params.template && params.template.structure) {
-        // TODO: 实现根据模板创建目录结构的逻辑
-        // 这里需要递归创建目录和文件
-        // 暂时只创建主文件夹，模板功能后续实现
-        this.logger.info('Template structure creation not yet implemented');
-      }
+      // 获取 vault 信息用于返回
+      const vaultsResult = await this.vaultService.listVaults();
+      const vault = vaultsResult.success 
+        ? vaultsResult.value.find(v => v.id === params.vaultId)
+        : undefined;
 
       return {
-        id: result.value.id,
-        path: result.value.path,
-        name: result.value.name,
-        title: result.value.title,
-        vault: result.value.vault,
-        folderPath: targetFolderPath,
+        path: result.value,
+        name: params.folderName,
+        title: params.folderName,
+        vault: vault ? { id: vault.id, name: vault.name } : undefined,
+        folderPath: result.value,
       };
     });
 
@@ -216,7 +256,7 @@ export class WebviewRPC {
     });
 
     // Workspace 相关方法
-    this.webviewAdapter.registerMethod('workspace.listFiles', async () => {
+    this.webviewAdapter.registerMethod('workspace.listFiles', async (params?: { query?: string }) => {
       const items: Array<{
         id?: string;
         path: string;
@@ -235,9 +275,22 @@ export class WebviewRPC {
       // 遍历所有工作区文件夹
       for (const folder of workspaceFolders) {
         try {
-          // 使用 VSCode API 查找所有文件和文件夹
-          const pattern = new vscode.RelativePattern(folder, '**/*');
-          const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 1000);
+          // 构建搜索模式（如果有查询条件）
+          let searchPattern = '**/*';
+          if (params?.query && params.query.trim()) {
+            // 使用通配符模式进行文件名搜索
+            const query = params.query.trim();
+            // 转义特殊字符，但保留 * 和 ?
+            const escapedQuery = query.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+            searchPattern = `**/*${escapedQuery}*`;
+          }
+
+          // 使用 VSCode API 查找文件
+          // VSCode 会自动使用 .gitignore 规则进行过滤
+          const pattern = new vscode.RelativePattern(folder, searchPattern);
+          // 不指定 exclude 模式，让 VSCode 使用 .gitignore
+          // 增加文件数量限制到 10000
+          const uris = await vscode.workspace.findFiles(pattern, null, 10000);
           
           // 收集所有路径，用于识别文件夹
           const allPaths = new Set<string>();
@@ -247,9 +300,7 @@ export class WebviewRPC {
             const relativePath = vscode.workspace.asRelativePath(uri);
             const fileName = uri.fsPath.split(/[/\\]/).pop() || '';
             
-            // 只包含常见的文档文件类型
-            const ext = uri.fsPath.split('.').pop()?.toLowerCase();
-            if (['md', 'txt', 'json', 'yaml', 'yml', 'xml'].includes(ext || '')) {
+            // 不限制文件类型，包含所有文件
               filePaths.add(relativePath);
               items.push({
                 path: relativePath,
@@ -257,13 +308,45 @@ export class WebviewRPC {
                 title: fileName.replace(/\.[^/.]+$/, ''), // 移除扩展名作为标题
                 type: 'file',
               });
-            }
             
             // 收集所有路径的父目录
             const pathParts = relativePath.split(/[/\\]/);
             for (let i = 1; i < pathParts.length; i++) {
               const dirPath = pathParts.slice(0, i).join('/');
               allPaths.add(dirPath);
+            }
+          }
+          
+          // 如果没有查询条件，也列出所有文件夹
+          if (!params?.query || !params.query.trim()) {
+            // 使用 listDirectory 获取文件夹列表
+            try {
+              const dirUri = folder.uri;
+              const dirEntries = await vscode.workspace.fs.readDirectory(dirUri);
+              
+              // 递归获取所有子目录
+              const scanDirs = async (baseUri: vscode.Uri, basePath = ''): Promise<void> => {
+                try {
+                  const entries = await vscode.workspace.fs.readDirectory(baseUri);
+                  for (const [name, type] of entries) {
+                    if (type === vscode.FileType.Directory) {
+                      const dirPath = basePath ? `${basePath}/${name}` : name;
+                      if (!filePaths.has(dirPath)) {
+                        allPaths.add(dirPath);
+                        // 递归扫描子目录
+                        const subUri = vscode.Uri.joinPath(baseUri, name);
+                        await scanDirs(subUri, dirPath);
+                      }
+                    }
+                  }
+                } catch (error) {
+                  // 忽略无法访问的目录（可能被 .gitignore 排除）
+                }
+              };
+              
+              await scanDirs(dirUri);
+            } catch (error) {
+              // 如果无法读取目录，继续处理文件
             }
           }
           

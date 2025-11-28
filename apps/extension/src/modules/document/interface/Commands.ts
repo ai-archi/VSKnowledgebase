@@ -39,17 +39,17 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       treeView,
       webviewAdapter
     );
-  }
+      }
 
   // ==================== 实现抽象方法 ====================
 
   protected getRefreshCommandName(): string {
     return 'archi.document.refresh';
-  }
+      }
 
   protected getExpandAllCommandName(): string {
     return 'archi.document.expandAll';
-  }
+    }
 
   protected getCollapseAllCommandName(): string {
     return 'archi.document.collapseAll';
@@ -65,7 +65,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
 
   protected getDeleteCommandName(): string {
     return 'archi.document.delete';
-  }
+    }
 
   protected async handleDelete(item: DocumentTreeItem): Promise<void> {
       if (item.vaultName) {
@@ -125,7 +125,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         }
       } else {
         vscode.window.showErrorMessage('Please select a vault or document to delete');
-    }
+      }
   }
 
   // ==================== 注册特定命令 ====================
@@ -162,7 +162,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
 
           if (!documentName) {
             return;
-          }
+      }
 
           const result = await this.documentService.createDocument(
             selectedVault.id,
@@ -198,7 +198,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       const vaultInfo = await this.validateAndGetVault(item, 'add diagram');
       if (!vaultInfo) {
       return;
-      }
+    }
       const { vault, vaultName } = vaultInfo;
 
       const diagramName = await vscode.window.showInputBox({
@@ -241,8 +241,8 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         // 如果是在 vault 节点上右键，在 diagrams 文件夹下创建
         diagramPath = `diagrams/${diagramName}.${extension}`;
         targetFolderPath = 'diagrams';
-      }
-
+        }
+        
       // 创建设计图文件
       const content = this.fileOperationDomainService.generateDefaultContent(
         diagramName,
@@ -273,6 +273,6 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     } catch (error: any) {
       this.logger.error('Failed to add diagram', error);
       vscode.window.showErrorMessage(`Failed to add diagram: ${error.message}`);
-    }
   }
+}
 }

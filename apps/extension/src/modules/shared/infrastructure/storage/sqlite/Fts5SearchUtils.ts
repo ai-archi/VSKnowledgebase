@@ -28,7 +28,7 @@ export class Fts5SearchUtils {
     // FTS5 虚拟表和触发器已通过迁移创建
     // 这里只需要确保连接已建立，并同步现有数据到 FTS5 索引
     // 如果表已存在，同步操作是安全的（不会重复插入）
-    
+
     this.initialized = true;
     this.logger?.info('FTS5 search initialized successfully.');
   }

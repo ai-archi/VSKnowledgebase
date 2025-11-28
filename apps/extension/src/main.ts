@@ -131,12 +131,14 @@ export async function activate(context: vscode.ExtensionContext) {
   const fileOperationDomainService = container.get<import('./modules/shared/domain/services/FileOperationDomainService').FileOperationDomainService>(TYPES.FileOperationDomainService);
   const documentTreeViewProvider = new DocumentTreeViewProvider(vaultService, documentTreeService, logger);
   const documentTreeView = vscode.window.createTreeView('architool.documentView', { treeDataProvider: documentTreeViewProvider });
+  const treeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
   const webviewRPC = new WebviewRPC(
     logger,
     vaultService,
     documentService,
     templateService,
-    artifactService
+    artifactService,
+    treeService
   );
   const documentCommands = new DocumentCommands(
     documentService,
