@@ -4,7 +4,7 @@ import { BaseArtifactTreeItem } from '../../shared/interface/tree/BaseArtifactTr
 import { BaseArtifactTreeViewProvider } from '../../shared/interface/tree/BaseArtifactTreeViewProvider';
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService, FileTreeNode } from '../../shared/application/ArtifactTreeApplicationService';
+import { ArtifactApplicationService, FileTreeNode } from '../../shared/application/ArtifactApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 
 export class DocumentTreeItem extends BaseArtifactTreeItem {
@@ -52,7 +52,7 @@ export class DocumentTreeItem extends BaseArtifactTreeItem {
 export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<DocumentTreeItem> {
   constructor(
     vaultService: VaultApplicationService,
-    treeService: ArtifactTreeApplicationService,
+    treeService: ArtifactApplicationService,
     logger: Logger
   ) {
     super(vaultService, treeService, logger);

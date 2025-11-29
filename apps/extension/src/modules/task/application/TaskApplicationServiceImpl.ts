@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { TaskApplicationService, Task, CreateTaskOptions } from './TaskApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
 // Remove duplicate Result import - use the one from errors
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
@@ -11,8 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 @injectable()
 export class TaskApplicationServiceImpl implements TaskApplicationService {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.MetadataRepository)
     private metadataRepository: MetadataRepository,
     @inject(TYPES.Logger)

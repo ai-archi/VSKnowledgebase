@@ -24,8 +24,8 @@ import { ChangeDetector, ChangeDetectorImpl } from '../../modules/shared/infrast
 import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactLinkRepository';
 
 // Application Services
-import { ArtifactFileSystemApplicationServiceImpl } from '../../modules/shared/application/ArtifactFileSystemApplicationServiceImpl';
-import { ArtifactTreeApplicationService, ArtifactTreeApplicationServiceImpl } from '../../modules/shared/application';
+import { ArtifactApplicationServiceImpl } from '../../modules/shared/application/ArtifactApplicationServiceImpl';
+import { ArtifactApplicationService } from '../../modules/shared/application/ArtifactApplicationService';
 import { CodeFileSystemApplicationService } from '../../modules/shared/application/CodeFileSystemApplicationService';
 import { CodeFileSystemApplicationServiceImpl } from '../../modules/shared/application/CodeFileSystemApplicationServiceImpl';
 import { VaultApplicationServiceImpl } from '../../modules/shared/application/VaultApplicationServiceImpl';
@@ -101,10 +101,8 @@ export function createContainer(
     .inSingletonScope();
 
   // Application Services
-  container.bind(TYPES.ArtifactFileSystemApplicationService)
-    .to(ArtifactFileSystemApplicationServiceImpl).inSingletonScope();
-  container.bind<ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService)
-    .to(ArtifactTreeApplicationServiceImpl).inSingletonScope();
+  container.bind<ArtifactApplicationService>(TYPES.ArtifactApplicationService)
+    .to(ArtifactApplicationServiceImpl).inSingletonScope();
   container.bind<CodeFileSystemApplicationService>(TYPES.CodeFileSystemApplicationService)
     .to(CodeFileSystemApplicationServiceImpl).inSingletonScope();
   container.bind(TYPES.VaultApplicationService)

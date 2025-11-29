@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { AIApplicationService, ImpactAnalysisResult, PromptGenerationOpts } from './AIApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { ArtifactLinkRepository } from '../../shared/infrastructure/ArtifactLinkRepository';
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactChange } from '../../shared/domain/entity/ArtifactChange';
@@ -17,8 +17,8 @@ import { Logger } from '../../../core/logger/Logger';
 @injectable()
 export class AIApplicationServiceImpl implements AIApplicationService {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.ArtifactLinkRepository)
     private linkRepository: ArtifactLinkRepository,
     @inject(TYPES.Logger)

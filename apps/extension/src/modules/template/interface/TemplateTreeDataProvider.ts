@@ -3,7 +3,7 @@ import * as path from 'path';
 import { BaseArtifactTreeItem } from '../../shared/interface/tree/BaseArtifactTreeItem';
 import { BaseArtifactTreeViewProvider } from '../../shared/interface/tree/BaseArtifactTreeViewProvider';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService, FileTreeNode } from '../../shared/application/ArtifactTreeApplicationService';
+import { ArtifactApplicationService, FileTreeNode } from '../../shared/application/ArtifactApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 
 /**
@@ -29,7 +29,7 @@ export class TemplateTreeItem extends BaseArtifactTreeItem {
 export class TemplateTreeDataProvider extends BaseArtifactTreeViewProvider<TemplateTreeItem> {
   constructor(
     vaultService: VaultApplicationService,
-    treeService: ArtifactTreeApplicationService,
+    treeService: ArtifactApplicationService,
     logger: Logger
   ) {
     super(vaultService, treeService, logger);

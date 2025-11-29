@@ -24,8 +24,7 @@ export const TYPES = {
   ChangeDetector: Symbol.for('ChangeDetector'),
 
   // Application Services
-  ArtifactFileSystemApplicationService: Symbol.for('ArtifactFileSystemApplicationService'),
-  ArtifactTreeApplicationService: Symbol.for('ArtifactTreeApplicationService'),
+  ArtifactApplicationService: Symbol.for('ArtifactApplicationService'),
   CodeFileSystemApplicationService: Symbol.for('CodeFileSystemApplicationService'),
   VaultApplicationService: Symbol.for('VaultApplicationService'),
   LookupApplicationService: Symbol.for('LookupApplicationService'),

@@ -4,7 +4,7 @@ import { createContainer } from './infrastructure/di/container';
 import { TYPES } from './infrastructure/di/types';
 import { Logger } from './core/logger/Logger';
 import { VaultApplicationService } from './modules/shared/application/VaultApplicationService';
-import { ArtifactFileSystemApplicationService } from './modules/shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from './modules/shared/application/ArtifactApplicationService';
 import { LookupApplicationService } from './modules/lookup/application/LookupApplicationService';
 import { DocumentApplicationService } from './modules/document/application/DocumentApplicationService';
 import { TaskApplicationService } from './modules/task/application/TaskApplicationService';
@@ -110,7 +110,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 4. 获取服务
   const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
-  const artifactService = container.get<ArtifactFileSystemApplicationService>(TYPES.ArtifactFileSystemApplicationService);
+  const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
   const lookupService = container.get<LookupApplicationService>(TYPES.LookupApplicationService);
   const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
   const taskService = container.get<TaskApplicationService>(TYPES.TaskApplicationService);
@@ -126,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const lookupProvider = new NoteLookupProvider(lookupService, vaultService, logger);
 
   // 7. 初始化文档视图
-  const documentTreeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const documentTreeService = artifactService;
   const fileTreeDomainService = container.get<import('./modules/shared/domain/services/FileTreeDomainService').FileTreeDomainService>(TYPES.FileTreeDomainService);
   const fileOperationDomainService = container.get<import('./modules/shared/domain/services/FileOperationDomainService').FileOperationDomainService>(TYPES.FileOperationDomainService);
   const documentTreeViewProvider = new DocumentTreeViewProvider(vaultService, documentTreeService, logger);
@@ -144,7 +144,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const documentCommands = new DocumentCommands(
     documentService,
     artifactService,
-    documentTreeService,
     vaultService,
     fileTreeDomainService,
     fileOperationDomainService,
@@ -175,7 +174,7 @@ export async function activate(context: vscode.ExtensionContext) {
   viewpointCommands.registerCommands(context);
 
   // 10. 初始化模板视图
-  const templateTreeService = container.get<import('./modules/shared/application/ArtifactTreeApplicationService').ArtifactTreeApplicationService>(TYPES.ArtifactTreeApplicationService);
+  const templateTreeService = artifactService;
   const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, templateTreeService, logger);
   vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
   const templateCommands = new TemplateCommands(templateService, vaultService, logger);

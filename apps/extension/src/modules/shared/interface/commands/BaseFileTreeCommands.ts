@@ -5,8 +5,7 @@ import { CommandAdapter, CommandDefinition } from '../../../../core/vscode-api/C
 import { WebviewAdapter, WebviewMessage } from '../../../../core/vscode-api/WebviewAdapter';
 import { Logger } from '../../../../core/logger/Logger';
 import { VaultApplicationService } from '../../application/VaultApplicationService';
-import { ArtifactTreeApplicationService } from '../../application/ArtifactTreeApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../application/ArtifactApplicationService';
 import { BaseArtifactTreeItem } from '../tree/BaseArtifactTreeItem';
 import { BaseArtifactTreeViewProvider } from '../tree/BaseArtifactTreeViewProvider';
 import { FileTreeDomainService } from '../../domain/services/FileTreeDomainService';
@@ -28,8 +27,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
 
   constructor(
     protected vaultService: VaultApplicationService,
-    protected treeService: ArtifactTreeApplicationService,
-    protected fileOperationService: ArtifactFileSystemApplicationService,
+    protected artifactService: ArtifactApplicationService,
     protected fileTreeDomainService: FileTreeDomainService,
     protected fileOperationDomainService: FileOperationDomainService,
     protected logger: Logger,

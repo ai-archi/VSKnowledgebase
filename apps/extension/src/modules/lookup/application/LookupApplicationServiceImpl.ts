@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { LookupApplicationService, QuickCreateOptions } from './LookupApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
@@ -10,8 +10,8 @@ import { Logger } from '../../../core/logger/Logger';
 @injectable()
 export class LookupApplicationServiceImpl implements LookupApplicationService {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
     @inject(TYPES.Logger)

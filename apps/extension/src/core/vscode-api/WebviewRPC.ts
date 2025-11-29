@@ -3,7 +3,7 @@ import { Logger } from '../logger/Logger';
 import { VaultApplicationService } from '../../modules/shared/application/VaultApplicationService';
 import { DocumentApplicationService } from '../../modules/document/application/DocumentApplicationService';
 import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../modules/shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../modules/shared/application/ArtifactApplicationService';
 import { CodeFileSystemApplicationService } from '../../modules/shared/application/CodeFileSystemApplicationService';
 import { WebviewAdapter, WebviewMessage } from './WebviewAdapter';
 
@@ -19,7 +19,7 @@ export class WebviewRPC {
     private vaultService: VaultApplicationService,
     private documentService: DocumentApplicationService,
     private templateService: TemplateApplicationService,
-    private artifactService: ArtifactFileSystemApplicationService,
+    private artifactService: ArtifactApplicationService,
     private codeFileService: CodeFileSystemApplicationService
   ) {
     this.webviewAdapter = new WebviewAdapter(logger);

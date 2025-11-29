@@ -1,5 +1,37 @@
-import { Result, ArtifactError } from '../domain/errors';
+import { Result, ArtifactError, QueryOptions } from '../domain/errors';
+import { Artifact } from '../domain/entity/artifact';
+import { ArtifactMetadata } from '../domain/ArtifactMetadata';
+import { ArtifactViewType } from '../domain/types';
 import { VaultReference } from '../domain/value_object/VaultReference';
+
+export interface CreateArtifactOpts {
+  vault: VaultReference;
+  path: string;
+  title: string;
+  content: string;
+  viewType: ArtifactViewType;
+  format?: string;
+  category?: string;
+  tags?: string[];
+}
+
+export interface UpdateArtifactOpts {
+  title?: string;
+  description?: string;
+  content?: string;
+  tags?: string[];
+  category?: string;
+}
+
+/**
+ * 文件/文件夹项（用于列表展示）
+ */
+export interface FileFolderItem {
+  path: string;
+  name: string;
+  title?: string;
+  type: 'file' | 'folder';
+}
 
 /**
  * 文件树节点信息
@@ -39,10 +71,69 @@ export interface ListDirectoryOptions {
 }
 
 /**
- * Artifact 文件树应用服务
- * 提供文件树操作的通用逻辑，将文档、设计图、任务、文件夹等都视为工件
+ * Artifact 应用服务
+ * 统一管理 artifact 相关的所有操作，包括业务逻辑和文件系统操作
  */
-export interface ArtifactTreeApplicationService {
+export interface ArtifactApplicationService {
+  // ========== Artifact 业务操作 ==========
+  
+  /**
+   * 创建 artifact
+   */
+  createArtifact(opts: CreateArtifactOpts): Promise<Result<Artifact, ArtifactError>>;
+  
+  /**
+   * 获取 artifact
+   */
+  getArtifact(vaultId: string, artifactId: string): Promise<Result<Artifact, ArtifactError>>;
+  
+  /**
+   * 更新 artifact
+   */
+  updateArtifact(artifactId: string, updates: UpdateArtifactOpts): Promise<Result<Artifact, ArtifactError>>;
+  
+  /**
+   * 更新 artifact 内容
+   */
+  updateArtifactContent(vaultId: string, artifactId: string, newContent: string): Promise<Result<void, ArtifactError>>;
+  
+  /**
+   * 删除 artifact
+   */
+  deleteArtifact(vaultId: string, artifactId: string): Promise<Result<void, ArtifactError>>;
+  
+  /**
+   * 列出 artifacts
+   */
+  listArtifacts(vaultId?: string, options?: QueryOptions): Promise<Result<Artifact[], ArtifactError>>;
+  
+  /**
+   * 更新 artifact 元数据
+   */
+  updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>>;
+  
+  /**
+   * 列出 vault 中的所有文件和文件夹（不限制文件类型）
+   * @param vaultId Vault ID（可选，不指定则列出所有 vault）
+   * @param options 查询选项
+   */
+  listFilesAndFolders(vaultId?: string, options?: QueryOptions): Promise<Result<FileFolderItem[], ArtifactError>>;
+  
+  /**
+   * 根据模板创建文件夹结构
+   * @param vault Vault 引用
+   * @param basePath 基础路径（相对于 artifacts 目录）
+   * @param template 模板内容
+   * @returns 创建结果
+   */
+  createFolderStructureFromTemplate(
+    vault: VaultReference,
+    basePath: string,
+    template: import('../domain/entity/ArtifactTemplate').ArtifactTemplate
+  ): Promise<Result<void, ArtifactError>>;
+
+  // ========== 文件系统操作 ==========
+  
   /**
    * 读取文件内容
    * @param vault Vault 引用
@@ -129,4 +220,3 @@ export interface ArtifactTreeApplicationService {
    */
   getFullPath(vault: VaultReference, path: string): string;
 }
-

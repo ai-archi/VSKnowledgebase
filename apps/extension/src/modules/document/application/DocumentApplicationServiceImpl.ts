@@ -1,9 +1,8 @@
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { DocumentApplicationService } from './DocumentApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
 import { TemplateApplicationService } from '../../template/application/TemplateApplicationService';
 import { VaultReference } from '../../shared/domain/value_object/VaultReference';
 // Remove duplicate Result import - use the one from errors
@@ -18,12 +17,10 @@ import * as yaml from 'js-yaml';
 @injectable()
 export class DocumentApplicationServiceImpl implements DocumentApplicationService {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
-    @inject(TYPES.ArtifactTreeApplicationService)
-    private treeService: ArtifactTreeApplicationService,
     @inject(TYPES.TemplateApplicationService)
     private templateService: TemplateApplicationService,
     @inject(TYPES.Logger)
@@ -130,7 +127,7 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       : `artifacts/${folderPath}/${folderName}`;
 
     // 创建文件夹
-    const createResult = await this.treeService.createDirectory(vault, targetFolderPath);
+    const createResult = await this.artifactService.createDirectory(vault, targetFolderPath);
     if (!createResult.success) {
       return createResult;
     }
@@ -151,7 +148,7 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
 
         // 读取模板文件内容（YAML 格式）
         const templatePath = `templates/structure/${templateId}.yml`;
-        const templateContentResult = await this.treeService.readFile(vault, templatePath);
+        const templateContentResult = await this.artifactService.readFile(vault, templatePath);
         
         if (templateContentResult.success) {
           // 使用 jinja2 模板语言替换变量（处理 YAML 中的 {{variable}}）

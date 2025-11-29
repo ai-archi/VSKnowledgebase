@@ -5,9 +5,8 @@ import {
   Template,
   CreateFromTemplateOpts,
 } from './TemplateApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../shared/domain/errors';
 import { VaultFileSystemAdapter } from '../../shared/infrastructure/storage/file/VaultFileSystemAdapter';
@@ -19,10 +18,8 @@ import * as yaml from 'js-yaml';
 @injectable()
 export class TemplateApplicationServiceImpl implements TemplateApplicationService {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
-    @inject(TYPES.ArtifactTreeApplicationService)
-    private treeService: ArtifactTreeApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
     @inject(TYPES.VaultFileSystemAdapter)
@@ -91,7 +88,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       this.logger.info(`Loading templates for vaultId: ${vaultId}, vaultName: ${vault.name}`);
 
       // 检查 templates 目录是否存在
-      const templatesDirExists = await this.treeService.exists(vaultRef, 'templates');
+      const templatesDirExists = await this.artifactService.exists(vaultRef, 'templates');
       if (!templatesDirExists.success || !templatesDirExists.value) {
         this.logger.warn(`Templates directory not found for vault: ${vault.name}`);
         return { success: true, value: [] };
@@ -100,7 +97,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       const templates: Template[] = [];
 
       // 递归扫描 templates 目录下的所有文件
-      const templatesDirResult = await this.treeService.listDirectory(
+      const templatesDirResult = await this.artifactService.listDirectory(
         vaultRef,
         'templates',
         { recursive: true, includeHidden: false }
@@ -124,7 +121,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           continue;
         }
 
-        const contentResult = await this.treeService.readFile(vaultRef, fileNode.path);
+        const contentResult = await this.artifactService.readFile(vaultRef, fileNode.path);
         if (!contentResult.success) {
           this.logger.warn(`Failed to read template file: ${fileNode.path}`);
           continue;
@@ -297,13 +294,13 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       const vaultRef = { id: vault.id, name: vault.name };
 
       // 确保模板目录存在
-      await this.treeService.createDirectory(vaultRef, 'templates');
+      await this.artifactService.createDirectory(vaultRef, 'templates');
 
       // 根据模板类型保存到不同目录
       if (template.type === 'structure') {
-        await this.treeService.createDirectory(vaultRef, 'templates/structure');
+        await this.artifactService.createDirectory(vaultRef, 'templates/structure');
         const templatePath = `templates/structure/${templateId}.yml`;
-        const writeResult = await this.treeService.writeFile(
+        const writeResult = await this.artifactService.writeFile(
           vaultRef,
           templatePath,
           yaml.dump(fullTemplate)
@@ -312,10 +309,10 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           return writeResult;
         }
       } else {
-        await this.treeService.createDirectory(vaultRef, 'templates/content');
+        await this.artifactService.createDirectory(vaultRef, 'templates/content');
         const extension = template.viewType === 'design' ? '.md' : '.md';
         const templatePath = `templates/content/${templateId}${extension}`;
-        const writeResult = await this.treeService.writeFile(
+        const writeResult = await this.artifactService.writeFile(
           vaultRef,
           templatePath,
           template.content || ''
@@ -325,7 +322,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         }
         // 同时保存元数据
         const metaPath = `templates/content/${templateId}.meta.yml`;
-        const metaWriteResult = await this.treeService.writeFile(
+        const metaWriteResult = await this.artifactService.writeFile(
           vaultRef,
           metaPath,
           yaml.dump({
@@ -396,7 +393,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
 
     if (updatedTemplate.type === 'structure') {
       const templatePath = `templates/structure/${templateId}.yml`;
-      const writeResult = await this.treeService.writeFile(
+      const writeResult = await this.artifactService.writeFile(
         vaultRef,
         templatePath,
         yaml.dump(updatedTemplate)
@@ -408,7 +405,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       const extension = updatedTemplate.viewType === 'design' ? '.md' : '.md';
       const templatePath = `templates/content/${templateId}${extension}`;
       if (updates.content !== undefined) {
-        const writeResult = await this.treeService.writeFile(
+        const writeResult = await this.artifactService.writeFile(
           vaultRef,
           templatePath,
           updates.content
@@ -419,7 +416,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       }
       // 更新元数据
       const metaPath = `templates/content/${templateId}.meta.yml`;
-      const metaWriteResult = await this.treeService.writeFile(
+      const metaWriteResult = await this.artifactService.writeFile(
         vaultRef,
         metaPath,
         yaml.dump({
@@ -469,7 +466,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
 
       if (template.type === 'structure') {
         const templatePath = `templates/structure/${templateId}.yml`;
-        const deleteResult = await this.treeService.delete(vaultRef, templatePath);
+        const deleteResult = await this.artifactService.delete(vaultRef, templatePath);
         if (!deleteResult.success) {
           return deleteResult;
         }
@@ -477,11 +474,11 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         const extension = template.viewType === 'design' ? '.md' : '.md';
         const templatePath = `templates/content/${templateId}${extension}`;
         const metaPath = `templates/content/${templateId}.meta.yml`;
-        const deleteTemplateResult = await this.treeService.delete(vaultRef, templatePath);
+        const deleteTemplateResult = await this.artifactService.delete(vaultRef, templatePath);
         if (!deleteTemplateResult.success && deleteTemplateResult.error?.code !== ArtifactErrorCode.NOT_FOUND) {
           return deleteTemplateResult;
         }
-        const deleteMetaResult = await this.treeService.delete(vaultRef, metaPath);
+        const deleteMetaResult = await this.artifactService.delete(vaultRef, metaPath);
         if (!deleteMetaResult.success && deleteMetaResult.error?.code !== ArtifactErrorCode.NOT_FOUND) {
           return deleteMetaResult;
         }

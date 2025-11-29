@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AIApplicationService } from '../application/AIApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { ViewpointApplicationService } from '../../viewpoint/application/ViewpointApplicationService';
 import { ChangeRepository } from '../../shared/infrastructure/ChangeRepository';
 import { Artifact } from '../../shared/domain/entity/artifact';
@@ -13,7 +13,7 @@ import { Logger } from '../../../core/logger/Logger';
 export class AICommands {
   constructor(
     private aiService: AIApplicationService,
-    private artifactService: ArtifactFileSystemApplicationService,
+    private artifactService: ArtifactApplicationService,
     private vaultService: VaultApplicationService,
     private viewpointService: ViewpointApplicationService,
     private changeRepository: ChangeRepository,

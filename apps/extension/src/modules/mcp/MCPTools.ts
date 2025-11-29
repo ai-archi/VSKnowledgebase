@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types';
-import { ArtifactFileSystemApplicationService } from '../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
 import { ArtifactLinkRepository } from '../shared/infrastructure/ArtifactLinkRepository';
 import { SqliteRuntimeIndex } from '../shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
@@ -95,8 +95,8 @@ export interface MCPTools {
 @injectable()
 export class MCPToolsImpl implements MCPTools {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
     @inject(TYPES.ArtifactLinkRepository)

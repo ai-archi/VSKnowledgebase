@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types';
-import { ArtifactFileSystemApplicationService } from '../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
 import { Artifact } from '../shared/domain/entity/artifact';
 import { Vault } from '../shared/domain/entity/vault';
@@ -31,8 +31,8 @@ export interface MCPResources {
 @injectable()
 export class MCPResourcesImpl implements MCPResources {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
     @inject(TYPES.Logger)

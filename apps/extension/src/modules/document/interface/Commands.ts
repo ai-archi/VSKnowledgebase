@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { DocumentApplicationService } from '../application/DocumentApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
-import { ArtifactTreeApplicationService } from '../../shared/application/ArtifactTreeApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 import { CommandAdapter } from '../../../core/vscode-api/CommandAdapter';
@@ -17,8 +16,7 @@ import * as path from 'path';
 export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
   constructor(
     private documentService: DocumentApplicationService,
-    artifactService: ArtifactFileSystemApplicationService,
-    treeService: ArtifactTreeApplicationService,
+    artifactService: ArtifactApplicationService,
     vaultService: VaultApplicationService,
     fileTreeDomainService: FileTreeDomainService,
     fileOperationDomainService: FileOperationDomainService,
@@ -31,7 +29,6 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
   ) {
     super(
       vaultService,
-      treeService,
       artifactService,
       fileTreeDomainService,
       fileOperationDomainService,
@@ -272,7 +269,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         diagramName,
         diagramType.value
       );
-      const result = await this.fileOperationService.createArtifact({
+      const result = await this.artifactService.createArtifact({
         vault: {
           id: vault.id,
           name: vault.name,

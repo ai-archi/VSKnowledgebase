@@ -1,15 +1,23 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { ArtifactFileSystemApplicationService, CreateArtifactOpts, UpdateArtifactOpts, FileFolderItem } from './ArtifactFileSystemApplicationService';
+import {
+  ArtifactApplicationService,
+  CreateArtifactOpts,
+  UpdateArtifactOpts,
+  FileFolderItem,
+  FileTreeNode,
+  ReadFileOptions,
+  ListDirectoryOptions,
+} from './ArtifactApplicationService';
 import { Artifact } from '../domain/entity/artifact';
 import { ArtifactMetadata } from '../domain/ArtifactMetadata';
 import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../domain/errors';
 import { ArtifactValidator } from '../domain/ArtifactValidator';
 import { ArtifactFileSystemAdapter } from '../infrastructure/storage/file/ArtifactFileSystemAdapter';
+import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
 import { SqliteRuntimeIndex } from '../infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MetadataRepository } from '../infrastructure/MetadataRepository';
 import { VaultApplicationService } from './VaultApplicationService';
-import { ArtifactTreeApplicationService } from './ArtifactTreeApplicationService';
 import { VaultReference } from '../domain/value_object/VaultReference';
 import { Logger } from '../../../core/logger/Logger';
 import { TemplateStructureDomainServiceImpl, TemplateStructureItem } from '../domain/services/TemplateStructureDomainService';
@@ -19,15 +27,17 @@ import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 
 @injectable()
-export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSystemApplicationService {
+export class ArtifactApplicationServiceImpl implements ArtifactApplicationService {
   constructor(
     @inject(TYPES.ArtifactFileSystemAdapter) private fileAdapter: ArtifactFileSystemAdapter,
+    @inject(TYPES.VaultFileSystemAdapter) private vaultAdapter: VaultFileSystemAdapter,
     @inject(TYPES.SqliteRuntimeIndex) private index: SqliteRuntimeIndex,
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
-    @inject(TYPES.ArtifactTreeApplicationService) private treeService: ArtifactTreeApplicationService,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
+
+  // ========== Artifact 业务操作 ==========
 
   async createArtifact(opts: CreateArtifactOpts): Promise<Result<Artifact, ArtifactError>> {
     const artifactId = uuidv4();
@@ -515,8 +525,8 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       for (const vault of vaultsToScan) {
         const vaultRef: VaultReference = { id: vault.id, name: vault.name };
         
-        // 使用 treeService 列出 artifacts 目录下的所有文件和文件夹（递归，不限制文件类型）
-        const listResult = await this.treeService.listDirectory(vaultRef, 'artifacts', {
+        // 使用 listDirectory 列出 artifacts 目录下的所有文件和文件夹（递归，不限制文件类型）
+        const listResult = await this.listDirectory(vaultRef, 'artifacts', {
           recursive: true,
           includeHidden: false,
           // 不指定 extensions，返回所有文件类型
@@ -563,6 +573,510 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       };
     }
   }
+
+  async updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>> {
+    try {
+      // 获取 artifact
+      const allArtifactsResult = await this.listArtifacts();
+      if (!allArtifactsResult.success) {
+        return {
+          success: false,
+          error: allArtifactsResult.error,
+        };
+      }
+
+      const artifact = allArtifactsResult.value.find(
+        a => a.id === artifactId || a.path === artifactId
+      );
+
+      if (!artifact) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Artifact not found: ${artifactId}`,
+            { artifactId }
+          ),
+        };
+      }
+
+      if (!artifact.metadataId) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Artifact has no metadata: ${artifactId}`,
+            { artifactId }
+          ),
+        };
+      }
+
+      // 检查 Vault 是否为只读
+      const vaultResult = await this.vaultService.getVault(artifact.vault.id);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${artifact.vault.id}`,
+            { vaultId: artifact.vault.id }
+          ),
+        };
+      }
+
+      if (vaultResult.value.readOnly) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.VAULT_READ_ONLY,
+            `Cannot update metadata in read-only vault: ${artifact.vault.name}`,
+            { vaultId: artifact.vault.id }
+          ),
+        };
+      }
+
+      // 获取现有元数据
+      const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+      if (!metadataResult.success || !metadataResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Metadata not found: ${artifact.metadataId}`,
+            { metadataId: artifact.metadataId }
+          ),
+        };
+      }
+
+      // 更新元数据
+      const updatedMetadata: ArtifactMetadata = {
+        ...metadataResult.value,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updateResult = await this.metadataRepo.update(updatedMetadata);
+      if (!updateResult.success) {
+        return updateResult;
+      }
+
+      this.logger.info('Artifact metadata updated', { artifactId, metadataId: artifact.metadataId });
+      return { success: true, value: updatedMetadata };
+    } catch (error: any) {
+      this.logger.error('Failed to update artifact metadata', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to update artifact metadata: ${error.message}`,
+          { artifactId },
+          error
+        ),
+      };
+    }
+  }
+
+  async createFolderStructureFromTemplate(
+    vault: VaultReference,
+    basePath: string,
+    artifactTemplate: import('../domain/entity/ArtifactTemplate').ArtifactTemplate
+  ): Promise<Result<void, ArtifactError>> {
+    try {
+      if (!artifactTemplate || !artifactTemplate.isValid()) {
+        const errorMessage = 'Template structure is empty or invalid. Please check the template file format.';
+        this.logger.error(errorMessage, { 
+          vaultId: vault.id, 
+          basePath
+        });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            errorMessage,
+            { vaultId: vault.id, basePath }
+          ),
+        };
+      }
+
+      // 从 ArtifactTemplate 对象获取已应用变量的结构项
+      const structureItems = artifactTemplate.structure;
+
+      this.logger.info('Creating folder structure from ArtifactTemplate', {
+        vaultId: vault.id,
+        basePath,
+        itemCount: structureItems.length,
+        firstItem: structureItems[0] ? {
+          type: structureItems[0].type,
+          name: structureItems[0].name
+        } : null
+      });
+
+      // 递归创建结构项（变量已在 ArtifactTemplate 中应用）
+      for (const item of structureItems) {
+        const itemResult = await this.createStructureItem(vault, basePath, item, artifactTemplate.variables);
+        if (!itemResult.success) {
+          return itemResult;
+        }
+      }
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      this.logger.error('Failed to create folder structure from template', {
+        error: error.message,
+        stack: error.stack,
+        vaultId: vault.id,
+        basePath
+      });
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to create folder structure from template: ${error.message}`,
+          { vaultId: vault.id, basePath },
+          error
+        ),
+      };
+    }
+  }
+
+  // ========== 文件系统操作 ==========
+
+  async readFile(
+    vault: VaultReference,
+    filePath: string,
+    options?: ReadFileOptions
+  ): Promise<Result<string, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, filePath);
+      
+      if (!fs.existsSync(fullPath)) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `File not found: ${filePath}`,
+            { vaultId: vault.id, vaultName: vault.name, filePath }
+          ),
+        };
+      }
+
+      const stats = fs.statSync(fullPath);
+      if (!stats.isFile()) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            `Path is not a file: ${filePath}`,
+            { vaultId: vault.id, vaultName: vault.name, filePath }
+          ),
+        };
+      }
+
+      const encoding = options?.encoding || 'utf-8';
+      const content = fs.readFileSync(fullPath, encoding);
+      return { success: true, value: content };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to read file: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, filePath },
+          error
+        ),
+      };
+    }
+  }
+
+  async writeFile(
+    vault: VaultReference,
+    filePath: string,
+    content: string
+  ): Promise<Result<void, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, filePath);
+      const dir = path.dirname(fullPath);
+
+      // 确保目录存在
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      // 原子写入：先写入临时文件，然后重命名
+      const tempPath = `${fullPath}.tmp`;
+      fs.writeFileSync(tempPath, content, 'utf-8');
+      fs.renameSync(tempPath, fullPath);
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to write file: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, filePath },
+          error
+        ),
+      };
+    }
+  }
+
+  async exists(vault: VaultReference, path: string): Promise<Result<boolean, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, path);
+      return { success: true, value: fs.existsSync(fullPath) };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to check existence: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, path },
+          error
+        ),
+      };
+    }
+  }
+
+  async isDirectory(vault: VaultReference, path: string): Promise<Result<boolean, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, path);
+      if (!fs.existsSync(fullPath)) {
+        return { success: true, value: false };
+      }
+      const stats = fs.statSync(fullPath);
+      return { success: true, value: stats.isDirectory() };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to check if directory: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, path },
+          error
+        ),
+      };
+    }
+  }
+
+  async isFile(vault: VaultReference, path: string): Promise<Result<boolean, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, path);
+      if (!fs.existsSync(fullPath)) {
+        return { success: true, value: false };
+      }
+      const stats = fs.statSync(fullPath);
+      return { success: true, value: stats.isFile() };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to check if file: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, path },
+          error
+        ),
+      };
+    }
+  }
+
+  async listDirectory(
+    vault: VaultReference,
+    dirPath: string,
+    options?: ListDirectoryOptions
+  ): Promise<Result<FileTreeNode[], ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, dirPath);
+      
+      if (!fs.existsSync(fullPath)) {
+        return { success: true, value: [] };
+      }
+
+      const stats = fs.statSync(fullPath);
+      if (!stats.isDirectory()) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            `Path is not a directory: ${dirPath}`,
+            { vaultId: vault.id, vaultName: vault.name, dirPath }
+          ),
+        };
+      }
+
+      const nodes: FileTreeNode[] = [];
+      const includeHidden = options?.includeHidden ?? false;
+      const extensions = options?.extensions;
+      const recursive = options?.recursive ?? false;
+
+      const scanDirectory = (currentDir: string, relativeBase: string = ''): void => {
+        try {
+          const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+
+          for (const entry of entries) {
+            // 跳过隐藏文件（如果不包含）
+            if (!includeHidden && entry.name.startsWith('.')) {
+              continue;
+            }
+
+            const entryFullPath = path.join(currentDir, entry.name);
+            const entryRelativePath = relativeBase
+              ? path.join(relativeBase, entry.name)
+              : entry.name;
+
+            if (entry.isDirectory()) {
+              const node: FileTreeNode = {
+                name: entry.name,
+                path: entryRelativePath,
+                fullPath: entryFullPath,
+                isDirectory: true,
+                isFile: false,
+              };
+              nodes.push(node);
+
+              // 如果递归，继续扫描子目录
+              if (recursive) {
+                scanDirectory(entryFullPath, entryRelativePath);
+              }
+            } else if (entry.isFile()) {
+              const ext = path.extname(entry.name).slice(1); // 去掉点号
+              
+              // 如果指定了扩展名过滤，检查扩展名
+              if (extensions && extensions.length > 0) {
+                if (!ext || !extensions.includes(ext.toLowerCase())) {
+                  continue;
+                }
+              }
+
+              const node: FileTreeNode = {
+                name: entry.name,
+                path: entryRelativePath,
+                fullPath: entryFullPath,
+                isDirectory: false,
+                isFile: true,
+                extension: ext || undefined,
+              };
+              nodes.push(node);
+            }
+          }
+        } catch (error: any) {
+          this.logger.warn(`Error scanning directory ${currentDir}:`, error);
+        }
+      };
+
+      scanDirectory(fullPath, dirPath || '');
+
+      // 排序：目录在前，文件在后，都按名称排序
+      nodes.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      return { success: true, value: nodes };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to list directory: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, dirPath },
+          error
+        ),
+      };
+    }
+  }
+
+  async createDirectory(
+    vault: VaultReference,
+    dirPath: string
+  ): Promise<Result<void, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, dirPath);
+      
+      if (!fs.existsSync(fullPath)) {
+        fs.mkdirSync(fullPath, { recursive: true });
+      }
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to create directory: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, dirPath },
+          error
+        ),
+      };
+    }
+  }
+
+  async delete(
+    vault: VaultReference,
+    path: string,
+    recursive?: boolean
+  ): Promise<Result<void, ArtifactError>> {
+    try {
+      const fullPath = this.getFullPath(vault, path);
+      
+      if (!fs.existsSync(fullPath)) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Path not found: ${path}`,
+            { vaultId: vault.id, vaultName: vault.name, path }
+          ),
+        };
+      }
+
+      const stats = fs.statSync(fullPath);
+      if (stats.isDirectory()) {
+        if (recursive) {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+        } else {
+          // 检查目录是否为空
+          const entries = fs.readdirSync(fullPath);
+          if (entries.length > 0) {
+            return {
+              success: false,
+              error: new ArtifactError(
+                ArtifactErrorCode.OPERATION_FAILED,
+                `Directory is not empty: ${path}`,
+                { vaultId: vault.id, vaultName: vault.name, path }
+              ),
+            };
+          }
+          fs.rmdirSync(fullPath);
+        }
+      } else {
+        fs.unlinkSync(fullPath);
+      }
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to delete: ${error.message}`,
+          { vaultId: vault.id, vaultName: vault.name, path },
+          error
+        ),
+      };
+    }
+  }
+
+  getFullPath(vault: VaultReference, filePath: string): string {
+    const vaultPath = this.vaultAdapter.getVaultPath(vault.name);
+    if (!filePath) {
+      return vaultPath;
+    }
+    return path.isAbsolute(filePath) ? filePath : path.join(vaultPath, filePath);
+  }
+
+  // ========== 私有辅助方法 ==========
 
   /**
    * 扫描指定 vault 的 artifacts 目录
@@ -742,171 +1256,6 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
     }
   }
 
-  async updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>> {
-    try {
-      // 获取 artifact
-      const allArtifactsResult = await this.listArtifacts();
-      if (!allArtifactsResult.success) {
-        return {
-          success: false,
-          error: allArtifactsResult.error,
-        };
-      }
-
-      const artifact = allArtifactsResult.value.find(
-        a => a.id === artifactId || a.path === artifactId
-      );
-
-      if (!artifact) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.NOT_FOUND,
-            `Artifact not found: ${artifactId}`,
-            { artifactId }
-          ),
-        };
-      }
-
-      if (!artifact.metadataId) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.NOT_FOUND,
-            `Artifact has no metadata: ${artifactId}`,
-            { artifactId }
-          ),
-        };
-      }
-
-      // 检查 Vault 是否为只读
-      const vaultResult = await this.vaultService.getVault(artifact.vault.id);
-      if (!vaultResult.success || !vaultResult.value) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.NOT_FOUND,
-            `Vault not found: ${artifact.vault.id}`,
-            { vaultId: artifact.vault.id }
-          ),
-        };
-      }
-
-      if (vaultResult.value.readOnly) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.VAULT_READ_ONLY,
-            `Cannot update metadata in read-only vault: ${artifact.vault.name}`,
-            { vaultId: artifact.vault.id }
-          ),
-        };
-      }
-
-      // 获取现有元数据
-      const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
-      if (!metadataResult.success || !metadataResult.value) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.NOT_FOUND,
-            `Metadata not found: ${artifact.metadataId}`,
-            { metadataId: artifact.metadataId }
-          ),
-        };
-      }
-
-      // 更新元数据
-      const updatedMetadata: ArtifactMetadata = {
-        ...metadataResult.value,
-        ...updates,
-        updatedAt: new Date().toISOString(),
-      };
-
-      const updateResult = await this.metadataRepo.update(updatedMetadata);
-      if (!updateResult.success) {
-        return updateResult;
-      }
-
-      this.logger.info('Artifact metadata updated', { artifactId, metadataId: artifact.metadataId });
-      return { success: true, value: updatedMetadata };
-    } catch (error: any) {
-      this.logger.error('Failed to update artifact metadata', error);
-      return {
-        success: false,
-        error: new ArtifactError(
-          ArtifactErrorCode.OPERATION_FAILED,
-          `Failed to update artifact metadata: ${error.message}`,
-          { artifactId },
-          error
-        ),
-      };
-    }
-  }
-
-  async createFolderStructureFromTemplate(
-    vault: VaultReference,
-    basePath: string,
-    artifactTemplate: import('../domain/entity/ArtifactTemplate').ArtifactTemplate
-  ): Promise<Result<void, ArtifactError>> {
-    try {
-      if (!artifactTemplate || !artifactTemplate.isValid()) {
-        const errorMessage = 'Template structure is empty or invalid. Please check the template file format.';
-        this.logger.error(errorMessage, { 
-          vaultId: vault.id, 
-          basePath
-        });
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.OPERATION_FAILED,
-            errorMessage,
-            { vaultId: vault.id, basePath }
-          ),
-        };
-      }
-
-      // 从 ArtifactTemplate 对象获取已应用变量的结构项
-      const structureItems = artifactTemplate.structure;
-
-      this.logger.info('Creating folder structure from ArtifactTemplate', {
-        vaultId: vault.id,
-        basePath,
-        itemCount: structureItems.length,
-        firstItem: structureItems[0] ? {
-          type: structureItems[0].type,
-          name: structureItems[0].name
-        } : null
-      });
-
-      // 递归创建结构项（变量已在 ArtifactTemplate 中应用）
-      for (const item of structureItems) {
-        const itemResult = await this.createStructureItem(vault, basePath, item, artifactTemplate.variables);
-        if (!itemResult.success) {
-          return itemResult;
-        }
-      }
-
-      return { success: true, value: undefined };
-    } catch (error: any) {
-      this.logger.error('Failed to create folder structure from template', {
-        error: error.message,
-        stack: error.stack,
-        vaultId: vault.id,
-        basePath
-      });
-      return {
-        success: false,
-        error: new ArtifactError(
-          ArtifactErrorCode.OPERATION_FAILED,
-          `Failed to create folder structure from template: ${error.message}`,
-          { vaultId: vault.id, basePath },
-          error
-        ),
-      };
-    }
-  }
-
   /**
    * 创建结构项（目录或文件）
    */
@@ -921,7 +1270,7 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
 
     if (item.type === 'directory') {
       // 创建目录
-      const createDirResult = await this.treeService.createDirectory(vault, itemPath);
+      const createDirResult = await this.createDirectory(vault, itemPath);
       if (!createDirResult.success) {
         return createDirResult;
       }
@@ -949,7 +1298,7 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
           ? templatePath
           : `templates/content/${templatePath}`;
 
-        const readResult = await this.treeService.readFile(vault, templateFullPath);
+        const readResult = await this.readFile(vault, templateFullPath);
         if (readResult.success) {
           fileContent = readResult.value;
           // 在文件内容中也替换变量（使用类似 Jinja2 的模板语法）
@@ -973,7 +1322,7 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
       }
 
       // 写入文件
-      const writeResult = await this.treeService.writeFile(vault, itemPath, fileContent);
+      const writeResult = await this.writeFile(vault, itemPath, fileContent);
       if (!writeResult.success) {
         return writeResult;
       }
@@ -985,5 +1334,4 @@ export class ArtifactFileSystemApplicationServiceImpl implements ArtifactFileSys
     }
   }
 }
-
 

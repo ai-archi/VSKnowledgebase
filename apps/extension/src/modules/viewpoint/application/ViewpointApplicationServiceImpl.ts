@@ -8,7 +8,7 @@ import {
   ArtifactTree,
   ArtifactTreeNode,
 } from './ViewpointApplicationService';
-import { ArtifactFileSystemApplicationService } from '../../shared/application/ArtifactFileSystemApplicationService';
+import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
 import { ArtifactRepository } from '../../shared/infrastructure/ArtifactRepository';
 import { VaultRepository } from '../../shared/infrastructure/VaultRepository';
@@ -82,8 +82,8 @@ const PREDEFINED_VIEWPOINTS: Viewpoint[] = [
 @injectable()
 export class ViewpointApplicationServiceImpl implements ViewpointApplicationService {
   constructor(
-    @inject(TYPES.ArtifactFileSystemApplicationService)
-    private artifactService: ArtifactFileSystemApplicationService,
+    @inject(TYPES.ArtifactApplicationService)
+    private artifactService: ArtifactApplicationService,
     @inject(TYPES.MetadataRepository)
     private metadataRepository: MetadataRepository,
     @inject(TYPES.ArtifactRepository)

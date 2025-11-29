@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { VaultApplicationService } from '../../application/VaultApplicationService';
-import { ArtifactTreeApplicationService, FileTreeNode } from '../../application/ArtifactTreeApplicationService';
+import { ArtifactApplicationService, FileTreeNode } from '../../application/ArtifactApplicationService';
 import { Logger } from '../../../../core/logger/Logger';
 import { BaseArtifactTreeItem } from './BaseArtifactTreeItem';
 import { TreeViewUtils } from '../../infrastructure/utils/TreeViewUtils';
@@ -20,7 +20,7 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
 
   constructor(
     protected vaultService: VaultApplicationService,
-    protected treeService: ArtifactTreeApplicationService,
+    protected treeService: ArtifactApplicationService,
     protected logger: Logger
   ) {}
 
