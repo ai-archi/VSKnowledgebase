@@ -263,6 +263,78 @@ export class WebviewRPC {
       return result.value;
     });
 
+    // Artifact 相关方法（用于创建设计图等）
+    this.webviewAdapter.registerMethod('artifact.create', async (params: {
+      vaultId: string;
+      path: string;
+      title: string;
+      content: string;
+      viewType: string;
+      format?: string;
+      category?: string;
+      tags?: string[];
+    }) => {
+      this.logger.info('[WebviewRPC] artifact.create called', { 
+        vaultId: params.vaultId, 
+        path: params.path, 
+        title: params.title,
+        viewType: params.viewType,
+        format: params.format
+      });
+      try {
+        // 获取 vault 信息
+        const vaultResult = await this.vaultService.getVault(params.vaultId);
+        if (!vaultResult.success) {
+          throw new Error(`Vault not found: ${params.vaultId}`);
+        }
+
+        const vault = vaultResult.value;
+        const result = await this.artifactService.createArtifact({
+          vault: {
+            id: vault.id,
+            name: vault.name,
+          },
+          path: params.path,
+          title: params.title,
+          content: params.content,
+          viewType: params.viewType as any,
+          format: params.format,
+          category: params.category,
+          tags: params.tags,
+        });
+
+        if (!result.success) {
+          this.logger.error('[WebviewRPC] artifact.create failed', { 
+            error: result.error.message,
+            vaultId: params.vaultId,
+            path: params.path
+          });
+          throw new Error(result.error.message);
+        }
+        this.logger.info('[WebviewRPC] artifact.create succeeded', { 
+          id: result.value.id,
+          path: result.value.path
+        });
+        return {
+          id: result.value.id,
+          path: result.value.path,
+          name: result.value.name,
+          title: result.value.title,
+          vault: result.value.vault,
+          viewType: result.value.viewType,
+          format: result.value.format,
+        };
+      } catch (error: any) {
+        this.logger.error('[WebviewRPC] artifact.create exception', { 
+          error: error.message,
+          stack: error.stack,
+          vaultId: params.vaultId,
+          path: params.path
+        });
+        throw error;
+      }
+    });
+
     this.logger.info('All Webview RPC methods registered');
   }
 

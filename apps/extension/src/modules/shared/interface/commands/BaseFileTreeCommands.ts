@@ -24,6 +24,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
 
   protected createFileWebviewPanel: vscode.WebviewPanel | null = null;
   protected createFolderWebviewPanel: vscode.WebviewPanel | null = null;
+  protected createDesignWebviewPanel: vscode.WebviewPanel | null = null;
 
   constructor(
     protected vaultService: VaultApplicationService,
@@ -469,6 +470,105 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
   }
 
   /**
+   * 显示创建设计图对话框
+   */
+  protected async showCreateDesignDialog(item?: T, designType?: string): Promise<void> {
+    // 如果已经打开，直接显示
+    if (this.createDesignWebviewPanel) {
+      this.createDesignWebviewPanel.reveal();
+      return;
+    }
+
+    // 获取当前选中的 vault 信息
+    let initialVaultId: string | undefined;
+    let initialFolderPath: string | undefined;
+
+    if (item) {
+      // 优先使用 item.vaultId，如果没有则通过 vaultName 查找
+      if (item.vaultId) {
+        initialVaultId = item.vaultId;
+      } else if (item.vaultName) {
+        const vault = await this.findVaultByName(item.vaultName);
+        if (vault) {
+          initialVaultId = vault.id;
+        }
+      }
+      // 只有在文件夹节点或文件节点时才设置 folderPath
+      // vault 节点的 folderPath 应该是 undefined
+      // 明确检查：只有当 folderPath 是有效的非空字符串时才设置
+      if (item.folderPath !== undefined && item.folderPath !== null && item.folderPath !== '') {
+        initialFolderPath = item.folderPath;
+      } else {
+        // 确保 vault 节点时 folderPath 是 undefined
+        initialFolderPath = undefined;
+      }
+      
+      this.logger.info('[BaseFileTreeCommands] Creating design dialog with context', {
+        vaultId: initialVaultId,
+        vaultName: item.vaultName,
+        itemFolderPath: item.folderPath,
+        initialFolderPath,
+        isVault: item.folderPath === undefined && item.filePath === undefined
+      });
+    }
+
+    // 创建新的 webview panel
+    const webviewDistPath = this.getWebviewDistPath();
+
+    const panel = vscode.window.createWebviewPanel(
+      'createDesignDialog',
+      '创建设计图',
+      vscode.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: false,
+        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+      }
+    );
+
+    // 设置 webview 消息处理器
+    panel.webview.onDidReceiveMessage(
+      async (message: WebviewMessage) => {
+        this.logger.info(`[BaseFileTreeCommands] Received message in createDesign dialog: ${message.method}`, { id: message.id, params: message.params });
+        if (message.method === 'close') {
+          panel.dispose();
+          return;
+        }
+        if (message.method === 'designCreated') {
+          const { vaultName, folderPath } = message.params || {};
+          if (vaultName) {
+            this.treeViewProvider.refresh();
+            await this.expandNode(vaultName, folderPath);
+            this.treeViewProvider.refresh();
+          }
+          return;
+        }
+        this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`);
+        await this.webviewAdapter.handleMessage(panel.webview, message);
+      },
+      null,
+      this.context.subscriptions
+    );
+
+    // 加载 webview 内容
+    const htmlContent = await this.getWebviewContent(
+      panel.webview,
+      'create-design-dialog.html',
+      initialVaultId,
+      initialFolderPath,
+      designType
+    );
+    panel.webview.html = htmlContent;
+
+    // 监听面板关闭事件
+    panel.onDidDispose(() => {
+      this.createDesignWebviewPanel = null;
+    });
+
+    this.createDesignWebviewPanel = panel;
+  }
+
+  /**
    * 删除项
    */
   protected async deleteItem(item?: T): Promise<void> {
@@ -509,7 +609,8 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     webview: vscode.Webview,
     htmlFileName: string,
     initialVaultId?: string,
-    initialFolderPath?: string
+    initialFolderPath?: string,
+    designType?: string
   ): Promise<string> {
     const webviewDistPath = this.getWebviewDistPath();
 
@@ -551,6 +652,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
       const initialData = {
         vaultId: initialVaultId,
         folderPath: initialFolderPath,
+        designType: designType,
       };
       const vscodeScript = `
         <script>

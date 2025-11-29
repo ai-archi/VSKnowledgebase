@@ -208,6 +208,24 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
           await this.addDiagram(item);
         },
       },
+      {
+        command: 'archi.document.addArchimateDesign',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.showCreateDesignDialog(item, 'archimate');
+        },
+      },
+      {
+        command: 'archi.document.addPlantUMLDesign',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.showCreateDesignDialog(item, 'puml');
+        },
+      },
+      {
+        command: 'archi.document.addMermaidDesign',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.showCreateDesignDialog(item, 'mermaid');
+        },
+      },
     ]);
   }
 
