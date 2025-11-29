@@ -29,7 +29,7 @@ graph LR
 ```
 
 **逻辑架构图**（Archimate）：
-参考 [[架构图.逻辑视图.xml.at]]
+参考 [[架构图.逻辑视图.archimate]]
 
 ### 物理视图
 
@@ -49,7 +49,7 @@ graph TB
 ```
 
 **物理架构图**（Archimate）：
-参考 [[架构图.物理视图.xml.at]]
+参考 [[架构图.物理视图.archimate]]
 
 ### 部署视图
 

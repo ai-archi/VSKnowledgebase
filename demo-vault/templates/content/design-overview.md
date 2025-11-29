@@ -28,7 +28,7 @@ graph TD
 ```
 
 **Archimate 架构图**：
-参考 [[架构图.系统架构图.xml.at]]
+参考 [[架构图.系统架构图.archimate]]
 
 ### 核心组件
 

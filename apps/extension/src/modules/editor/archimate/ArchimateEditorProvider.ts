@@ -4,7 +4,7 @@ import * as path from 'path';
 
 /**
  * ArchiMate 编辑器提供者
- * 支持 .xml.at 文件的自定义编辑器
+ * 支持 .archimate 文件的自定义编辑器
  */
 export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'architool.archimateEditor';
