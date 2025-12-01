@@ -1197,7 +1197,13 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   async exists(vault: VaultReference, path: string): Promise<Result<boolean, ArtifactError>> {
     try {
       const fullPath = this.getFullPath(vault, path);
-      return { success: true, value: fs.existsSync(fullPath) };
+      // 使用异步操作，不阻塞事件循环
+      try {
+        await fs.promises.access(fullPath);
+        return { success: true, value: true };
+      } catch {
+        return { success: true, value: false };
+      }
     } catch (error: any) {
       return {
         success: false,
@@ -1214,11 +1220,18 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   async isDirectory(vault: VaultReference, path: string): Promise<Result<boolean, ArtifactError>> {
     try {
       const fullPath = this.getFullPath(vault, path);
-      if (!fs.existsSync(fullPath)) {
-        return { success: true, value: false };
+      // 使用异步操作，不阻塞事件循环
+      // 直接使用 stat，如果文件不存在会抛出 ENOENT 错误
+      try {
+        const stats = await fs.promises.stat(fullPath);
+        return { success: true, value: stats.isDirectory() };
+      } catch (error: any) {
+        // 如果文件不存在，返回 false
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return { success: true, value: false };
+        }
+        throw error;
       }
-      const stats = fs.statSync(fullPath);
-      return { success: true, value: stats.isDirectory() };
     } catch (error: any) {
       return {
         success: false,
@@ -1235,11 +1248,18 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   async isFile(vault: VaultReference, path: string): Promise<Result<boolean, ArtifactError>> {
     try {
       const fullPath = this.getFullPath(vault, path);
-      if (!fs.existsSync(fullPath)) {
-        return { success: true, value: false };
+      // 使用异步操作，不阻塞事件循环
+      // 直接使用 stat，如果文件不存在会抛出 ENOENT 错误
+      try {
+        const stats = await fs.promises.stat(fullPath);
+        return { success: true, value: stats.isFile() };
+      } catch (error: any) {
+        // 如果文件不存在，返回 false
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return { success: true, value: false };
+        }
+        throw error;
       }
-      const stats = fs.statSync(fullPath);
-      return { success: true, value: stats.isFile() };
     } catch (error: any) {
       return {
         success: false,
@@ -1261,20 +1281,25 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     try {
       const fullPath = this.getFullPath(vault, dirPath);
       
-      if (!fs.existsSync(fullPath)) {
-        return { success: true, value: [] };
-      }
-
-      const stats = fs.statSync(fullPath);
-      if (!stats.isDirectory()) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.OPERATION_FAILED,
-            `Path is not a directory: ${dirPath}`,
-            { vaultId: vault.id, vaultName: vault.name, dirPath }
-          ),
-        };
+      // 使用异步操作检查路径是否存在
+      try {
+        const stats = await fs.promises.stat(fullPath);
+        if (!stats.isDirectory()) {
+          return {
+            success: false,
+            error: new ArtifactError(
+              ArtifactErrorCode.OPERATION_FAILED,
+              `Path is not a directory: ${dirPath}`,
+              { vaultId: vault.id, vaultName: vault.name, dirPath }
+            ),
+          };
+        }
+      } catch (error: any) {
+        // 路径不存在，返回空数组
+        if (error.code === 'ENOENT') {
+          return { success: true, value: [] };
+        }
+        throw error;
       }
 
       const nodes: FileTreeNode[] = [];
@@ -1282,10 +1307,13 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       const extensions = options?.extensions;
       const recursive = options?.recursive ?? false;
 
-      const scanDirectory = (currentDir: string, relativeBase: string = ''): void => {
+      // 使用异步递归扫描目录
+      const scanDirectory = async (currentDir: string, relativeBase: string = ''): Promise<void> => {
         try {
-          const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+          // 使用异步 readdir，不阻塞事件循环
+          const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
 
+          // 批量处理条目，减少循环开销
           for (const entry of entries) {
             // 跳过隐藏文件（如果不包含）
             if (!includeHidden && entry.name.startsWith('.')) {
@@ -1309,7 +1337,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
 
               // 如果递归，继续扫描子目录
               if (recursive) {
-                scanDirectory(entryFullPath, entryRelativePath);
+                await scanDirectory(entryFullPath, entryRelativePath);
               }
             } else if (entry.isFile()) {
               const ext = path.extname(entry.name).slice(1); // 去掉点号
@@ -1337,7 +1365,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         }
       };
 
-      scanDirectory(fullPath, dirPath || '');
+      await scanDirectory(fullPath, dirPath || '');
 
       // 排序：目录在前，文件在后，都按名称排序
       nodes.sort((a, b) => {

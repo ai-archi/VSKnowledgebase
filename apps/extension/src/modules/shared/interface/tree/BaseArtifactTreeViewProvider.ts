@@ -59,14 +59,23 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
         return await this.getRootVaults();
       }
 
+      // 获取 vault 引用
+      const vaultRef = await this.getVaultRef(element);
+      if (!vaultRef) {
+        return [];
+      }
+
       // Vault 节点：显示该 vault 的根目录下的文件和子目录
       if (element.isVault(element.vaultName!)) {
-        return await this.getVaultChildren(element);
+        const rootDir = this.getRootDirectory();
+        return this.getDirectoryFiles(vaultRef, rootDir, '');
       }
 
       // 文件夹节点：显示该目录下的文件和子目录
-      if (element.folderPath !== undefined && element.vaultName) {
-        return await this.getFolderChildren(element);
+      if (element.folderPath) {
+        const rootDir = this.getRootDirectory();
+        const dirPath = `${rootDir}/${element.folderPath}`;
+        return this.getDirectoryFiles(vaultRef, dirPath, element.folderPath);
       }
 
       return [];
@@ -82,71 +91,39 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
    */
   async getParent(element: T): Promise<T | undefined> {
     try {
-      // 根节点没有父节点
-      if (!element.vaultName) {
+      // 根节点或 Vault 节点没有父节点
+      if (!element.vaultName || element.isVault(element.vaultName)) {
         return undefined;
       }
 
-      // Vault 节点的父节点是根节点
-      if (element.isVault(element.vaultName)) {
+      // 获取父路径（文件或文件夹的父目录）
+      const currentPath = element.filePath || element.folderPath;
+      if (!currentPath) {
         return undefined;
       }
 
-      // 文件节点的父节点是包含它的文件夹
-      if (element.filePath !== undefined && element.vaultName) {
-        const dirPath = PathUtils.dirname(element.filePath);
-        if (dirPath === '') {
-          // 文件在根目录，父节点是 vault
-          return await this.findVaultNode(element.vaultName);
-        } else {
-          // 文件在子目录，父节点是文件夹
-          // 直接创建父文件夹节点，不需要查找
-          return this.createTreeItem(
-            PathUtils.basename(dirPath),
-            vscode.TreeItemCollapsibleState.Collapsed,
-            element.vaultName,
-            element.vaultId,
-            dirPath,
-            undefined,
-            this.getItemContextValue(undefined, 'folder')
-          );
-        }
+      const parentPath = PathUtils.dirname(currentPath);
+      
+      // 如果父路径为空，说明在根目录，父节点是 vault
+      if (parentPath === '') {
+        const rootVaults = await this.getRootVaults();
+        return rootVaults.find(item => item.isVault(element.vaultName!));
       }
 
-      // 文件夹节点的父节点
-      if (element.folderPath !== undefined && element.vaultName) {
-        const dirPath = PathUtils.dirname(element.folderPath);
-        if (dirPath === '') {
-          // 文件夹在根目录，父节点是 vault
-          return await this.findVaultNode(element.vaultName);
-        } else {
-          // 文件夹在子目录，父节点是父文件夹
-          // 直接创建父文件夹节点，不需要查找
-          return this.createTreeItem(
-            PathUtils.basename(dirPath),
-            vscode.TreeItemCollapsibleState.Collapsed,
-            element.vaultName,
-            element.vaultId,
-            dirPath,
-            undefined,
-            this.getItemContextValue(undefined, 'folder')
-          );
-        }
-      }
-
-      return undefined;
+      // 否则，父节点是父文件夹
+      return this.createTreeItem(
+        PathUtils.basename(parentPath),
+        vscode.TreeItemCollapsibleState.Collapsed,
+        element.vaultName,
+        element.vaultId,
+        parentPath,
+        undefined,
+        this.getItemContextValue(undefined, 'folder')
+      );
     } catch (error: any) {
       this.logger.error('Failed to get parent node', error);
       return undefined;
     }
-  }
-
-  /**
-   * 查找 vault 节点
-   */
-  private async findVaultNode(vaultName: string): Promise<T | undefined> {
-    const rootVaults = await this.getRootVaults();
-    return rootVaults.find(item => item.isVault(vaultName));
   }
 
   /**
@@ -171,50 +148,26 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
   }
 
   /**
-   * 获取 Vault 节点的子节点
+   * 获取 vault 引用（从 element 或通过查找）
    */
-  private async getVaultChildren(element: T): Promise<T[]> {
+  private async getVaultRef(element: T): Promise<{ id: string; name: string } | undefined> {
+    // 如果 element 中已有 vaultId 和 vaultName，直接使用
+    if (element.vaultId && element.vaultName) {
+      return { id: element.vaultId, name: element.vaultName };
+    }
+
+    // 否则查找 vault
+    if (!element.vaultName) {
+      return undefined;
+    }
+
     const vaultsResult = await this.vaultService.listVaults();
     if (!vaultsResult.success) {
-      return [];
+      return undefined;
     }
+
     const vault = vaultsResult.value.find(v => v.name === element.vaultName);
-    if (!vault) {
-      return [];
-    }
-    const vaultRef = { id: vault.id, name: vault.name };
-    const rootDir = this.getRootDirectory();
-
-    const existsResult = await this.treeService.exists(vaultRef, rootDir);
-    if (!existsResult.success || !existsResult.value) {
-      return [];
-    }
-
-    return this.getDirectoryFiles(vaultRef, rootDir, '');
-  }
-
-  /**
-   * 获取文件夹节点的子节点
-   */
-  private async getFolderChildren(element: T): Promise<T[]> {
-    const vaultsResult = await this.vaultService.listVaults();
-    if (!vaultsResult.success) {
-      return [];
-    }
-    const vault = vaultsResult.value.find(v => v.name === element.vaultName);
-    if (!vault) {
-      return [];
-    }
-    const vaultRef = { id: vault.id, name: vault.name };
-    const rootDir = this.getRootDirectory();
-    const dirPath = `${rootDir}/${element.folderPath}`;
-
-    const isDirResult = await this.treeService.isDirectory(vaultRef, dirPath);
-    if (!isDirResult.success || !isDirResult.value) {
-      return [];
-    }
-
-    return this.getDirectoryFiles(vaultRef, dirPath, element.folderPath!);
+    return vault ? { id: vault.id, name: vault.name } : undefined;
   }
 
   /**
@@ -235,10 +188,13 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
       }
 
       const items: T[] = [];
+      const filePromises: Promise<T>[] = [];
+
       for (const node of listResult.value) {
         const itemRelativePath = relativePath ? `${relativePath}/${node.name}` : node.name;
 
         if (node.isDirectory) {
+          // 目录：同步创建
           items.push(
             this.createTreeItem(
               node.name,
@@ -251,14 +207,15 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
             )
           );
         } else if (node.isFile) {
-          const fileItem = await this.createFileItem(
-            node,
-            vaultRef,
-            itemRelativePath,
-            dirPath
-          );
-          items.push(fileItem);
+          // 文件：异步创建（可能需要额外处理）
+          filePromises.push(this.createFileItem(node, vaultRef, itemRelativePath, dirPath));
         }
+      }
+
+      // 等待所有文件项创建完成
+      if (filePromises.length > 0) {
+        const fileItems = await Promise.all(filePromises);
+        items.push(...fileItems);
       }
 
       return items;

@@ -202,15 +202,29 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
       this.logger.debug('Collapse all nodes called');
       
       // VSCode TreeView 没有直接的 collapseAll API
-      // 最可靠的方法是通过刷新视图来重置所有节点的状态
-      // 刷新整个树视图（传入 undefined 表示刷新根节点及其所有子节点）
+      // 问题：VSCode 会记住用户的展开状态，即使刷新也可能恢复
+      // 
+      // 解决方案：使用延迟刷新的策略
+      // VSCode 可能会在刷新后立即恢复展开状态，我们需要在恢复之前再次刷新
       
-      // 多次刷新以确保 VSCode 清除所有展开状态
-      // VSCode 可能会记住展开状态，多次刷新可以强制重置
-      for (let i = 0; i < 3; i++) {
-        this.treeViewProvider.refresh(undefined);
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+      // 第一次刷新：触发视图更新
+      this.treeViewProvider.refresh(undefined);
+      
+      // 等待视图开始更新
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // 第二次刷新：在 VSCode 恢复展开状态之前打断它
+      this.treeViewProvider.refresh(undefined);
+      
+      // 等待足够的时间让 VSCode 处理刷新并清除展开状态
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 第三次刷新：确保所有节点都回到折叠状态
+      // 如果前两次刷新后 VSCode 仍然恢复了展开状态，这次刷新可以强制重置
+      this.treeViewProvider.refresh(undefined);
+      
+      // 等待最终刷新完成
+      await new Promise(resolve => setTimeout(resolve, 150));
       
       this.logger.debug('Collapse all nodes completed');
     } catch (error: any) {
