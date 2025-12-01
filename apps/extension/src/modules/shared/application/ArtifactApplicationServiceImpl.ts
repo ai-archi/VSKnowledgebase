@@ -22,6 +22,7 @@ import { VaultApplicationService } from './VaultApplicationService';
 import { VaultReference } from '../domain/value_object/VaultReference';
 import { Logger } from '../../../core/logger/Logger';
 import { TemplateStructureDomainServiceImpl, TemplateStructureItem } from '../domain/services/TemplateStructureDomainService';
+import { FileOperationDomainService } from '../domain/services/FileOperationDomainService';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -36,6 +37,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
     @inject(TYPES.ArtifactRepository) private artifactRepository: ArtifactRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
+    @inject(TYPES.FileOperationDomainService) private fileOperationService: FileOperationDomainService,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
@@ -70,10 +72,30 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       return validationResult;
     }
 
+    // 确定文件内容：如果提供了 content 则使用，否则从模板复制
+    let fileContent = opts.content;
+    if (!fileContent) {
+      // 尝试从模板获取内容（通过领域服务）
+      const architoolRoot = this.fileAdapter.getArtifactRoot();
+      const templateContent = this.fileOperationService.getDesignTemplateContent(
+        opts.viewType,
+        opts.format,
+        opts.templateViewType,
+        opts.title,
+        architoolRoot
+      );
+      if (templateContent) {
+        fileContent = templateContent;
+      } else {
+        // 如果没有模板，使用默认内容
+        fileContent = this.fileOperationService.generateDefaultContent(opts.title, opts.format || 'md');
+      }
+    }
+
     const writeResult = await this.fileAdapter.writeArtifact(
       opts.vault.name,
       opts.path,
-      opts.content
+      fileContent
     );
     if (!writeResult.success) {
       return writeResult;
@@ -1308,7 +1330,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       const recursive = options?.recursive ?? false;
 
       // 使用异步递归扫描目录
-      const scanDirectory = async (currentDir: string, relativeBase: string = ''): Promise<void> => {
+      const scanDirectory = async (currentDir: string, relativeBase = ''): Promise<void> => {
         try {
           // 使用异步 readdir，不阻塞事件循环
           const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
@@ -1734,5 +1756,6 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       return { success: true, value: undefined };
     }
   }
+
 }
 

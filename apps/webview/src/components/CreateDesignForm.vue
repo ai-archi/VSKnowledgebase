@@ -45,6 +45,38 @@
             :prefix-icon="Document"
           />
         </el-form-item>
+        <el-form-item v-if="formData.diagramType === 'archimate'" label="视图类型">
+          <el-select
+            v-model="formData.archimateViewType"
+            placeholder="选择 Archimate 视图类型"
+            style="width: 100%"
+          >
+            <el-option-group label="业务层">
+              <el-option label="业务流程图" value="business-process-view" />
+              <el-option label="业务功能视图" value="business-function-view" />
+              <el-option label="业务服务视图" value="business-service-view" />
+              <el-option label="业务协作视图" value="business-collaboration-view" />
+              <el-option label="业务交互视图" value="business-interaction-view" />
+            </el-option-group>
+            <el-option-group label="应用层">
+              <el-option label="应用组件视图" value="application-component-view" />
+              <el-option label="应用协作视图" value="application-collaboration-view" />
+              <el-option label="应用序列视图" value="application-sequence-view" />
+              <el-option label="应用服务视图" value="application-service-view" />
+              <el-option label="应用功能视图" value="application-function-view" />
+            </el-option-group>
+            <el-option-group label="技术层">
+              <el-option label="技术组件视图" value="technology-component-view" />
+              <el-option label="技术节点视图" value="technology-node-view" />
+              <el-option label="技术部署视图" value="technology-deployment-view" />
+              <el-option label="技术服务视图" value="technology-service-view" />
+            </el-option-group>
+            <el-option-group label="其他">
+              <el-option label="跨层视图" value="cross-layered-view" />
+              <el-option label="默认模板" value="" />
+            </el-option-group>
+          </el-select>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -185,6 +217,7 @@ interface FileItem {
 interface FormData {
   diagramName: string;
   diagramType: string;
+  archimateViewType?: string; // Archimate 视图类型
 }
 
 interface Emits {
@@ -197,6 +230,7 @@ const emit = defineEmits<Emits>();
 const formData = ref<FormData>({
   diagramName: '',
   diagramType: '', // 将从 initialData 中读取
+  archimateViewType: '', // Archimate 视图类型
 });
 const initialVaultId = ref<string | undefined>(undefined);
 const initialFolderPath = ref<string | undefined>(undefined);
@@ -416,8 +450,7 @@ const handleCreate = async () => {
       finalPath: diagramPath
     });
     
-    // 获取默认内容
-    const content = await getDefaultContent(diagramName, formData.value.diagramType);
+    // 不需要在这里获取内容，后端会根据模板自动处理
     
     console.log('[CreateDesignForm] Calling artifact.create', {
       vaultId: initialVaultId.value,
@@ -450,9 +483,9 @@ const handleCreate = async () => {
       vaultId: initialVaultId.value,
       path: diagramPath,
       title: diagramName,
-      content: content,
       viewType: 'design',
       format: extension,
+      templateViewType: formData.value.diagramType === 'archimate' ? formData.value.archimateViewType : undefined,
       relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
       relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
     });
@@ -499,19 +532,6 @@ const handleCreate = async () => {
   }
 };
 
-const getDefaultContent = async (diagramName: string, diagramType: string): Promise<string> => {
-  switch (diagramType.toLowerCase()) {
-    case 'mermaid':
-    case 'mmd':
-      return `# ${diagramName}\n\n\`\`\`mermaid\ngraph TD\n    A[Start] --> B[End]\n\`\`\`\n`;
-    case 'puml':
-      return `@startuml\n!theme plain\n\ntitle ${diagramName}\n\n[Component1] --> [Component2]\n\n@enduml\n`;
-    case 'archimate':
-      return `# ${diagramName}\n\nArchimate diagram content\n`;
-    default:
-      return `# ${diagramName}\n\n`;
-  }
-};
 
 const generatePrompt = (action: string) => {
   if (selectedFiles.value.length === 0) {

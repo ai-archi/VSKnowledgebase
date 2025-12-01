@@ -418,6 +418,46 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
   }
 
   /**
+   * 打开创建的文件
+   * @param vaultName Vault 名称
+   * @param filePath 文件路径（相对于 artifacts 目录）
+   */
+  protected async openCreatedFile(vaultName: string, filePath: string): Promise<void> {
+    try {
+      const vaultResult = await this.vaultService.listVaults();
+      if (!vaultResult.success) {
+        this.logger.warn('Failed to list vaults when opening created file', { vaultName, filePath });
+        return;
+      }
+
+      const vault = vaultResult.value.find(v => v.name === vaultName);
+      if (!vault) {
+        this.logger.warn('Vault not found when opening created file', { vaultName, filePath });
+        return;
+      }
+
+      // 通过 path 获取 artifact（getArtifact 支持通过 path 查找）
+      const artifactResult = await this.artifactService.getArtifact(vault.id, filePath);
+      if (artifactResult.success && artifactResult.value.contentLocation) {
+        // 等待一小段时间，确保文件已写入磁盘
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const doc = await vscode.workspace.openTextDocument(artifactResult.value.contentLocation);
+        await vscode.window.showTextDocument(doc, { preview: false });
+        this.logger.info('Opened created file', { vaultName, filePath, contentLocation: artifactResult.value.contentLocation });
+      } else {
+        this.logger.warn('Failed to get artifact when opening created file', { 
+          vaultName, 
+          filePath, 
+          error: artifactResult.success ? 'No contentLocation' : artifactResult.error?.message 
+        });
+      }
+    } catch (error: any) {
+      this.logger.error('Failed to open created file', { error: error.message, vaultName, filePath });
+    }
+  }
+
+  /**
    * 显示创建文件对话框
    */
   protected async showCreateFileDialog(item?: T): Promise<void> {
@@ -483,13 +523,18 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           return;
         }
         if (message.method === 'fileCreated') {
-          const { vaultName, folderPath } = message.params || {};
+          const { vaultName, folderPath, filePath } = message.params || {};
           if (vaultName) {
             this.treeViewProvider.refresh();
             // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
             const pathToExpand = folderPath && folderPath.trim() !== '' ? folderPath : undefined;
             await this.expandNode(vaultName, pathToExpand);
             this.treeViewProvider.refresh();
+            
+            // 自动打开创建的文件
+            if (filePath && vaultName) {
+              await this.openCreatedFile(vaultName, filePath);
+            }
           }
           return;
         }
@@ -677,13 +722,18 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           return;
         }
         if (message.method === 'designCreated') {
-          const { vaultName, folderPath } = message.params || {};
+          const { vaultName, folderPath, filePath } = message.params || {};
           if (vaultName) {
             this.treeViewProvider.refresh();
             // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
             const pathToExpand = folderPath && folderPath.trim() !== '' ? folderPath : undefined;
             await this.expandNode(vaultName, pathToExpand);
             this.treeViewProvider.refresh();
+            
+            // 自动打开创建的文件
+            if (filePath && vaultName) {
+              await this.openCreatedFile(vaultName, filePath);
+            }
           }
           return;
         }

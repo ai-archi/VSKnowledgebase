@@ -420,11 +420,12 @@ export class WebviewRPC {
           },
           path: params.path,
           title: params.title,
-          content: params.content,
+          content: params.content, // 可选，如果不提供则从模板复制
           viewType: params.viewType as any,
           format: params.format,
           category: params.category,
           tags: params.tags,
+          templateViewType: (params as any).templateViewType, // 模板视图类型
         });
 
         if (!result.success) {

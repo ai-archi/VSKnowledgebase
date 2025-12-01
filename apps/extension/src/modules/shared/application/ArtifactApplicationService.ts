@@ -8,11 +8,12 @@ export interface CreateArtifactOpts {
   vault: VaultReference;
   path: string;
   title: string;
-  content: string;
+  content?: string; // 可选，如果提供则使用，否则从模板复制
   viewType: ArtifactViewType;
   format?: string;
   category?: string;
   tags?: string[];
+  templateViewType?: string; // 模板视图类型（用于 archimate 等）
 }
 
 export interface UpdateArtifactOpts {
