@@ -179,6 +179,80 @@
         "command": "archi.document.editRelations",
         "title": "Edit Relations",
         "icon": "$(link)"
+      },
+      {
+        "command": "archi.template.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "archi.template.expandAll",
+        "title": "Expand All",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "archi.template.collapseAll",
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "archi.task.refresh",
+        "title": "Refresh"
+      },
+      {
+        "command": "archi.task.expandAll",
+        "title": "Expand All",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "archi.task.collapseAll",
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "archi.task.addFile",
+        "title": "Add File",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "archi.task.addFolder",
+        "title": "Add Folder",
+        "icon": "$(folder-create)"
+      },
+      {
+        "command": "archi.task.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "archi.template.addFile",
+        "title": "Add File Template",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "archi.template.addFolder",
+        "title": "Add Folder Template",
+        "icon": "$(folder-create)"
+      },
+      {
+        "command": "archi.template.addArchimateDesign",
+        "title": "Add Archimate Template",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "archi.template.addPlantUMLDesign",
+        "title": "Add PlantUML Template",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "archi.template.addMermaidDesign",
+        "title": "Add Mermaid Template",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "archi.template.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -201,6 +275,26 @@
         {
           "command": "archi.document.collapseAll",
           "when": "view == architool.documentView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "archi.template.expandAll",
+          "when": "view == architool.templateView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archi.template.collapseAll",
+          "when": "view == architool.templateView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "archi.task.expandAll",
+          "when": "view == architool.taskView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archi.task.collapseAll",
+          "when": "view == architool.taskView",
           "group": "navigation@4"
         }
       ],
@@ -308,6 +402,131 @@
         {
           "command": "archi.document.delete",
           "when": "view == architool.documentView && viewItem == folder",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.template.addFile",
+          "when": "view == architool.templateView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addFolder",
+          "when": "view == architool.templateView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addArchimateDesign",
+          "when": "view == architool.templateView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addPlantUMLDesign",
+          "when": "view == architool.templateView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addMermaidDesign",
+          "when": "view == architool.templateView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.delete",
+          "when": "view == architool.templateView && viewItem == vault",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.task.addFile",
+          "when": "view == architool.taskView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.task.addFolder",
+          "when": "view == architool.taskView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.task.delete",
+          "when": "view == architool.taskView && viewItem == vault",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.task.addFile",
+          "when": "view == architool.taskView && viewItem == task.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.task.addFolder",
+          "when": "view == architool.taskView && viewItem == task.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.task.delete",
+          "when": "view == architool.taskView && viewItem == task.file",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.task.delete",
+          "when": "view == architool.taskView && viewItem == task.directory",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.template.addFile",
+          "when": "view == architool.templateView && viewItem == template.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addFolder",
+          "when": "view == architool.templateView && viewItem == template.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addArchimateDesign",
+          "when": "view == architool.templateView && viewItem == template.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addPlantUMLDesign",
+          "when": "view == architool.templateView && viewItem == template.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addMermaidDesign",
+          "when": "view == architool.templateView && viewItem == template.file",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.delete",
+          "when": "view == architool.templateView && viewItem == template.file",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.template.addFile",
+          "when": "view == architool.templateView && viewItem == template.directory",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addFolder",
+          "when": "view == architool.templateView && viewItem == template.directory",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addArchimateDesign",
+          "when": "view == architool.templateView && viewItem == template.directory",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addPlantUMLDesign",
+          "when": "view == architool.templateView && viewItem == template.directory",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.addMermaidDesign",
+          "when": "view == architool.templateView && viewItem == template.directory",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.template.delete",
+          "when": "view == architool.templateView && viewItem == template.directory",
           "group": "2_actions"
         }
       ]

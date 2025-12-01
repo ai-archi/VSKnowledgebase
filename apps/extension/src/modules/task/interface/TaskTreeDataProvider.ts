@@ -1,96 +1,93 @@
 import * as vscode from 'vscode';
-import { TaskApplicationService, Task } from '../application/TaskApplicationService';
+import * as path from 'path';
+import { BaseArtifactTreeItem } from '../../shared/interface/tree/BaseArtifactTreeItem';
+import { BaseArtifactTreeViewProvider } from '../../shared/interface/tree/BaseArtifactTreeViewProvider';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
+import { ArtifactApplicationService, FileTreeNode } from '../../shared/application/ArtifactApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 
-export class TaskTreeItem extends vscode.TreeItem {
-  public readonly task?: Task;
-  public readonly vaultName?: string;
-
+/**
+ * 任务树项
+ */
+export class TaskTreeItem extends BaseArtifactTreeItem {
   constructor(
-    task?: Task,
-    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None,
+    label: string,
+    collapsibleState: vscode.TreeItemCollapsibleState,
     vaultName?: string,
+    vaultId?: string,
+    folderPath?: string,
+    filePath?: string,
     contextValue?: string
   ) {
-    if (task) {
-      super(task.title, collapsibleState);
-      this.task = task;
-      this.tooltip = `${task.title} - ${task.status}`;
-      this.description = task.status;
-      this.contextValue = 'task';
-    } else if (vaultName) {
-      super(vaultName, collapsibleState);
-      this.vaultName = vaultName;
-      this.tooltip = `Vault: ${vaultName}`;
-      this.contextValue = contextValue || 'vault';
-      this.iconPath = new vscode.ThemeIcon('folder');
-    } else {
-      super('', collapsibleState);
-    }
+    super(label, collapsibleState, vaultName, vaultId, folderPath, filePath, contextValue);
   }
 }
 
-export class TaskTreeDataProvider implements vscode.TreeDataProvider<TaskTreeItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<TaskTreeItem | undefined | null | void> =
-    new vscode.EventEmitter<TaskTreeItem | undefined | null | void>();
-  readonly onDidChangeTreeData: vscode.Event<TaskTreeItem | undefined | null | void> =
-    this._onDidChangeTreeData.event;
-
+/**
+ * 任务树视图数据提供者
+ */
+export class TaskTreeDataProvider extends BaseArtifactTreeViewProvider<TaskTreeItem> {
   constructor(
-    private taskService: TaskApplicationService,
-    private vaultService: VaultApplicationService,
-    private logger: Logger
-  ) {}
-
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
+    vaultService: VaultApplicationService,
+    treeService: ArtifactApplicationService,
+    logger: Logger
+  ) {
+    super(vaultService, treeService, logger);
   }
 
-  getTreeItem(element: TaskTreeItem): vscode.TreeItem {
-    return element;
+  protected getRootDirectory(): string {
+    return 'tasks';
   }
 
-  async getChildren(element?: TaskTreeItem): Promise<TaskTreeItem[]> {
-    try {
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success || vaultsResult.value.length === 0) {
-        return [];
-      }
+  protected createTreeItem(
+    label: string,
+    collapsibleState: vscode.TreeItemCollapsibleState,
+    vaultName?: string,
+    vaultId?: string,
+    folderPath?: string,
+    filePath?: string,
+    contextValue?: string
+  ): TaskTreeItem {
+    return new TaskTreeItem(
+      label,
+      collapsibleState,
+      vaultName,
+      vaultId,
+      folderPath,
+      filePath,
+      contextValue
+    );
+  }
 
-      // 根节点：显示所有 vault
-      if (!element) {
-        return vaultsResult.value.map(vault =>
-          new TaskTreeItem(
-            undefined,
-            vscode.TreeItemCollapsibleState.Collapsed,
-            vault.name,
-            'vault'
-          )
-        );
-      }
+  protected getItemContextValue(
+    item: TaskTreeItem | undefined,
+    type: 'vault' | 'folder' | 'file'
+  ): string {
+    switch (type) {
+      case 'vault':
+        return 'vault';
+      case 'folder':
+        return 'task.directory';
+      case 'file':
+        return 'task.file';
+      default:
+        return 'task.file';
+    }
+  }
 
-      // Vault 节点：显示该 vault 的所有任务
-      if (element.vaultName) {
-        const vault = vaultsResult.value.find(v => v.name === element.vaultName);
-        if (!vault) {
-          return [];
-        }
+  protected getItemIcon(
+    item: TaskTreeItem,
+    node: FileTreeNode
+  ): vscode.ThemeIcon | undefined {
+    if (node.isDirectory) {
+      return new vscode.ThemeIcon('folder');
+    }
 
-        const tasksResult = await this.taskService.listTasks(vault.id);
-        if (!tasksResult.success) {
-          return [];
-        }
-
-        return tasksResult.value.map(task =>
-          new TaskTreeItem(task, vscode.TreeItemCollapsibleState.None)
-        );
-      }
-
-      return [];
-    } catch (error: any) {
-      this.logger.error('Failed to get task tree items', error);
-      return [];
+    const ext = path.extname(node.path).toLowerCase();
+    if (ext === '.md') {
+      return new vscode.ThemeIcon('checklist');
+    } else {
+      return new vscode.ThemeIcon('file');
     }
   }
 }

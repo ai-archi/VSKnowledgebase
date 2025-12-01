@@ -91,7 +91,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
   // ==================== 通用命令实现 ====================
 
   /**
-   * 展开所有节点
+   * 展开所有节点（递归展开所有文件夹）
    */
   protected async expandAll(): Promise<void> {
     try {
@@ -103,23 +103,92 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
       // 先刷新视图以确保所有节点都已加载
       this.treeViewProvider.refresh();
 
-      // 等待一小段时间让视图更新
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 等待足够的时间让视图完全更新和加载
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 展开所有 vault 节点
-      for (const vault of vaultsResult.value) {
-        const vaultItem = await this.treeViewProvider.findTreeItem(
-          undefined,
-          (item) => item.isVault(vault.name)
-        );
-        if (vaultItem) {
-          try {
-            await this.treeView.reveal(vaultItem, { expand: true });
-          } catch (error) {
-            // 忽略单个节点展开失败
+      // 递归展开所有节点
+      const expandNodeRecursive = async (element: T | undefined): Promise<void> => {
+        try {
+          const children = await this.treeViewProvider.getChildren(element);
+          
+          for (const child of children) {
+            // 只展开文件夹节点（vault 或 folder）
+            if (child.folderPath !== undefined || (child.vaultName && !child.folderPath && !child.filePath)) {
+              try {
+                // 检查节点是否可展开
+                if (child.collapsibleState === vscode.TreeItemCollapsibleState.None) {
+                  continue;
+                }
+                
+                // 使用重试机制展开节点
+                let retries = 3;
+                let lastError: any = null;
+                
+                while (retries > 0) {
+                  try {
+                    await this.treeView.reveal(child, { expand: true });
+                    lastError = null;
+                    break; // 成功，退出重试循环
+                  } catch (error: any) {
+                    lastError = error;
+                    retries--;
+                    if (retries > 0) {
+                      // 等待一小段时间后重试
+                      await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                  }
+                }
+                
+                if (lastError) {
+                  // 所有重试都失败了，记录错误但继续处理其他节点
+                  const errorMessage = lastError?.message || String(lastError) || 'Unknown error';
+                  this.logger.debug(`Failed to expand node after retries: ${child.label}`, {
+                    error: errorMessage,
+                    vaultName: child.vaultName,
+                    folderPath: child.folderPath,
+                    filePath: child.filePath,
+                    collapsibleState: child.collapsibleState
+                  });
+                  continue; // 跳过这个节点，继续处理下一个
+                }
+                
+                // 如果是 vault 节点，等待更长时间让子节点加载
+                const isVaultNode = child.vaultName && !child.folderPath && !child.filePath;
+                const delay = isVaultNode 
+                  ? BaseFileTreeCommands.VAULT_EXPAND_DELAY_MS 
+                  : BaseFileTreeCommands.TREE_UPDATE_DELAY_MS;
+                
+                await new Promise(resolve => setTimeout(resolve, delay));
+                
+                // 递归展开子节点
+                await expandNodeRecursive(child);
+              } catch (error: any) {
+                // 记录详细的错误信息
+                const errorMessage = error?.message || String(error) || 'Unknown error';
+                const errorStack = error?.stack || '';
+                this.logger.debug(`Failed to expand node: ${child.label}`, {
+                  error: errorMessage,
+                  stack: errorStack,
+                  vaultName: child.vaultName,
+                  folderPath: child.folderPath,
+                  filePath: child.filePath,
+                  collapsibleState: child.collapsibleState
+                });
+                // 继续处理其他节点，不中断整个展开过程
+              }
+            }
           }
+        } catch (error: any) {
+          const errorMessage = error?.message || String(error) || 'Unknown error';
+          this.logger.warn(`Failed to get children for node expansion`, {
+            error: errorMessage,
+            element: element?.label || 'root'
+          });
         }
-      }
+      };
+
+      // 从根节点开始递归展开
+      await expandNodeRecursive(undefined);
     } catch (error: any) {
       this.logger.error('Failed to expand all nodes', error);
     }
@@ -129,11 +198,38 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
    * 折叠所有节点
    */
   protected async collapseAll(): Promise<void> {
-    TreeViewUtils.collapseAll(this.treeViewProvider);
+    try {
+      this.logger.debug('Collapse all nodes called');
+      
+      // VSCode TreeView 没有直接的 collapseAll API
+      // 最可靠的方法是通过刷新视图来重置所有节点的状态
+      // 刷新整个树视图（传入 undefined 表示刷新根节点及其所有子节点）
+      
+      // 多次刷新以确保 VSCode 清除所有展开状态
+      // VSCode 可能会记住展开状态，多次刷新可以强制重置
+      for (let i = 0; i < 3; i++) {
+        this.treeViewProvider.refresh(undefined);
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      this.logger.debug('Collapse all nodes completed');
+    } catch (error: any) {
+      this.logger.error('Failed to collapse all nodes', {
+        error: error?.message || String(error),
+        stack: error?.stack
+      });
+      // 即使出错，也尝试刷新视图
+      try {
+        this.treeViewProvider.refresh(undefined);
+      } catch (refreshError) {
+        this.logger.error('Failed to refresh after collapse error', refreshError);
+      }
+    }
   }
 
   /**
    * 展开指定的节点
+   * 支持递归展开深层嵌套的文件夹路径
    */
   protected async expandNode(vaultName: string, folderPath?: string): Promise<void> {
     if (!vaultName) {
@@ -162,24 +258,53 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
         return;
       }
 
-      // 如果需要展开文件夹
-      if (folderPath !== undefined) {
+      // 如果需要展开文件夹路径
+      if (folderPath !== undefined && folderPath !== '') {
         // 等待 vault 展开完成，让子节点加载
         await new Promise(resolve => setTimeout(resolve, BaseFileTreeCommands.VAULT_EXPAND_DELAY_MS));
 
-        // 从 vault 的子节点中查找文件夹
-        const vaultChildren = await this.treeViewProvider.getChildren(vaultItem);
-        const folderItem = vaultChildren.find(item => item.isFolder(vaultName, folderPath)) as T | undefined;
+        // 将路径分割成多个部分（例如 "folder1/folder2/folder3" -> ["folder1", "folder2", "folder3"]）
+        const pathParts = folderPath.split('/').filter(part => part.length > 0);
+        
+        if (pathParts.length === 0) {
+          return;
+        }
 
-        if (folderItem) {
-          try {
-            await this.treeView.reveal(folderItem, { expand: true });
-            this.logger.debug(`Folder node expanded: ${vaultName}/${folderPath}`);
-          } catch (error: any) {
-            this.logger.warn(`Failed to reveal folder node: ${folderPath}`, error?.message || String(error));
+        // 从 vault 开始，逐层展开每个文件夹
+        let currentParent: T = vaultItem;
+        let currentPath = '';
+
+        for (let i = 0; i < pathParts.length; i++) {
+          const part = pathParts[i];
+          currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+          // 获取当前父节点的子节点
+          const children = await this.treeViewProvider.getChildren(currentParent);
+          
+          // 查找匹配的文件夹节点
+          const folderItem = children.find(item => item.isFolder(vaultName, currentPath)) as T | undefined;
+
+          if (folderItem) {
+            try {
+              // 展开找到的文件夹节点
+              await this.treeView.reveal(folderItem, { expand: true });
+              this.logger.debug(`Folder node expanded: ${vaultName}/${currentPath}`);
+              
+              // 等待展开完成，让子节点加载（最后一个文件夹不需要等待）
+              if (i < pathParts.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, BaseFileTreeCommands.TREE_UPDATE_DELAY_MS));
+              }
+              
+              // 更新当前父节点为刚展开的文件夹
+              currentParent = folderItem;
+            } catch (error: any) {
+              this.logger.warn(`Failed to reveal folder node: ${currentPath}`, error?.message || String(error));
+              break;
+            }
+          } else {
+            this.logger.debug(`Folder node not found: ${vaultName}/${currentPath}`);
+            break;
           }
-        } else {
-          this.logger.debug(`Folder node not found: ${vaultName}/${folderPath}`);
         }
       }
     } catch (error: any) {
@@ -347,7 +472,9 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           const { vaultName, folderPath } = message.params || {};
           if (vaultName) {
             this.treeViewProvider.refresh();
-            await this.expandNode(vaultName, folderPath);
+            // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
+            const pathToExpand = folderPath && folderPath.trim() !== '' ? folderPath : undefined;
+            await this.expandNode(vaultName, pathToExpand);
             this.treeViewProvider.refresh();
           }
           return;
@@ -436,11 +563,12 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
               parentFolderPath
             });
             this.treeViewProvider.refresh();
-            // 展开父文件夹或新创建的文件夹
-            const pathToExpand = parentFolderPath || folderPath || '';
-            if (pathToExpand) {
-              await this.expandNode(vaultName, pathToExpand);
-            }
+            // 展开父文件夹，以便能看到新创建的文件夹
+            // 如果 parentFolderPath 为空，说明在根目录下创建，只展开 vault
+            const pathToExpand = parentFolderPath && parentFolderPath.trim() !== '' 
+              ? parentFolderPath 
+              : undefined;
+            await this.expandNode(vaultName, pathToExpand);
             this.treeViewProvider.refresh();
           }
           return;
@@ -538,7 +666,9 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           const { vaultName, folderPath } = message.params || {};
           if (vaultName) {
             this.treeViewProvider.refresh();
-            await this.expandNode(vaultName, folderPath);
+            // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
+            const pathToExpand = folderPath && folderPath.trim() !== '' ? folderPath : undefined;
+            await this.expandNode(vaultName, pathToExpand);
             this.treeViewProvider.refresh();
           }
           return;

@@ -157,9 +157,20 @@ export async function activate(context: vscode.ExtensionContext) {
   documentCommands.register(commandAdapter);
 
   // 8. 初始化任务视图
-  const taskTreeDataProvider = new TaskTreeDataProvider(taskService, vaultService, logger);
-  vscode.window.createTreeView('architool.taskView', { treeDataProvider: taskTreeDataProvider });
-  const taskCommands = new TaskCommands(taskService, logger, context, taskTreeDataProvider, vaultService);
+  const taskTreeDataProvider = new TaskTreeDataProvider(vaultService, artifactService, logger);
+  const taskTreeView = vscode.window.createTreeView('architool.taskView', { treeDataProvider: taskTreeDataProvider });
+  const taskCommands = new TaskCommands(
+    taskService,
+    artifactService,
+    vaultService,
+    fileTreeDomainService,
+    fileOperationDomainService,
+    logger,
+    context,
+    taskTreeDataProvider,
+    taskTreeView,
+    webviewRPC.getAdapter()
+  );
   taskCommands.register(commandAdapter);
 
   // 9. 初始化视点视图
@@ -176,9 +187,20 @@ export async function activate(context: vscode.ExtensionContext) {
   // 10. 初始化模板视图
   const templateTreeService = artifactService;
   const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, templateTreeService, logger);
-  vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
-  const templateCommands = new TemplateCommands(templateService, vaultService, logger);
-  templateCommands.registerCommands(context);
+  const templateTreeView = vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
+  const templateCommands = new TemplateCommands(
+    templateService,
+    artifactService,
+    vaultService,
+    fileTreeDomainService,
+    fileOperationDomainService,
+    logger,
+    context,
+    templateTreeDataProvider,
+    templateTreeView,
+    webviewRPC.getAdapter()
+  );
+  templateCommands.register(commandAdapter);
 
   // 11. 初始化 AI 服务命令
   const changeRepository = container.get<import('./modules/shared/infrastructure/ChangeRepository').ChangeRepository>(TYPES.ChangeRepository);

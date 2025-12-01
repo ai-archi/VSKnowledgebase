@@ -79,17 +79,22 @@ export class TreeViewUtils {
 
   /**
    * 折叠所有节点
+   * @param treeView 树视图（可选，如果提供则可以使用 reveal 方法）
    * @param treeDataProvider 树数据提供者
    */
-  static collapseAll<T extends vscode.TreeItem>(
-    treeDataProvider: vscode.TreeDataProvider<T>
-  ): void {
+  static async collapseAll<T extends vscode.TreeItem>(
+    treeView?: vscode.TreeView<T>,
+    treeDataProvider?: vscode.TreeDataProvider<T>
+  ): Promise<void> {
     // VSCode TreeView 没有直接的 collapseAll API
-    // 最简单的方法是通过刷新视图来折叠所有节点
-    // 刷新后所有节点默认是折叠状态
-    if ('refresh' in treeDataProvider && typeof treeDataProvider.refresh === 'function') {
+    // 方法1：通过刷新视图来折叠所有节点（刷新后所有节点默认是折叠状态）
+    if (treeDataProvider && 'refresh' in treeDataProvider && typeof treeDataProvider.refresh === 'function') {
       (treeDataProvider as any).refresh();
     }
+    
+    // 方法2：如果提供了 treeView，可以尝试折叠根节点
+    // 注意：VSCode 的 reveal 方法只支持 expand: true，不支持 expand: false
+    // 所以我们需要依赖刷新来折叠节点
   }
 
   /**

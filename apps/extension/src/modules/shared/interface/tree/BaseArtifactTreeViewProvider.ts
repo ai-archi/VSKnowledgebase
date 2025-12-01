@@ -26,9 +26,10 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
 
   /**
    * 刷新视图
+   * @param element 要刷新的元素，如果为 undefined 则刷新整个树
    */
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
+  refresh(element?: T | undefined | null | void): void {
+    this._onDidChangeTreeData.fire(element);
   }
 
   /**
@@ -73,6 +74,79 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
       this.logger.error('Failed to get tree items', error);
       return [];
     }
+  }
+
+  /**
+   * 获取父节点
+   * 这是使用 reveal() 方法所必需的
+   */
+  async getParent(element: T): Promise<T | undefined> {
+    try {
+      // 根节点没有父节点
+      if (!element.vaultName) {
+        return undefined;
+      }
+
+      // Vault 节点的父节点是根节点
+      if (element.isVault(element.vaultName)) {
+        return undefined;
+      }
+
+      // 文件节点的父节点是包含它的文件夹
+      if (element.filePath !== undefined && element.vaultName) {
+        const dirPath = PathUtils.dirname(element.filePath);
+        if (dirPath === '') {
+          // 文件在根目录，父节点是 vault
+          return await this.findVaultNode(element.vaultName);
+        } else {
+          // 文件在子目录，父节点是文件夹
+          // 直接创建父文件夹节点，不需要查找
+          return this.createTreeItem(
+            PathUtils.basename(dirPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+            element.vaultName,
+            element.vaultId,
+            dirPath,
+            undefined,
+            this.getItemContextValue(undefined, 'folder')
+          );
+        }
+      }
+
+      // 文件夹节点的父节点
+      if (element.folderPath !== undefined && element.vaultName) {
+        const dirPath = PathUtils.dirname(element.folderPath);
+        if (dirPath === '') {
+          // 文件夹在根目录，父节点是 vault
+          return await this.findVaultNode(element.vaultName);
+        } else {
+          // 文件夹在子目录，父节点是父文件夹
+          // 直接创建父文件夹节点，不需要查找
+          return this.createTreeItem(
+            PathUtils.basename(dirPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+            element.vaultName,
+            element.vaultId,
+            dirPath,
+            undefined,
+            this.getItemContextValue(undefined, 'folder')
+          );
+        }
+      }
+
+      return undefined;
+    } catch (error: any) {
+      this.logger.error('Failed to get parent node', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * 查找 vault 节点
+   */
+  private async findVaultNode(vaultName: string): Promise<T | undefined> {
+    const rootVaults = await this.getRootVaults();
+    return rootVaults.find(item => item.isVault(vaultName));
   }
 
   /**

@@ -43,8 +43,10 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     eventBus.on('document:created', async (data: { artifact: any; vaultName: string; folderPath: string }) => {
       this.logger.info('Document created event received, refreshing view', data);
       this.treeViewProvider.refresh();
-      if (data.vaultName && data.folderPath) {
-        await this.expandNode(data.vaultName, data.folderPath);
+      if (data.vaultName) {
+        // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
+        const pathToExpand = data.folderPath && data.folderPath.trim() !== '' ? data.folderPath : undefined;
+        await this.expandNode(data.vaultName, pathToExpand);
         this.treeViewProvider.refresh();
       }
     });
@@ -54,8 +56,11 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       this.logger.info('Folder created event received, refreshing view', data);
       this.treeViewProvider.refresh();
       if (data.vaultName) {
-        // 展开父文件夹或新创建的文件夹
-        const pathToExpand = data.parentFolderPath || data.folderPath;
+        // 展开父文件夹，以便能看到新创建的文件夹
+        // 如果 parentFolderPath 为空，说明在根目录下创建，只展开 vault
+        const pathToExpand = data.parentFolderPath && data.parentFolderPath.trim() !== '' 
+          ? data.parentFolderPath 
+          : undefined;
         await this.expandNode(data.vaultName, pathToExpand);
         this.treeViewProvider.refresh();
       }
