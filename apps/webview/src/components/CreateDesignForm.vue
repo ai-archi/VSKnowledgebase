@@ -428,6 +428,24 @@ const handleCreate = async () => {
       contentLength: content.length
     });
     
+    // 分离文档和代码文件
+    const relatedArtifacts: string[] = [];
+    const relatedCodePaths: string[] = [];
+
+    for (const file of selectedFiles.value) {
+      if (file.vault) {
+        // 文档，优先使用id，否则使用path
+        if (file.id) {
+          relatedArtifacts.push(file.id);
+        } else {
+          relatedArtifacts.push(file.path);
+        }
+      } else {
+        // 代码文件，使用path
+        relatedCodePaths.push(file.path);
+      }
+    }
+
     const result = await extensionService.call('artifact.create', {
       vaultId: initialVaultId.value,
       path: diagramPath,
@@ -435,6 +453,8 @@ const handleCreate = async () => {
       content: content,
       viewType: 'design',
       format: extension,
+      relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
+      relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
     });
 
     console.log('[CreateDesignForm] Design diagram created successfully', result);

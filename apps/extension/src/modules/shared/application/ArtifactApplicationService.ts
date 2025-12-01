@@ -113,6 +113,58 @@ export interface ArtifactApplicationService {
   updateArtifactMetadata(artifactId: string, updates: Partial<ArtifactMetadata>): Promise<Result<ArtifactMetadata, ArtifactError>>;
   
   /**
+   * 更新关联文档
+   * @param vaultId Vault ID
+   * @param targetId 目标ID（可以是artifact ID、文件路径或文件夹路径）
+   * @param targetType 目标类型：'artifact' | 'file' | 'folder' | 'vault'
+   * @param relatedArtifacts 关联的Artifact ID列表
+   */
+  updateRelatedArtifacts(
+    vaultId: string,
+    targetId: string,
+    targetType: 'artifact' | 'file' | 'folder' | 'vault',
+    relatedArtifacts: string[]
+  ): Promise<Result<ArtifactMetadata, ArtifactError>>;
+
+  /**
+   * 更新关联代码路径
+   * @param vaultId Vault ID
+   * @param targetId 目标ID（可以是artifact ID、文件路径或文件夹路径）
+   * @param targetType 目标类型：'artifact' | 'file' | 'folder' | 'vault'
+   * @param relatedCodePaths 关联的代码路径列表
+   */
+  updateRelatedCodePaths(
+    vaultId: string,
+    targetId: string,
+    targetType: 'artifact' | 'file' | 'folder' | 'vault',
+    relatedCodePaths: string[]
+  ): Promise<Result<ArtifactMetadata, ArtifactError>>;
+
+  /**
+   * 获取关联文档
+   * @param vaultId Vault ID
+   * @param targetId 目标ID（可以是artifact ID、文件路径或文件夹路径）
+   * @param targetType 目标类型：'artifact' | 'file' | 'folder' | 'vault'
+   */
+  getRelatedArtifacts(
+    vaultId: string,
+    targetId: string,
+    targetType: 'artifact' | 'file' | 'folder' | 'vault'
+  ): Promise<Result<string[], ArtifactError>>;
+
+  /**
+   * 获取关联代码路径
+   * @param vaultId Vault ID
+   * @param targetId 目标ID（可以是artifact ID、文件路径或文件夹路径）
+   * @param targetType 目标类型：'artifact' | 'file' | 'folder' | 'vault'
+   */
+  getRelatedCodePaths(
+    vaultId: string,
+    targetId: string,
+    targetType: 'artifact' | 'file' | 'folder' | 'vault'
+  ): Promise<Result<string[], ArtifactError>>;
+  
+  /**
    * 列出 vault 中的所有文件和文件夹（不限制文件类型）
    * @param vaultId Vault ID（可选，不指定则列出所有 vault）
    * @param options 查询选项

@@ -123,7 +123,16 @@ export class ArtifactFileSystemAdapter {
         };
       }
 
-      fs.unlinkSync(fullPath);
+      // 检查是文件还是文件夹
+      const stats = fs.statSync(fullPath);
+      if (stats.isDirectory()) {
+        // 如果是文件夹，递归删除
+        fs.rmSync(fullPath, { recursive: true, force: true });
+      } else {
+        // 如果是文件，直接删除
+        fs.unlinkSync(fullPath);
+      }
+
       return { success: true, value: undefined };
     } catch (error: any) {
       return {

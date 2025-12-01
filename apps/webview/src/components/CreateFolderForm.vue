@@ -479,12 +479,32 @@ const handleCreate = async () => {
     // 确定文件夹路径
     const folderPath = initialFolderPath.value || '';
     
+    // 分离文档和代码文件
+    const relatedArtifacts: string[] = [];
+    const relatedCodePaths: string[] = [];
+
+    for (const file of selectedFiles.value) {
+      if (file.vault) {
+        // 文档，优先使用id，否则使用path
+        if (file.id) {
+          relatedArtifacts.push(file.id);
+        } else {
+          relatedArtifacts.push(file.path);
+        }
+      } else {
+        // 代码文件，使用path
+        relatedCodePaths.push(file.path);
+      }
+    }
+
     // 只传递模板 ID，后端会读取模板文件并处理
     const result = await extensionService.call('document.createFolder', {
       vaultId: formData.value.vaultId,
       folderPath: folderPath,
       folderName: formData.value.folderName.trim(),
       templateId: formData.value.templateId || undefined, // 只传递模板 ID
+      relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
+      relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
     });
 
     ElMessage.success('文件夹创建成功');

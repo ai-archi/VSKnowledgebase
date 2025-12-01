@@ -113,6 +113,8 @@ export class WebviewRPC {
       path: string;
       title: string;
       content: string;
+      relatedArtifacts?: string[];
+      relatedCodePaths?: string[];
     }) => {
       this.logger.info('[WebviewRPC] document.create called', { 
         vaultId: params.vaultId, 
@@ -126,6 +128,29 @@ export class WebviewRPC {
           params.title,
           params.content
         );
+
+        // 如果创建成功且有关联关系，保存关联关系
+        if (result.success && (params.relatedArtifacts || params.relatedCodePaths)) {
+          const artifact = result.value;
+          await Promise.all([
+            params.relatedArtifacts && params.relatedArtifacts.length > 0
+              ? this.artifactService.updateRelatedArtifacts(
+                  artifact.vault.id,
+                  artifact.id,
+                  'artifact',
+                  params.relatedArtifacts
+                )
+              : Promise.resolve({ success: true } as any),
+            params.relatedCodePaths && params.relatedCodePaths.length > 0
+              ? this.artifactService.updateRelatedCodePaths(
+                  artifact.vault.id,
+                  artifact.id,
+                  'artifact',
+                  params.relatedCodePaths
+                )
+              : Promise.resolve({ success: true } as any),
+          ]);
+        }
         if (!result.success) {
           this.logger.error('[WebviewRPC] document.create failed', { 
             error: result.error.message,
@@ -161,6 +186,8 @@ export class WebviewRPC {
       folderPath: string;
       folderName: string;
       templateId?: string; // 模板 ID，后端会根据 ID 读取模板文件
+      relatedArtifacts?: string[];
+      relatedCodePaths?: string[];
     }) => {
       const result = await this.documentService.createFolder(
         params.vaultId,
@@ -170,6 +197,28 @@ export class WebviewRPC {
       );
       if (!result.success) {
         throw new Error(result.error.message);
+      }
+
+      // 如果创建成功且有关联关系，保存关联关系
+      if (result.success && (params.relatedArtifacts || params.relatedCodePaths)) {
+        await Promise.all([
+          params.relatedArtifacts && params.relatedArtifacts.length > 0
+            ? this.artifactService.updateRelatedArtifacts(
+                params.vaultId,
+                result.value,
+                'folder',
+                params.relatedArtifacts
+              )
+            : Promise.resolve({ success: true } as any),
+          params.relatedCodePaths && params.relatedCodePaths.length > 0
+            ? this.artifactService.updateRelatedCodePaths(
+                params.vaultId,
+                result.value,
+                'folder',
+                params.relatedCodePaths
+              )
+            : Promise.resolve({ success: true } as any),
+        ]);
       }
 
       // 获取 vault 信息用于返回
@@ -263,6 +312,79 @@ export class WebviewRPC {
       return result.value;
     });
 
+    // Artifact 关联关系相关方法
+    this.webviewAdapter.registerMethod('artifact.getRelatedArtifacts', async (params: {
+      vaultId: string;
+      targetId: string;
+      targetType: 'artifact' | 'file' | 'folder' | 'vault';
+    }) => {
+      this.logger.info('[WebviewRPC] artifact.getRelatedArtifacts called', params);
+      const result = await this.artifactService.getRelatedArtifacts(
+        params.vaultId,
+        params.targetId,
+        params.targetType
+      );
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return result.value;
+    });
+
+    this.webviewAdapter.registerMethod('artifact.getRelatedCodePaths', async (params: {
+      vaultId: string;
+      targetId: string;
+      targetType: 'artifact' | 'file' | 'folder' | 'vault';
+    }) => {
+      this.logger.info('[WebviewRPC] artifact.getRelatedCodePaths called', params);
+      const result = await this.artifactService.getRelatedCodePaths(
+        params.vaultId,
+        params.targetId,
+        params.targetType
+      );
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return result.value;
+    });
+
+    this.webviewAdapter.registerMethod('artifact.updateRelatedArtifacts', async (params: {
+      vaultId: string;
+      targetId: string;
+      targetType: 'artifact' | 'file' | 'folder' | 'vault';
+      relatedArtifacts: string[];
+    }) => {
+      this.logger.info('[WebviewRPC] artifact.updateRelatedArtifacts called', params);
+      const result = await this.artifactService.updateRelatedArtifacts(
+        params.vaultId,
+        params.targetId,
+        params.targetType,
+        params.relatedArtifacts
+      );
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return result.value;
+    });
+
+    this.webviewAdapter.registerMethod('artifact.updateRelatedCodePaths', async (params: {
+      vaultId: string;
+      targetId: string;
+      targetType: 'artifact' | 'file' | 'folder' | 'vault';
+      relatedCodePaths: string[];
+    }) => {
+      this.logger.info('[WebviewRPC] artifact.updateRelatedCodePaths called', params);
+      const result = await this.artifactService.updateRelatedCodePaths(
+        params.vaultId,
+        params.targetId,
+        params.targetType,
+        params.relatedCodePaths
+      );
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return result.value;
+    });
+
     // Artifact 相关方法（用于创建设计图等）
     this.webviewAdapter.registerMethod('artifact.create', async (params: {
       vaultId: string;
@@ -273,6 +395,8 @@ export class WebviewRPC {
       format?: string;
       category?: string;
       tags?: string[];
+      relatedArtifacts?: string[];
+      relatedCodePaths?: string[];
     }) => {
       this.logger.info('[WebviewRPC] artifact.create called', { 
         vaultId: params.vaultId, 
@@ -315,6 +439,29 @@ export class WebviewRPC {
           id: result.value.id,
           path: result.value.path
         });
+
+        // 如果创建成功且有关联关系，保存关联关系
+        if (params.relatedArtifacts || params.relatedCodePaths) {
+          await Promise.all([
+            params.relatedArtifacts && params.relatedArtifacts.length > 0
+              ? this.artifactService.updateRelatedArtifacts(
+                  result.value.vault.id,
+                  result.value.id,
+                  'artifact',
+                  params.relatedArtifacts
+                )
+              : Promise.resolve({ success: true } as any),
+            params.relatedCodePaths && params.relatedCodePaths.length > 0
+              ? this.artifactService.updateRelatedCodePaths(
+                  result.value.vault.id,
+                  result.value.id,
+                  'artifact',
+                  params.relatedCodePaths
+                )
+              : Promise.resolve({ success: true } as any),
+          ]);
+        }
+
         return {
           id: result.value.id,
           path: result.value.path,

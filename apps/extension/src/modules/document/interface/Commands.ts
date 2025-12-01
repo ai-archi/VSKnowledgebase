@@ -89,8 +89,52 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     }
 
   protected async handleDelete(item: DocumentTreeItem): Promise<void> {
-      if (item.vaultName) {
-        // 删除 vault
+      // 先判断是否是文件或文件夹（优先级高于 vault）
+      if (item.artifact || item.filePath || item.folderPath !== undefined) {
+        // 删除文档或文件夹
+        let filePath: string;
+        let vaultId: string;
+        let fileName: string;
+        let isFolder = false;
+
+        if (item.artifact) {
+          filePath = item.artifact.path;
+          vaultId = item.artifact.vault.id;
+          fileName = item.artifact.title;
+        } else if (item.filePath) {
+          filePath = item.filePath;
+          vaultId = item.vaultId!;
+          fileName = path.basename(filePath);
+        } else if (item.folderPath !== undefined) {
+          filePath = item.folderPath;
+          vaultId = item.vaultId!;
+          fileName = path.basename(item.folderPath) || item.folderPath;
+          isFolder = true;
+        } else {
+          vscode.window.showErrorMessage('Unable to determine item to delete');
+          return;
+        }
+        
+        const confirm = await vscode.window.showWarningMessage(
+          `Are you sure you want to delete ${isFolder ? 'folder' : 'file'} '${fileName}'? This action cannot be undone.`,
+          { modal: true },
+          'Delete'
+        );
+
+        if (confirm !== 'Delete') {
+          return;
+        }
+
+        const result = await this.documentService.deleteDocument(vaultId, filePath);
+
+        if (result.success) {
+          vscode.window.showInformationMessage(`${isFolder ? 'Folder' : 'Document'} '${fileName}' deleted`);
+          this.treeViewProvider.refresh();
+        } else {
+          vscode.window.showErrorMessage(`Failed to delete ${isFolder ? 'folder' : 'document'}: ${result.error.message}`);
+        }
+      } else if (item.vaultName && item.folderPath === undefined && item.filePath === undefined) {
+        // 删除 vault（只有在没有 folderPath 和 filePath 的情况下才是 vault 节点）
         const confirm = await vscode.window.showWarningMessage(
           `Are you sure you want to delete vault '${item.vaultName}'? This action cannot be undone.`,
           { modal: true },
@@ -120,32 +164,8 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         } else {
           vscode.window.showErrorMessage(`Failed to delete vault: ${result.error.message}`);
         }
-      } else if (item.artifact || item.filePath) {
-        // 删除文档
-        const filePath = item.artifact?.path || item.filePath!;
-        const vaultId = item.artifact?.vault.id || item.vaultId!;
-        const fileName = item.artifact?.title || path.basename(filePath);
-        
-        const confirm = await vscode.window.showWarningMessage(
-          `Are you sure you want to delete '${fileName}'? This action cannot be undone.`,
-          { modal: true },
-          'Delete'
-        );
-
-        if (confirm !== 'Delete') {
-          return;
-        }
-
-        const result = await this.documentService.deleteDocument(vaultId, filePath);
-
-        if (result.success) {
-          vscode.window.showInformationMessage(`Document '${fileName}' deleted`);
-          this.treeViewProvider.refresh();
-        } else {
-          vscode.window.showErrorMessage(`Failed to delete document: ${result.error.message}`);
-        }
       } else {
-        vscode.window.showErrorMessage('Please select a vault or document to delete');
+        vscode.window.showErrorMessage('Please select a vault, folder, or document to delete');
       }
   }
 
@@ -203,12 +223,6 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         },
       },
       {
-        command: 'archi.document.addDiagram',
-        callback: async (item?: DocumentTreeItem) => {
-          await this.addDiagram(item);
-        },
-      },
-      {
         command: 'archi.document.addArchimateDesign',
         callback: async (item?: DocumentTreeItem) => {
           await this.showCreateDesignDialog(item, 'archimate');
@@ -226,92 +240,147 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
           await this.showCreateDesignDialog(item, 'mermaid');
         },
       },
+      {
+        command: 'archi.document.editRelations',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.editRelations(item);
+        },
+      },
     ]);
   }
 
   /**
-   * 添加设计图（文档特定命令）
+   * 编辑关联关系
    */
-  private async addDiagram(item?: DocumentTreeItem): Promise<void> {
+  private async editRelations(item?: DocumentTreeItem): Promise<void> {
+    await this.showEditRelationsDialog(item);
+  }
+
+  /**
+   * 显示编辑关联关系对话框
+   */
+  private async showEditRelationsDialog(item?: DocumentTreeItem): Promise<void> {
     try {
-      const vaultInfo = await this.validateAndGetVault(item, 'add diagram');
-      if (!vaultInfo) {
+      // 获取选中的项
+      if (!item) {
+        const selection = this.treeView.selection;
+        if (selection.length === 0) {
+          vscode.window.showErrorMessage('Please select an item to edit relations');
       return;
     }
-      const { vault, vaultName } = vaultInfo;
-
-      const diagramName = await vscode.window.showInputBox({
-        prompt: 'Enter diagram name (without extension)',
-        validateInput: (value) => PathUtils.validateFileName(value),
-      });
-
-      if (!diagramName) return;
-
-      // 选择图表类型
-      const diagramType = await vscode.window.showQuickPick(
-        [
-          { label: 'Mermaid', value: 'mermaid', description: 'Mermaid diagram (.mmd)' },
-          { label: 'PlantUML', value: 'puml', description: 'PlantUML diagram (.puml)' },
-          { label: 'Archimate', value: 'archimate', description: 'Archimate diagram (.archimate)' },
-        ],
-        {
-          placeHolder: 'Select diagram type',
-        }
-      );
-
-      if (!diagramType) return;
-
-      // 确定文件路径和扩展名
-      const extension =
-        diagramType.value === 'mermaid'
-          ? 'mmd'
-          : diagramType.value === 'puml'
-          ? 'puml'
-          : 'archimate';
-      let diagramPath: string;
-      let targetFolderPath: string | undefined;
-
-      if (item?.folderPath !== undefined || item?.artifact) {
-        // 如果在文件夹或文档节点上右键，使用标准路径计算
-        const pathInfo = this.fileTreeDomainService.calculateTargetPath(item, diagramName, extension);
-        diagramPath = pathInfo.targetPath;
-        targetFolderPath = pathInfo.targetFolderPath;
-      } else {
-        // 如果是在 vault 节点上右键，在 diagrams 文件夹下创建
-        diagramPath = `diagrams/${diagramName}.${extension}`;
-        targetFolderPath = 'diagrams';
-        }
-        
-      // 创建设计图文件
-      const content = this.fileOperationDomainService.generateDefaultContent(
-        diagramName,
-        diagramType.value
-      );
-      const result = await this.artifactService.createArtifact({
-        vault: {
-          id: vault.id,
-          name: vault.name,
-        },
-        path: diagramPath,
-        title: diagramName,
-        content,
-        viewType: 'design',
-        format: extension,
-      });
-
-      if (result.success) {
-        await this.handleCreateSuccess(
-          `Diagram '${diagramName}'`,
-          vaultName,
-          result.value.contentLocation,
-          targetFolderPath
-        );
-      } else {
-        vscode.window.showErrorMessage(`Failed to create diagram: ${result.error.message}`);
+        item = selection[0] as DocumentTreeItem;
       }
+
+      // 确定目标类型和ID
+      let targetType: 'artifact' | 'file' | 'folder' | 'vault';
+      let targetId: string;
+      let vaultId: string;
+      let displayName: string;
+
+      if (item.vaultName && !item.folderPath && !item.filePath && !item.artifact) {
+        // Vault节点
+        targetType = 'vault';
+        const vault = await this.findVaultByName(item.vaultName);
+        if (!vault) {
+          vscode.window.showErrorMessage(`Vault not found: ${item.vaultName}`);
+          return;
+        }
+        vaultId = vault.id;
+        targetId = vault.id;
+        displayName = `Vault: ${item.vaultName}`;
+      } else if (item.folderPath !== undefined) {
+        // 文件夹节点
+        targetType = 'folder';
+        if (!item.vaultId) {
+          const vault = await this.findVaultByName(item.vaultName!);
+          if (!vault) {
+            vscode.window.showErrorMessage(`Vault not found: ${item.vaultName}`);
+            return;
+          }
+          vaultId = vault.id;
+        } else {
+          vaultId = item.vaultId;
+        }
+        targetId = item.folderPath;
+        displayName = `Folder: ${item.folderPath}`;
+      } else if (item.artifact) {
+        // Artifact节点
+        targetType = 'artifact';
+        vaultId = item.artifact.vault.id;
+        targetId = item.artifact.id;
+        displayName = `Document: ${item.artifact.title}`;
+      } else if (item.filePath) {
+        // 文件节点（未索引的文件）
+        targetType = 'file';
+        if (!item.vaultId) {
+          const vault = await this.findVaultByName(item.vaultName!);
+          if (!vault) {
+            vscode.window.showErrorMessage(`Vault not found: ${item.vaultName}`);
+            return;
+          }
+          vaultId = vault.id;
+        } else {
+          vaultId = item.vaultId;
+        }
+        targetId = item.filePath;
+        displayName = `File: ${path.basename(item.filePath)}`;
+      } else {
+        vscode.window.showErrorMessage('Unable to determine item type');
+        return;
+      }
+
+      // 创建新的 webview panel
+      const webviewDistPath = this.getWebviewDistPath();
+
+      const panel = vscode.window.createWebviewPanel(
+        'editRelationsDialog',
+        `Edit Relations - ${displayName}`,
+        vscode.ViewColumn.Beside,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: false,
+          localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+        }
+      );
+
+      // 设置 webview 消息处理器
+      panel.webview.onDidReceiveMessage(
+        async (message: any) => {
+          this.logger.info(`[DocumentCommands] Received message in editRelations dialog: ${message.method}`, { id: message.id, params: message.params });
+          if (message.method === 'close') {
+            panel.dispose();
+            return;
+          }
+          this.logger.info(`[DocumentCommands] Forwarding message to WebviewAdapter: ${message.method}`);
+          await this.webviewAdapter.handleMessage(panel.webview, message);
+        },
+        null,
+        this.context.subscriptions
+      );
+
+      // 加载 webview 内容
+      const htmlContent = await this.getWebviewContent(
+        panel.webview,
+        'edit-relations-dialog.html',
+        vaultId,
+        undefined,
+        undefined,
+        {
+          vaultId,
+          targetId,
+          targetType,
+          displayName,
+        }
+      );
+      panel.webview.html = htmlContent;
+
+      // 监听面板关闭事件
+      panel.onDidDispose(() => {
+        this.treeViewProvider.refresh();
+      });
     } catch (error: any) {
-      this.logger.error('Failed to add diagram', error);
-      vscode.window.showErrorMessage(`Failed to add diagram: ${error.message}`);
+      this.logger.error('Failed to show edit relations dialog', error);
+      vscode.window.showErrorMessage(`Failed to show edit relations dialog: ${error.message}`);
   }
 }
 }

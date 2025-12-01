@@ -610,7 +610,8 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     htmlFileName: string,
     initialVaultId?: string,
     initialFolderPath?: string,
-    designType?: string
+    designType?: string,
+    additionalData?: Record<string, any>
   ): Promise<string> {
     const webviewDistPath = this.getWebviewDistPath();
 
@@ -653,6 +654,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
         vaultId: initialVaultId,
         folderPath: initialFolderPath,
         designType: designType,
+        ...(additionalData || {}),
       };
       const vscodeScript = `
         <script>

@@ -80,6 +80,10 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
           case 'error':
             vscode.window.showErrorMessage(`Editor error: ${e.message}`);
             break;
+
+          case 'info':
+            vscode.window.showInformationMessage(e.message);
+            break;
         }
       }
     );
@@ -172,14 +176,8 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       }
     );
     
-    // 3. 注入初始内容（必须，用于传递文档内容）
-    const initialContentScript = `
-    <script>
-        window.initialContent = ${JSON.stringify(document.getText())};
-    </script>`;
-    
-    // 在 </head> 之前注入初始内容脚本（在 app.js 加载之前）
-    htmlContent = htmlContent.replace('</head>', `${initialContentScript}\n</head>`);
+    // 3. 不再使用 window.initialContent，改为仅通过 postMessage 传递内容
+    // 这样可以避免 JSON.stringify 导致的编码问题和重复加载
     
     return htmlContent;
   }
