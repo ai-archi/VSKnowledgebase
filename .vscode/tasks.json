@@ -7,6 +7,7 @@
       "dependsOn": [
         "Build Archimate JS",
         "Build Mermaid Editor",
+        "Build PlantUML JS",
         "Compile Extension",
         "Build Webview",
         "Copy Webview Assets"
@@ -45,6 +46,24 @@
       "args": [
         "run",
         "build:mermaid-editor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build PlantUML JS",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "run",
+        "build:plantuml-js"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

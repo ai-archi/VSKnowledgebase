@@ -12,6 +12,8 @@ packages/**/public/
 out/
 **/out/
 lib/
+# Allow packages/*/lib/ directories (source code, not build output)
+!packages/*/lib/
 .next/
 **/.next/
 *.tsbuildinfo
@@ -52,5 +54,5 @@ tmp/
 
 # ArchiTool runtime
 .architool/cache/
-
+vendors/vscode-extension-samples
 yarn.lock

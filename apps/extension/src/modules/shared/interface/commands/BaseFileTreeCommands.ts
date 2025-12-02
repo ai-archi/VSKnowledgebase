@@ -455,8 +455,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           viewType = 'architool.mermaidEditor';
           break;
         case '.puml':
-          // PlantUML 文件没有自定义编辑器，使用默认文本编辑器
-          viewType = undefined;
+          viewType = 'architool.plantumlEditor';
           break;
         default:
           // 其他文件类型使用默认文本编辑器

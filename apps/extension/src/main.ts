@@ -30,6 +30,7 @@ import { RemoteEndpoint } from './modules/shared/domain/value_object/RemoteEndpo
 import { GitVaultAdapter } from './modules/shared/infrastructure/storage/git/GitVaultAdapter';
 import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
+import { PlantUMLEditorProvider } from './modules/editor/plantuml/PlantUMLEditorProvider';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -214,6 +215,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const mermaidEditorDisposable = MermaidEditorProvider.register(context);
   context.subscriptions.push(mermaidEditorDisposable);
   logger.info('Mermaid editor provider registered');
+
+  const plantumlEditorDisposable = PlantUMLEditorProvider.register(context);
+  context.subscriptions.push(plantumlEditorDisposable);
+  logger.info('PlantUML editor provider registered');
 
   // 13. Webview RPC 服务已在步骤 7 中初始化
   logger.info('Webview RPC service initialized');

@@ -59,6 +59,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "architool.plantumlEditor",
+        "displayName": "PlantUML Diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.puml"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "languages": [

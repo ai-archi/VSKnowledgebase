@@ -24,11 +24,17 @@ build-mermaid-editor:
 	rm -rf apps/extension/mermaid-editor/*
 	cd packages/mermaid-editor && OUTPUT_PATH=../../apps/extension/mermaid-editor pnpm run build
 
+build-plantuml-js:
+	echo "Building plantuml-js..."
+	mkdir -p apps/extension/dist/plantuml-js
+	rm -rf apps/extension/dist/plantuml-js/*
+	cd packages/plantuml-js && OUTPUT_PATH=../../apps/extension/dist/plantuml-js pnpm run build
+
 build-webview:
 	echo "Building webview..."
 	cd apps/webview && pnpm run build
 
-build-all: build-archimate-js build-mermaid-editor build-webview
+build-all: build-archimate-js build-mermaid-editor build-plantuml-js build-webview
 	echo "Building extension..."
 	cd apps/extension && pnpm run compile
 	echo "Copying webview build artifacts..."
