@@ -41,13 +41,15 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     vaultId: string,
     artifactPath: string,
     title: string,
-    content: string
+    templateId?: string,
+    content?: string
   ): Promise<Result<Artifact, ArtifactError>> {
     this.logger.info('[DocumentApplicationService] createDocument called', {
       vaultId,
       artifactPath,
       title,
-      contentLength: content.length
+      templateId,
+      hasContent: !!content
     });
 
     const vaultResult = await this.vaultService.getVault(vaultId);
@@ -61,9 +63,12 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
 
     this.logger.info('[DocumentApplicationService] Creating artifact', {
       vaultName: vaultResult.value.name,
-      artifactPath
+      artifactPath,
+      templateId,
+      hasContent: !!content
     });
 
+    // 直接传递 templateId 给 ArtifactApplicationService，让它处理模板渲染
     const result = await this.artifactService.createArtifact({
       vault: {
         id: vaultResult.value.id,
@@ -71,15 +76,23 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       },
       path: artifactPath,
       title,
-      content,
+      templateId: templateId, // 传递模板ID，ArtifactApplicationService 会处理渲染
+      content: content, // 如果提供了内容，也会使用
       viewType: 'document',
     });
 
     if (result.success) {
       this.logger.info('[DocumentApplicationService] Artifact created successfully', {
         id: result.value.id,
-        path: result.value.path
+        path: result.value.path,
+        contentLocation: result.value.contentLocation,
+        vaultName: vaultResult.value.name
       });
+      if (!result.value.contentLocation) {
+        this.logger.error('[DocumentApplicationService] contentLocation is missing in created artifact!', {
+          artifact: result.value
+        });
+      }
       // 如果创建成功，发送事件通知视图刷新
       const folderPath = artifactPath.substring(0, artifactPath.lastIndexOf('/')) || '';
       this.eventBus.emit('document:created', {

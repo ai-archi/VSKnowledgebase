@@ -112,20 +112,23 @@ export class WebviewRPC {
       vaultId: string;
       path: string;
       title: string;
-      content: string;
+      templateId?: string; // 模板ID，如果提供则使用模板内容（经过Jinja2渲染）
+      content?: string; // 可选，如果不提供模板ID则使用此内容
       relatedArtifacts?: string[];
       relatedCodePaths?: string[];
     }) => {
       this.logger.info('[WebviewRPC] document.create called', { 
         vaultId: params.vaultId, 
         path: params.path, 
-        title: params.title 
+        title: params.title,
+        templateId: params.templateId
       });
       try {
         const result = await this.documentService.createDocument(
           params.vaultId,
           params.path,
           params.title,
+          params.templateId,
           params.content
         );
 
@@ -161,14 +164,22 @@ export class WebviewRPC {
         }
         this.logger.info('[WebviewRPC] document.create succeeded', { 
           id: result.value.id,
-          path: result.value.path
+          path: result.value.path,
+          contentLocation: result.value.contentLocation,
+          vaultName: result.value.vault.name
         });
+        if (!result.value.contentLocation) {
+          this.logger.error('[WebviewRPC] document.create: contentLocation is missing!', {
+            artifact: result.value
+          });
+        }
         return {
           id: result.value.id,
           path: result.value.path,
           name: result.value.name,
           title: result.value.title,
           vault: result.value.vault,
+          contentLocation: result.value.contentLocation,
         };
       } catch (error: any) {
         this.logger.error('[WebviewRPC] document.create exception', { 
@@ -390,7 +401,8 @@ export class WebviewRPC {
       vaultId: string;
       path: string;
       title: string;
-      content: string;
+      templateId?: string; // 模板ID，如果提供则使用模板内容（经过Jinja2渲染）
+      content?: string; // 可选，如果不提供模板ID则使用此内容
       viewType: string;
       format?: string;
       category?: string;
@@ -403,7 +415,8 @@ export class WebviewRPC {
         path: params.path, 
         title: params.title,
         viewType: params.viewType,
-        format: params.format
+        format: params.format,
+        templateId: params.templateId
       });
       try {
         // 获取 vault 信息
@@ -420,7 +433,8 @@ export class WebviewRPC {
           },
           path: params.path,
           title: params.title,
-          content: params.content, // 可选，如果不提供则从模板复制
+          templateId: params.templateId, // 传递模板ID，后端会进行渲染
+          content: params.content, // 可选，如果不提供模板ID则使用此内容
           viewType: params.viewType as any,
           format: params.format,
           category: params.category,
@@ -438,8 +452,15 @@ export class WebviewRPC {
         }
         this.logger.info('[WebviewRPC] artifact.create succeeded', { 
           id: result.value.id,
-          path: result.value.path
+          path: result.value.path,
+          contentLocation: result.value.contentLocation,
+          vaultName: result.value.vault.name
         });
+        if (!result.value.contentLocation) {
+          this.logger.error('[WebviewRPC] artifact.create: contentLocation is missing!', {
+            artifact: result.value
+          });
+        }
 
         // 如果创建成功且有关联关系，保存关联关系
         if (params.relatedArtifacts || params.relatedCodePaths) {
@@ -471,6 +492,7 @@ export class WebviewRPC {
           vault: result.value.vault,
           viewType: result.value.viewType,
           format: result.value.format,
+          contentLocation: result.value.contentLocation,
         };
       } catch (error: any) {
         this.logger.error('[WebviewRPC] artifact.create exception', { 

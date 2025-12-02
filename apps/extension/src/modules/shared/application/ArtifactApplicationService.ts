@@ -8,7 +8,8 @@ export interface CreateArtifactOpts {
   vault: VaultReference;
   path: string;
   title: string;
-  content?: string; // 可选，如果提供则使用，否则从模板复制
+  templateId?: string; // 模板ID，如果提供则使用模板内容（经过Jinja2渲染）
+  content?: string; // 可选，如果不提供模板ID则使用此内容，否则从模板复制
   viewType: ArtifactViewType;
   format?: string;
   category?: string;

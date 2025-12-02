@@ -418,6 +418,42 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
   }
 
   /**
+   * 通过 contentLocation 直接打开文件
+   * @param contentLocation 文件的完整路径
+   */
+  protected async openFileByContentLocation(contentLocation: string): Promise<void> {
+    try {
+      this.logger.info('Opening file by contentLocation', { contentLocation });
+      
+      // 等待一小段时间，确保文件已写入磁盘
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 检查文件是否存在
+      if (!fs.existsSync(contentLocation)) {
+        this.logger.warn('File does not exist at contentLocation', { contentLocation });
+        // 尝试等待更长时间，可能文件还在写入
+        await new Promise(resolve => setTimeout(resolve, 300));
+        if (!fs.existsSync(contentLocation)) {
+          this.logger.error('File still does not exist after waiting', { contentLocation });
+          return;
+        }
+      }
+      
+      // 使用 vscode.Uri.file() 确保路径格式正确
+      const fileUri = vscode.Uri.file(contentLocation);
+      const doc = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      this.logger.info('Opened created file by contentLocation', { contentLocation });
+    } catch (error: any) {
+      this.logger.error('Failed to open file by contentLocation', { 
+        error: error.message, 
+        stack: error.stack,
+        contentLocation 
+      });
+    }
+  }
+
+  /**
    * 打开创建的文件
    * @param vaultName Vault 名称
    * @param filePath 文件路径（相对于 artifacts 目录）
@@ -523,7 +559,14 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           return;
         }
         if (message.method === 'fileCreated') {
-          const { vaultName, folderPath, filePath } = message.params || {};
+          const { vaultName, folderPath, filePath, contentLocation } = message.params || {};
+          this.logger.info('[BaseFileTreeCommands] fileCreated message received', {
+            vaultName,
+            folderPath,
+            filePath,
+            contentLocation,
+            hasContentLocation: !!contentLocation
+          });
           if (vaultName) {
             this.treeViewProvider.refresh();
             // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
@@ -532,10 +575,26 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
             this.treeViewProvider.refresh();
             
             // 自动打开创建的文件
-            if (filePath && vaultName) {
+            if (contentLocation) {
+              // 优先使用 contentLocation，这是最可靠的方式
+              this.logger.info('[BaseFileTreeCommands] Opening file using contentLocation', { contentLocation });
+              await this.openFileByContentLocation(contentLocation);
+            } else if (filePath && vaultName) {
+              // 如果没有 contentLocation，回退到原来的方式
+              this.logger.info('[BaseFileTreeCommands] Opening file using fallback method', { vaultName, filePath });
               await this.openCreatedFile(vaultName, filePath);
+            } else {
+              this.logger.warn('[BaseFileTreeCommands] Cannot open file: missing contentLocation and filePath', {
+                vaultName,
+                hasContentLocation: !!contentLocation,
+                hasFilePath: !!filePath
+              });
             }
           }
+          // 处理完 fileCreated 消息后，关闭 panel
+          setTimeout(() => {
+            panel.dispose();
+          }, 100);
           return;
         }
         this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`);
@@ -722,7 +781,14 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           return;
         }
         if (message.method === 'designCreated') {
-          const { vaultName, folderPath, filePath } = message.params || {};
+          const { vaultName, folderPath, filePath, contentLocation } = message.params || {};
+          this.logger.info('[BaseFileTreeCommands] designCreated message received', {
+            vaultName,
+            folderPath,
+            filePath,
+            contentLocation,
+            hasContentLocation: !!contentLocation
+          });
           if (vaultName) {
             this.treeViewProvider.refresh();
             // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
@@ -731,10 +797,26 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
             this.treeViewProvider.refresh();
             
             // 自动打开创建的文件
-            if (filePath && vaultName) {
+            if (contentLocation) {
+              // 优先使用 contentLocation，这是最可靠的方式
+              this.logger.info('[BaseFileTreeCommands] Opening design file using contentLocation', { contentLocation });
+              await this.openFileByContentLocation(contentLocation);
+            } else if (filePath && vaultName) {
+              // 如果没有 contentLocation，回退到原来的方式
+              this.logger.info('[BaseFileTreeCommands] Opening design file using fallback method', { vaultName, filePath });
               await this.openCreatedFile(vaultName, filePath);
+            } else {
+              this.logger.warn('[BaseFileTreeCommands] Cannot open design file: missing contentLocation and filePath', {
+                vaultName,
+                hasContentLocation: !!contentLocation,
+                hasFilePath: !!filePath
+              });
             }
           }
+          // 处理完 designCreated 消息后，关闭 panel
+          setTimeout(() => {
+            panel.dispose();
+          }, 100);
           return;
         }
         this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`);

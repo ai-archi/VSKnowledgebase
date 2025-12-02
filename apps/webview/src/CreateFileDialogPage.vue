@@ -11,12 +11,9 @@
 import CreateFileForm from './components/CreateFileForm.vue';
 
 const handleFileCreated = (artifact: any) => {
-  // 文件创建成功，通知后端关闭 webview
+  // 文件创建成功，不需要在这里发送 close 消息
+  // CreateFileForm 组件已经发送了 fileCreated 消息，后端会在处理完后自动关闭
   console.log('File created:', artifact);
-  if (window.acquireVsCodeApi) {
-    const vscode = window.acquireVsCodeApi();
-    vscode.postMessage({ method: 'close' });
-  }
 };
 
 const handleClose = () => {

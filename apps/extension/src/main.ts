@@ -620,7 +620,7 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   ]);
 
-  // 10. 启动 MCP Server（可选）
+  // 15. 启动 MCP Server（可选）
   try {
     const mcpStarter = container.get<MCPServerStarter>(TYPES.MCPServerStarter);
     await mcpStarter.start();

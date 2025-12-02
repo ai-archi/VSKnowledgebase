@@ -142,7 +142,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
               const fixedStructure = this.fixYamlStructureNames(templateData.structure);
               
               templates.push({
-                id: templateData.id || uuidv4(),
+                id: templateData.id || `${vault.name}/${fileNode.path}`, // 如果没有id，使用 vault名称/路径 作为ID
                 name: templateData.name || path.basename(fileNode.name, path.extname(fileNode.name)),
                 description: templateData.description,
                 type: 'structure',
@@ -156,7 +156,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
             } else {
               // 否则作为内容模板
               templates.push({
-                id: templateData?.id || uuidv4(),
+                id: templateData?.id || `${vault.name}/${fileNode.path}`, // 如果没有id，使用 vault名称/路径 作为ID
                 name: templateData?.name || path.basename(fileNode.name, path.extname(fileNode.name)),
                 description: templateData?.description,
                 type: 'content',
@@ -172,7 +172,7 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
             // YAML 解析失败，作为普通内容模板
             this.logger.warn(`Failed to parse YAML template: ${fileNode.path}, treating as content template`, yamlError);
             templates.push({
-              id: uuidv4(),
+              id: `${vault.name}/${fileNode.path}`, // 使用 vault名称/路径 作为ID
               name: path.basename(fileNode.name, path.extname(fileNode.name)),
               description: undefined,
               type: 'content',
@@ -184,8 +184,9 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
           }
         } else if (ext === 'md') {
           // Markdown 文件：作为内容模板
+          // 使用 vault名称/文件路径 作为ID
           templates.push({
-            id: uuidv4(),
+            id: `${vault.name}/${fileNode.path}`, // 使用 vault名称/路径 作为ID
             name: path.basename(fileNode.name, path.extname(fileNode.name)),
             description: undefined,
             type: 'content',
@@ -197,8 +198,9 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
         } else {
           // 其他文件类型：作为内容模板
           this.logger.info(`Loading file with unknown extension as content template: ${fileNode.path}`);
+          // 使用 vault名称/文件路径 作为ID
           templates.push({
-            id: uuidv4(),
+            id: `${vault.name}/${fileNode.path}`, // 使用 vault名称/路径 作为ID
             name: path.basename(fileNode.name, path.extname(fileNode.name)),
             description: undefined,
             type: 'content',

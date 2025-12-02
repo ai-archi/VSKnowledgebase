@@ -34,8 +34,16 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
 
   /**
    * 获取树项
+   * 注意：VSCode 会维护节点的展开/折叠状态，这里返回的 collapsibleState 只是初始状态
+   * 为了确保折叠功能正常工作，我们需要确保返回的 TreeItem 对象能够正确反映节点的可折叠状态
+   * 
+   * 重要：直接返回 element 对象，VSCode 会维护实际的展开/折叠状态。
+   * collapsibleState 只是用来判断节点是否可折叠（Collapsed/Expanded/None），
+   * 实际的展开/折叠状态由 VSCode 内部管理，用户点击折叠图标时 VSCode 会自动处理。
    */
   getTreeItem(element: T): vscode.TreeItem {
+    // 直接返回 element，VSCode 会维护实际的展开/折叠状态
+    // collapsibleState 只是用来判断节点是否可折叠，实际的展开/折叠由 VSCode 管理
     return element;
   }
 

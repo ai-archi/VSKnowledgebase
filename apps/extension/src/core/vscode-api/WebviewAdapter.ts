@@ -144,6 +144,13 @@ export class WebviewAdapter {
 
       this.logger.debug(`Calling handler for method: ${message.method}`);
       const result = await handler(message.params);
+      this.logger.info(`[WebviewAdapter] Handler result for ${message.method}:`, {
+        hasResult: !!result,
+        resultType: typeof result,
+        resultKeys: result && typeof result === 'object' ? Object.keys(result) : null,
+        hasContentLocation: result && typeof result === 'object' ? !!result.contentLocation : false,
+        contentLocation: result && typeof result === 'object' ? result.contentLocation : undefined
+      });
       this.postMessage(webview, {
         id: message.id,
         result,

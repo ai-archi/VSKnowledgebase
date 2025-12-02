@@ -72,10 +72,34 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       return validationResult;
     }
 
-    // 确定文件内容：如果提供了 content 则使用，否则从模板复制
+    // 确定文件内容：优先使用模板ID，然后使用content，最后使用默认模板
     let fileContent = opts.content;
+    
+    // 如果有模板ID，直接读取模板文件并进行Jinja2渲染
+    if (opts.templateId && !fileContent) {
+      const templateContentResult = await this.getTemplateContentAndRender(
+        opts.vault,
+        opts.templateId,
+        opts.title,
+        opts.viewType
+      );
+      if (templateContentResult.success) {
+        fileContent = templateContentResult.value;
+        this.logger.info('[ArtifactApplicationService] Template rendered', {
+          templateId: opts.templateId,
+          contentLength: fileContent.length
+        });
+      } else {
+        this.logger.warn('[ArtifactApplicationService] Failed to load template', {
+          templateId: opts.templateId,
+          error: templateContentResult.error?.message
+        });
+      }
+    }
+    
+    // 如果没有模板ID或模板获取失败，且没有提供content，尝试从默认模板获取
     if (!fileContent) {
-      // 尝试从模板获取内容（通过领域服务）
+      // 尝试从模板获取内容（通过领域服务，用于 archimate 等设计图）
       const architoolRoot = this.fileAdapter.getArtifactRoot();
       const templateContent = this.fileOperationService.getDesignTemplateContent(
         opts.viewType,
@@ -1754,6 +1778,108 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     } else {
       this.logger.warn(`Unknown structure item type: ${item.type}, skipping`);
       return { success: true, value: undefined };
+    }
+  }
+
+  /**
+   * 获取模板内容并进行Jinja2渲染
+   * 直接读取模板文件，不依赖TemplateApplicationService，避免循环依赖
+   * templateId格式：<vault名称>/templates/content/my-template.md 或 templates/content/my-template.md
+   */
+  private async getTemplateContentAndRender(
+    vault: VaultReference,
+    templateId: string,
+    title: string,
+    viewType?: string
+  ): Promise<Result<string, ArtifactError>> {
+    try {
+      let templateContent: string | null = null;
+      let templatePath: string | null = null;
+
+      // templateId应该是路径格式：<vault名称>/templates/content/my-template.md 或 templates/content/my-template.md
+      let actualPath = templateId;
+      
+      // 如果包含vault名称前缀，提取路径部分
+      if (templateId.startsWith(`${vault.name}/`)) {
+        actualPath = templateId.substring(vault.name.length + 1);
+      }
+      
+      // 直接读取模板文件
+      const readResult = await this.readFile(vault, actualPath);
+      if (readResult.success) {
+        templateContent = readResult.value;
+        templatePath = actualPath;
+        this.logger.info('[ArtifactApplicationService] Template found by path', {
+          templateId,
+          actualPath,
+          templatePath
+        });
+      } else {
+        // 如果读取失败，记录错误
+        this.logger.warn('[ArtifactApplicationService] Template file not found', {
+          templateId,
+          actualPath,
+          vaultId: vault.id,
+          vaultName: vault.name
+        });
+      }
+
+      if (!templateContent) {
+        // 如果所有方法都失败，返回错误
+        this.logger.warn('[ArtifactApplicationService] Template not found', {
+          templateId,
+          vaultId: vault.id,
+          viewType
+        });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Template file not found: ${templateId}`,
+            { templateId, vaultId: vault.id }
+          ),
+        };
+      }
+
+      this.logger.info('[ArtifactApplicationService] Template found and will render', {
+        templateId,
+        templatePath,
+        contentLength: templateContent.length
+      });
+
+      // 准备变量映射
+      const variables: Record<string, string> = {
+        fileName: title,
+        title: title,
+        diagramName: title, // 设计图也使用此变量
+      };
+
+      // 使用 Jinja2 渲染模板内容
+      const templateStructureService = new TemplateStructureDomainServiceImpl();
+      const renderedContent = templateStructureService.renderTemplate(templateContent, variables);
+
+      this.logger.info('[ArtifactApplicationService] Template rendered', {
+        templateId,
+        renderedLength: renderedContent.length
+      });
+
+      return { success: true, value: renderedContent };
+    } catch (error: any) {
+      this.logger.error('[ArtifactApplicationService] Failed to get and render template', {
+        templateId,
+        vaultId: vault.id,
+        error: error.message,
+        stack: error.stack
+      });
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to get template content: ${error.message}`,
+          { templateId, vaultId: vault.id },
+          error
+        ),
+      };
     }
   }
 

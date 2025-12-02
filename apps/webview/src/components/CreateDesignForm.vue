@@ -45,38 +45,69 @@
             :prefix-icon="Document"
           />
         </el-form-item>
-        <el-form-item v-if="formData.diagramType === 'archimate'" label="视图类型">
-          <el-select
-            v-model="formData.archimateViewType"
-            placeholder="选择 Archimate 视图类型"
-            style="width: 100%"
-          >
-            <el-option-group label="业务层">
-              <el-option label="业务流程图" value="business-process-view" />
-              <el-option label="业务功能视图" value="business-function-view" />
-              <el-option label="业务服务视图" value="business-service-view" />
-              <el-option label="业务协作视图" value="business-collaboration-view" />
-              <el-option label="业务交互视图" value="business-interaction-view" />
-            </el-option-group>
-            <el-option-group label="应用层">
-              <el-option label="应用组件视图" value="application-component-view" />
-              <el-option label="应用协作视图" value="application-collaboration-view" />
-              <el-option label="应用序列视图" value="application-sequence-view" />
-              <el-option label="应用服务视图" value="application-service-view" />
-              <el-option label="应用功能视图" value="application-function-view" />
-            </el-option-group>
-            <el-option-group label="技术层">
-              <el-option label="技术组件视图" value="technology-component-view" />
-              <el-option label="技术节点视图" value="technology-node-view" />
-              <el-option label="技术部署视图" value="technology-deployment-view" />
-              <el-option label="技术服务视图" value="technology-service-view" />
-            </el-option-group>
-            <el-option-group label="其他">
-              <el-option label="跨层视图" value="cross-layered-view" />
-              <el-option label="默认模板" value="" />
-            </el-option-group>
-          </el-select>
-        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item v-if="formData.diagramType === 'archimate'" label="视图类型">
+              <el-select
+                v-model="formData.archimateViewType"
+                placeholder="选择 Archimate 视图类型"
+                style="width: 100%"
+              >
+                <el-option-group label="业务层">
+                  <el-option label="业务流程图" value="business-process-view" />
+                  <el-option label="业务功能视图" value="business-function-view" />
+                  <el-option label="业务服务视图" value="business-service-view" />
+                  <el-option label="业务协作视图" value="business-collaboration-view" />
+                  <el-option label="业务交互视图" value="business-interaction-view" />
+                </el-option-group>
+                <el-option-group label="应用层">
+                  <el-option label="应用组件视图" value="application-component-view" />
+                  <el-option label="应用协作视图" value="application-collaboration-view" />
+                  <el-option label="应用序列视图" value="application-sequence-view" />
+                  <el-option label="应用服务视图" value="application-service-view" />
+                  <el-option label="应用功能视图" value="application-function-view" />
+                </el-option-group>
+                <el-option-group label="技术层">
+                  <el-option label="技术组件视图" value="technology-component-view" />
+                  <el-option label="技术节点视图" value="technology-node-view" />
+                  <el-option label="技术部署视图" value="technology-deployment-view" />
+                  <el-option label="技术服务视图" value="technology-service-view" />
+                </el-option-group>
+                <el-option-group label="其他">
+                  <el-option label="跨层视图" value="cross-layered-view" />
+                  <el-option label="默认模板" value="" />
+                </el-option-group>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="设计图模板">
+              <el-select
+                v-model="formData.templateId"
+                placeholder="选择模板（可选）"
+                filterable
+                clearable
+                style="width: 100%"
+                :disabled="!initialVaultId || templates.length === 0"
+              >
+                <el-option
+                  v-for="template in templates"
+                  :key="template.id"
+                  :label="template.name"
+                  :value="template.id"
+                >
+                  <div class="template-option">
+                    <span class="template-name">{{ template.name }}</span>
+                    <span v-if="template.description" class="template-description">{{ template.description }}</span>
+                    <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
+                      {{ template.type === 'structure' ? '结构' : '内容' }}
+                    </el-tag>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
     </div>
 
@@ -183,6 +214,10 @@ import {
   ElIcon,
   ElEmpty,
   ElMessage,
+  ElSelect,
+  ElOption,
+  ElOptionGroup,
+  ElTag,
 } from 'element-plus';
 import {
   Document,
@@ -202,6 +237,13 @@ interface Vault {
   description?: string;
 }
 
+interface Template {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'structure' | 'content';
+}
+
 interface FileItem {
   id?: string;
   path: string;
@@ -218,6 +260,7 @@ interface FormData {
   diagramName: string;
   diagramType: string;
   archimateViewType?: string; // Archimate 视图类型
+  templateId: string; // 模板 ID
 }
 
 interface Emits {
@@ -231,9 +274,11 @@ const formData = ref<FormData>({
   diagramName: '',
   diagramType: '', // 将从 initialData 中读取
   archimateViewType: '', // Archimate 视图类型
+  templateId: '', // 模板 ID
 });
 const initialVaultId = ref<string | undefined>(undefined);
 const initialFolderPath = ref<string | undefined>(undefined);
+const templates = ref<Template[]>([]);
 const selectedFiles = ref<FileItem[]>([]);
 const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
@@ -304,11 +349,23 @@ onMounted(() => {
       designType: initialData.designType
     });
   }
-  // 如果有初始 vaultId，加载文件
+  // 如果有初始 vaultId，加载模板和文件
   if (initialVaultId.value) {
+    loadTemplates(initialVaultId.value);
     loadFiles();
   }
 });
+
+const loadTemplates = async (vaultId: string) => {
+  try {
+    const templatesList = await extensionService.call<any[]>('template.list', { vaultId });
+    // 只加载内容类型的模板（设计图使用内容模板）
+    templates.value = (templatesList || []).filter(t => t.type === 'content');
+  } catch (err: any) {
+    console.error('Failed to load templates', err);
+    templates.value = [];
+  }
+};
 
 // 移除 loadVaults 和 handleVaultChange，不再需要用户选择 vault
 
@@ -450,15 +507,13 @@ const handleCreate = async () => {
       finalPath: diagramPath
     });
     
-    // 不需要在这里获取内容，后端会根据模板自动处理
-    
     console.log('[CreateDesignForm] Calling artifact.create', {
       vaultId: initialVaultId.value,
       path: diagramPath,
       title: diagramName,
       viewType: 'design',
       format: extension,
-      contentLength: content.length
+      templateId: formData.value.templateId || undefined,
     });
     
     // 分离文档和代码文件
@@ -485,6 +540,7 @@ const handleCreate = async () => {
       title: diagramName,
       viewType: 'design',
       format: extension,
+      templateId: formData.value.templateId || undefined, // 传递模板ID，后端会进行渲染
       templateViewType: formData.value.diagramType === 'archimate' ? formData.value.archimateViewType : undefined,
       relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
       relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
@@ -507,17 +563,11 @@ const handleCreate = async () => {
           vaultName: vault?.name,
           folderPath: targetFolderPath,
           filePath: diagramPath,
+          contentLocation: result.contentLocation,
         }
       });
+      // 注意：不需要单独发送 close 消息，后端会在处理完 designCreated 后自动关闭
     }
-    
-    // 延迟关闭，确保刷新完成
-    setTimeout(() => {
-      if (window.acquireVsCodeApi) {
-        const vscode = window.acquireVsCodeApi();
-        vscode.postMessage({ method: 'close' });
-      }
-    }, 100);
   } catch (err: any) {
     console.error('[CreateDesignForm] Failed to create design diagram', {
       error: err,
@@ -531,6 +581,7 @@ const handleCreate = async () => {
     creating.value = false;
   }
 };
+
 
 
 const generatePrompt = (action: string) => {
@@ -633,9 +684,21 @@ const generatePrompt = (action: string) => {
   color: var(--vscode-foreground, #cccccc);
 }
 
-.vault-description {
+.vault-description,
+.template-description {
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
+}
+
+.template-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.template-name {
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
 }
 
 /* 下方区域 */

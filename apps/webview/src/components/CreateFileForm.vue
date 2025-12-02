@@ -498,15 +498,11 @@ const handleCreate = async () => {
       hasTemplate: !!formData.value.templateId
     });
     
-    const content = formData.value.templateId
-      ? await getTemplateContent(formData.value.templateId)
-      : `# ${formData.value.fileName.trim()}\n\n`;
-    
     console.log('[CreateFileForm] Calling document.create', {
       vaultId: formData.value.vaultId,
       path: filePath,
       title: formData.value.fileName,
-      contentLength: content.length
+      templateId: formData.value.templateId || undefined,
     });
     
     // 分离文档和代码文件
@@ -531,12 +527,20 @@ const handleCreate = async () => {
       vaultId: formData.value.vaultId,
       path: filePath,
       title: formData.value.fileName,
-      content: content,
+      templateId: formData.value.templateId || undefined, // 传递模板ID，后端会进行渲染
       relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
       relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
     });
 
     console.log('[CreateFileForm] Document created successfully', result);
+    console.log('[CreateFileForm] Full result object:', JSON.stringify(result, null, 2));
+    console.log('[CreateFileForm] contentLocation from result:', result?.contentLocation);
+    console.log('[CreateFileForm] Has contentLocation:', !!result?.contentLocation);
+    
+    if (!result?.contentLocation) {
+      console.error('[CreateFileForm] WARNING: contentLocation is missing in result!', result);
+    }
+    
     ElMessage.success('文件创建成功');
     emit('created', result);
     
@@ -545,23 +549,25 @@ const handleCreate = async () => {
       const vscode = window.acquireVsCodeApi();
       const vault = vaults.value.find(v => v.id === formData.value.vaultId);
       const folderPath = initialFolderPath.value || '';
+      const messageParams = {
+        vaultName: vault?.name,
+        folderPath: folderPath,
+        filePath: filePath,
+        contentLocation: result?.contentLocation,
+      };
+      console.log('[CreateFileForm] Sending fileCreated message with params:', messageParams);
+      console.log('[CreateFileForm] Message will be sent:', JSON.stringify({
+        method: 'fileCreated',
+        params: messageParams,
+      }, null, 2));
       vscode.postMessage({ 
         method: 'fileCreated',
-        params: {
-          vaultName: vault?.name,
-          folderPath: folderPath,
-          filePath: filePath,
-        }
+        params: messageParams,
       });
+      // 注意：不需要单独发送 close 消息，后端会在处理完 fileCreated 后自动关闭
+    } else {
+      console.error('[CreateFileForm] VSCode API not available!');
     }
-    
-    // 延迟关闭，确保刷新完成
-    setTimeout(() => {
-      if (window.acquireVsCodeApi) {
-        const vscode = window.acquireVsCodeApi();
-        vscode.postMessage({ method: 'close' });
-      }
-    }, 100);
   } catch (err: any) {
     console.error('[CreateFileForm] Failed to create document', {
       error: err,
@@ -576,21 +582,6 @@ const handleCreate = async () => {
   }
 };
 
-const getTemplateContent = async (templateId: string): Promise<string> => {
-  try {
-    const template = templates.value.find((t) => t.id === templateId);
-    if (template) {
-      const result = await extensionService.call<string>('template.getContent', {
-        templateId,
-        vaultId: formData.value.vaultId,
-      });
-      return result || '';
-    }
-  } catch (err: any) {
-    console.error('Failed to get template content', err);
-  }
-  return '';
-};
 
 
 const generatePrompt = (action: string) => {
