@@ -20,6 +20,17 @@ export class PlantUMLEditorApp {
     this.maxScale = 5.0;
     this.scaleStep = 0.1;
     
+    // 平移相关
+    this.translateX = 0;
+    this.translateY = 0;
+    this.isDragging = false;
+    this.isPanning = false; // 是否正在平移（用于区分拖动和点击）
+    this.dragStartX = 0;
+    this.dragStartY = 0;
+    this.dragStartTranslateX = 0;
+    this.dragStartTranslateY = 0;
+    this.dragThreshold = 5; // 拖动阈值（像素）
+    
     // DOM 元素
     this.elements = {
       errorMessage: null,
@@ -196,11 +207,14 @@ export class PlantUMLEditorApp {
     this.currentSVG = this.elements.diagramContainer.querySelector('svg');
     
     if (this.currentSVG) {
-      // 应用当前缩放
+      // 应用当前缩放和平移
       this.applyZoom();
       
       // 设置鼠标滚轮缩放
       this.setupWheelZoom();
+      
+      // 设置画布拖动
+      this.setupPan();
     }
   }
   
@@ -296,8 +310,8 @@ export class PlantUMLEditorApp {
   applyZoom() {
     if (!this.currentSVG) return;
     
-    // 应用缩放变换
-    this.currentSVG.style.transform = `scale(${this.scale})`;
+    // 应用缩放和平移变换
+    this.currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
     
     // 更新 SVG 尺寸以触发正确的滚动
     const bbox = this.currentSVG.getBBox();
@@ -422,6 +436,116 @@ export class PlantUMLEditorApp {
         sourcePanel.style.width = `${newSourceWidth}px`;
       }
     });
+  }
+  
+  /**
+   * 设置画布拖动功能
+   */
+  setupPan() {
+    if (!this.elements.diagramContainer) return;
+    
+    // 移除旧的监听器（如果存在）
+    if (this.panMouseDownHandler) {
+      this.elements.diagramContainer.removeEventListener('mousedown', this.panMouseDownHandler);
+    }
+    if (this.panMouseMoveHandler) {
+      document.removeEventListener('mousemove', this.panMouseMoveHandler);
+    }
+    if (this.panMouseUpHandler) {
+      document.removeEventListener('mouseup', this.panMouseUpHandler);
+    }
+    
+    // 鼠标按下事件
+    this.panMouseDownHandler = (e) => {
+      // 如果点击的是 SVG 内的元素（不是背景），不处理拖动
+      const target = e.target;
+      if (target !== this.currentSVG && target.tagName !== 'svg' && target.parentElement !== this.currentSVG) {
+        // 检查是否点击了 SVG 内的实际元素
+        if (target.closest('svg') === this.currentSVG && target !== this.elements.diagramContainer) {
+          return;
+        }
+      }
+      
+      // 如果点击的是 SVG 背景或容器，开始拖动
+      if (target === this.currentSVG || 
+          target === this.elements.diagramContainer || 
+          target.tagName === 'svg') {
+        // 检查是否按下了鼠标左键
+        if (e.button === 0) {
+          this.isDragging = true;
+          this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
+          this.dragStartTranslateX = this.translateX;
+          this.dragStartTranslateY = this.translateY;
+          
+          // 添加拖动样式
+          this.elements.diagramContainer.style.cursor = 'grabbing';
+          if (this.currentSVG) {
+            this.currentSVG.style.cursor = 'grabbing';
+          }
+          
+          e.preventDefault();
+        }
+      }
+    };
+    
+    // 鼠标移动事件
+    this.panMouseMoveHandler = (e) => {
+      if (!this.isDragging) return;
+      
+      const deltaX = e.clientX - this.dragStartX;
+      const deltaY = e.clientY - this.dragStartY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // 如果移动距离超过阈值，认为是拖动
+      if (distance > this.dragThreshold) {
+        this.isPanning = true;
+      }
+      
+      if (this.isPanning) {
+        this.translateX = this.dragStartTranslateX + deltaX;
+        this.translateY = this.dragStartTranslateY + deltaY;
+        
+        this.applyZoom();
+        
+        e.preventDefault();
+      }
+    };
+    
+    // 鼠标释放事件
+    this.panMouseUpHandler = (e) => {
+      if (this.isDragging) {
+        const wasPanning = this.isPanning;
+        this.isDragging = false;
+        this.isPanning = false;
+        
+        // 恢复光标样式
+        this.elements.diagramContainer.style.cursor = 'grab';
+        if (this.currentSVG) {
+          this.currentSVG.style.cursor = 'default';
+        }
+        
+        // 如果进行了拖动，阻止后续的点击事件
+        if (wasPanning) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    
+    // 绑定事件监听器
+    this.elements.diagramContainer.addEventListener('mousedown', this.panMouseDownHandler);
+    document.addEventListener('mousemove', this.panMouseMoveHandler);
+    document.addEventListener('mouseup', this.panMouseUpHandler);
+  }
+  
+  /**
+   * 重置平移
+   */
+  resetPan() {
+    this.translateX = 0;
+    this.translateY = 0;
+    this.applyZoom();
   }
 }
 

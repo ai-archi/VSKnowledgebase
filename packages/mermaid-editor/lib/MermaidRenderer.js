@@ -17,6 +17,17 @@ export class MermaidRenderer {
     this.maxScale = 5.0;
     this.scaleStep = 0.1;
     
+    // 平移相关
+    this.translateX = 0;
+    this.translateY = 0;
+    this.isDragging = false;
+    this.isPanning = false; // 是否正在平移（用于区分拖动和点击）
+    this.dragStartX = 0;
+    this.dragStartY = 0;
+    this.dragStartTranslateX = 0;
+    this.dragStartTranslateY = 0;
+    this.dragThreshold = 5; // 拖动阈值（像素）
+    
     this.init();
   }
   
@@ -59,11 +70,14 @@ export class MermaidRenderer {
       // 后处理增强
       this.enhanceSVG(this.currentSVG);
       
-      // 应用当前缩放
+      // 应用当前缩放和平移
       this.applyZoom();
       
       // 设置鼠标滚轮缩放
       this.setupWheelZoom();
+      
+      // 设置画布拖动
+      this.setupPan();
       
       return this.currentSVG;
     } catch (error) {
@@ -348,7 +362,7 @@ export class MermaidRenderer {
   }
   
   /**
-   * 应用缩放
+   * 应用缩放和平移
    */
   applyZoom() {
     if (!this.currentSVG) return;
@@ -357,8 +371,8 @@ export class MermaidRenderer {
     const originalWidth = this.currentSVG.getAttribute('width') || this.currentSVG.viewBox?.baseVal?.width || this.currentSVG.clientWidth;
     const originalHeight = this.currentSVG.getAttribute('height') || this.currentSVG.viewBox?.baseVal?.height || this.currentSVG.clientHeight;
     
-    // 应用缩放变换
-    this.currentSVG.style.transform = `scale(${this.scale})`;
+    // 应用缩放和平移变换
+    this.currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
     
     // 更新 SVG 尺寸以触发正确的滚动
     if (originalWidth && originalHeight) {
@@ -402,6 +416,118 @@ export class MermaidRenderer {
    */
   getZoom() {
     return this.scale;
+  }
+  
+  /**
+   * 设置画布拖动功能
+   */
+  setupPan() {
+    if (!this.container) return;
+    
+    // 移除旧的监听器（如果存在）
+    if (this.panMouseDownHandler) {
+      this.container.removeEventListener('mousedown', this.panMouseDownHandler);
+    }
+    if (this.panMouseMoveHandler) {
+      document.removeEventListener('mousemove', this.panMouseMoveHandler);
+    }
+    if (this.panMouseUpHandler) {
+      document.removeEventListener('mouseup', this.panMouseUpHandler);
+    }
+    
+    // 鼠标按下事件
+    this.panMouseDownHandler = (e) => {
+      // 如果点击的是交互元素（节点、边等），不处理拖动
+      const target = e.target;
+      if (target.closest('.node[data-mermaid-type="node"]') ||
+          target.closest('.edgePath[data-mermaid-type="edge"]') ||
+          target.closest('.cluster[data-mermaid-type="subgraph"]') ||
+          target.closest('.mermaid-selection-box') ||
+          target.closest('.mermaid-label-editor')) {
+        return;
+      }
+      
+      // 如果点击的是 SVG 背景或容器，开始拖动
+      if (target === this.currentSVG || 
+          target === this.container || 
+          target.tagName === 'svg' ||
+          (target.tagName === 'g' && !target.closest('.node, .edgePath, .cluster'))) {
+        // 检查是否按下了鼠标左键
+        if (e.button === 0) {
+          this.isDragging = true;
+          this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
+          this.dragStartTranslateX = this.translateX;
+          this.dragStartTranslateY = this.translateY;
+          
+          // 添加拖动样式
+          this.container.style.cursor = 'grabbing';
+          if (this.currentSVG) {
+            this.currentSVG.style.cursor = 'grabbing';
+          }
+          
+          e.preventDefault();
+        }
+      }
+    };
+    
+    // 鼠标移动事件
+    this.panMouseMoveHandler = (e) => {
+      if (!this.isDragging) return;
+      
+      const deltaX = e.clientX - this.dragStartX;
+      const deltaY = e.clientY - this.dragStartY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // 如果移动距离超过阈值，认为是拖动
+      if (distance > this.dragThreshold) {
+        this.isPanning = true;
+      }
+      
+      if (this.isPanning) {
+        this.translateX = this.dragStartTranslateX + deltaX;
+        this.translateY = this.dragStartTranslateY + deltaY;
+        
+        this.applyZoom();
+        
+        e.preventDefault();
+      }
+    };
+    
+    // 鼠标释放事件
+    this.panMouseUpHandler = (e) => {
+      if (this.isDragging) {
+        const wasPanning = this.isPanning;
+        this.isDragging = false;
+        this.isPanning = false;
+        
+        // 恢复光标样式
+        this.container.style.cursor = 'grab';
+        if (this.currentSVG) {
+          this.currentSVG.style.cursor = 'default';
+        }
+        
+        // 如果进行了拖动，阻止后续的点击事件
+        if (wasPanning) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    
+    // 绑定事件监听器
+    this.container.addEventListener('mousedown', this.panMouseDownHandler);
+    document.addEventListener('mousemove', this.panMouseMoveHandler);
+    document.addEventListener('mouseup', this.panMouseUpHandler);
+  }
+  
+  /**
+   * 重置平移
+   */
+  resetPan() {
+    this.translateX = 0;
+    this.translateY = 0;
+    this.applyZoom();
   }
 }
 
