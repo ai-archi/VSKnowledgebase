@@ -33,8 +33,8 @@
           "when": "true"
         },
         {
-          "id": "architool.templateView",
-          "name": "Templates",
+          "id": "architool.assistantsView",
+          "name": "Assistants",
           "when": "true"
         }
       ]

@@ -11,12 +11,9 @@
 import CreateDesignForm from './components/CreateDesignForm.vue';
 
 const handleDesignCreated = (artifact: any) => {
-  // 设计图创建成功，通知后端关闭 webview
+  // 设计图创建成功，不需要在这里发送 close 消息
+  // CreateDesignForm 组件已经发送了 designCreated 消息，后端会在处理完后自动关闭
   console.log('Design diagram created:', artifact);
-  if (window.acquireVsCodeApi) {
-    const vscode = window.acquireVsCodeApi();
-    vscode.postMessage({ method: 'close' });
-  }
 };
 
 const handleClose = () => {

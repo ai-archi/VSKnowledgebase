@@ -22,6 +22,8 @@ import { VaultRepositoryImpl } from '../../modules/shared/infrastructure/VaultRe
 import { ChangeRepository, ChangeRepositoryImpl } from '../../modules/shared/infrastructure/ChangeRepository';
 import { ChangeDetector, ChangeDetectorImpl } from '../../modules/shared/infrastructure/ChangeDetector';
 import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactLinkRepository';
+import { AICommandRepository } from '../../modules/shared/infrastructure/AICommandRepository';
+import { AICommandRepositoryImpl } from '../../modules/shared/infrastructure/AICommandRepositoryImpl';
 
 // Application Services
 import { ArtifactApplicationServiceImpl } from '../../modules/shared/application/ArtifactApplicationServiceImpl';
@@ -38,6 +40,8 @@ import { TemplateApplicationService } from '../../modules/template/application/T
 import { TemplateApplicationServiceImpl } from '../../modules/template/application/TemplateApplicationServiceImpl';
 import { AIApplicationService } from '../../modules/ai/application/AIApplicationService';
 import { AIApplicationServiceImpl } from '../../modules/ai/application/AIApplicationServiceImpl';
+import { AICommandApplicationService } from '../../modules/shared/application/AICommandApplicationService';
+import { AICommandApplicationServiceImpl } from '../../modules/shared/application/AICommandApplicationServiceImpl';
 
 // MCP
 import { MCPServerStarter } from '../../modules/mcp/MCPServerStarter';
@@ -47,6 +51,7 @@ import { MCPResources, MCPResourcesImpl } from '../../modules/mcp/MCPResources';
 // Domain Services
 import { FileTreeDomainService, FileTreeDomainServiceImpl } from '../../modules/shared/domain/services/FileTreeDomainService';
 import { FileOperationDomainService, FileOperationDomainServiceImpl } from '../../modules/shared/domain/services/FileOperationDomainService';
+import { CommandTemplateDomainService, CommandTemplateDomainServiceImpl } from '../../modules/shared/domain/services/CommandTemplateDomainService';
 
 export function createContainer(
   architoolRoot: string,
@@ -99,6 +104,9 @@ export function createContainer(
       return new ArtifactLinkRepositoryImpl(vaultAdapter);
     })
     .inSingletonScope();
+  container.bind<AICommandRepository>(TYPES.AICommandRepository)
+    .to(AICommandRepositoryImpl)
+    .inSingletonScope();
 
   // Application Services
   container.bind<ArtifactApplicationService>(TYPES.ArtifactApplicationService)
@@ -119,6 +127,8 @@ export function createContainer(
     .to(TemplateApplicationServiceImpl).inSingletonScope();
   container.bind<AIApplicationService>(TYPES.AIApplicationService)
     .to(AIApplicationServiceImpl).inSingletonScope();
+  container.bind<AICommandApplicationService>(TYPES.AICommandApplicationService)
+    .to(AICommandApplicationServiceImpl).inSingletonScope();
 
   // MCP
   container.bind<MCPTools>(TYPES.MCPTools)
@@ -136,6 +146,9 @@ export function createContainer(
     .inSingletonScope();
   container.bind<FileOperationDomainService>(TYPES.FileOperationDomainService)
     .to(FileOperationDomainServiceImpl)
+    .inSingletonScope();
+  container.bind<CommandTemplateDomainService>(TYPES.CommandTemplateDomainService)
+    .to(CommandTemplateDomainServiceImpl)
     .inSingletonScope();
 
   return container;

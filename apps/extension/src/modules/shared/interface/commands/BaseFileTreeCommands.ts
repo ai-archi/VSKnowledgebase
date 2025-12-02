@@ -419,6 +419,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
 
   /**
    * 通过 contentLocation 直接打开文件
+   * 对于设计图文件，使用自定义编辑器打开
    * @param contentLocation 文件的完整路径
    */
   protected async openFileByContentLocation(contentLocation: string): Promise<void> {
@@ -441,9 +442,40 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
       
       // 使用 vscode.Uri.file() 确保路径格式正确
       const fileUri = vscode.Uri.file(contentLocation);
-      const doc = await vscode.workspace.openTextDocument(fileUri);
-      await vscode.window.showTextDocument(doc, { preview: false });
-      this.logger.info('Opened created file by contentLocation', { contentLocation });
+      
+      // 根据文件扩展名确定使用哪个自定义编辑器
+      const ext = path.extname(contentLocation).toLowerCase();
+      let viewType: string | undefined;
+      
+      switch (ext) {
+        case '.archimate':
+          viewType = 'architool.archimateEditor';
+          break;
+        case '.mmd':
+          viewType = 'architool.mermaidEditor';
+          break;
+        case '.puml':
+          // PlantUML 文件没有自定义编辑器，使用默认文本编辑器
+          viewType = undefined;
+          break;
+        default:
+          // 其他文件类型使用默认文本编辑器
+          viewType = undefined;
+          break;
+      }
+      
+      if (viewType) {
+        // 使用自定义编辑器打开
+        this.logger.info('Opening file with custom editor', { contentLocation, viewType });
+        await vscode.commands.executeCommand('vscode.openWith', fileUri, viewType);
+      } else {
+        // 使用默认文本编辑器打开
+        this.logger.info('Opening file with default text editor', { contentLocation });
+        const doc = await vscode.workspace.openTextDocument(fileUri);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      }
+      
+      this.logger.info('Opened created file by contentLocation', { contentLocation, viewType });
     } catch (error: any) {
       this.logger.error('Failed to open file by contentLocation', { 
         error: error.message, 

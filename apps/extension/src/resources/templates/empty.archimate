@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-{{sanitizedFileName}}-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
-  <archimate:name>{{fileName}}</archimate:name>
-  <archimate:documentation>{{fileName}} 架构图</archimate:documentation>
-  <archimate:elements>
-  </archimate:elements>
-  <archimate:views>
-    <archimate:diagrams>
-      <archimate:view id="id-main-diagram">
-        <archimate:name>{{fileName}}</archimate:name>
-        <archimate:documentation>{{fileName}} 架构图</archimate:documentation>
-      </archimate:view>
-    </archimate:diagrams>
-  </archimate:views>
-  <archimate:relationships>
-  </archimate:relationships>
-</archimate:model>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd" identifier="id-{{sanitizedFileName}}-model">
+  <name>{{fileName}}</name>
+  <documentation>{{fileName}} 架构图</documentation>
+  <elements>
+  </elements>
+  <views>
+    <diagrams>
+      <view identifier="id-main-diagram" xsi:type="Diagram">
+        <name>{{fileName}}</name>
+        <documentation>{{fileName}} 架构图</documentation>
+      </view>
+    </diagrams>
+  </views>
+  <relationships>
+  </relationships>
+</model>
 

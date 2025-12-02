@@ -29,12 +29,29 @@ export class VaultFileSystemAdapter {
       'metadata',
       'links',
       'templates',
+      'ai-enhancements',
+      'hooks',
       'tasks',
       'viewpoints',
       'changes',
     ];
 
     for (const dir of subDirs) {
+      const dirPath = path.join(vaultPath, dir);
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+    }
+
+    // 创建 ai-enhancements 的子目录结构
+    const aiEnhancementsDirs = [
+      'ai-enhancements/commands',
+      'ai-enhancements/commands/file-commands',
+      'ai-enhancements/commands/folder-commands',
+      'ai-enhancements/commands/design-commands',
+    ];
+
+    for (const dir of aiEnhancementsDirs) {
       const dirPath = path.join(vaultPath, dir);
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
