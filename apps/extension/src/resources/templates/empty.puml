@@ -1,0 +1,9 @@
+@startuml
+!theme plain
+
+title {{fileName}}
+
+[Component1] --> [Component2]
+
+@enduml
+

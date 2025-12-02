@@ -88,10 +88,10 @@
                 filterable
                 clearable
                 style="width: 100%"
-                :disabled="!initialVaultId || templates.length === 0"
+                :disabled="!initialVaultId || filteredTemplates.length === 0"
               >
                 <el-option
-                  v-for="template in templates"
+                  v-for="template in filteredTemplates"
                   :key="template.id"
                   :label="template.name"
                   :value="template.id"
@@ -298,6 +298,37 @@ const filteredFiles = computed(() => {
   );
 });
 
+// 根据设计图格式过滤模板
+const filteredTemplates = computed(() => {
+  if (!formData.value.diagramType) {
+    return templates.value;
+  }
+  
+  // 设计图格式到文件扩展名的映射
+  const formatExtensionMap: Record<string, string> = {
+    mermaid: 'mmd',
+    puml: 'puml',
+    archimate: 'archimate',
+  };
+  
+  const targetExtension = formatExtensionMap[formData.value.diagramType];
+  if (!targetExtension) {
+    return templates.value;
+  }
+  
+  // 从模板ID中提取文件扩展名并过滤
+  return templates.value.filter((template) => {
+    // 模板ID格式：vault名称/templates/content/xxx.扩展名
+    // 提取扩展名
+    const lastDotIndex = template.id.lastIndexOf('.');
+    if (lastDotIndex === -1) {
+      return false;
+    }
+    const extension = template.id.substring(lastDotIndex + 1).toLowerCase();
+    return extension === targetExtension;
+  });
+});
+
 const canCreate = computed(() => {
   return (
     formData.value.diagramName.trim() !== '' &&
@@ -316,6 +347,22 @@ watch(
     }
   },
   { deep: true }
+);
+
+// 监听设计图类型变化，如果当前选择的模板不匹配新格式，清空选择
+watch(
+  () => formData.value.diagramType,
+  () => {
+    if (formData.value.templateId) {
+      // 检查当前选择的模板是否在过滤后的列表中
+      const isTemplateValid = filteredTemplates.value.some(
+        (t) => t.id === formData.value.templateId
+      );
+      if (!isTemplateValid) {
+        formData.value.templateId = '';
+      }
+    }
+  }
 );
 
 onMounted(() => {
@@ -484,7 +531,7 @@ const handleCreate = async () => {
     const extension = getExtension(formData.value.diagramType);
     const diagramName = formData.value.diagramName.trim();
     
-    // 构建文件路径：如果有初始文件夹路径，在文件夹下创建；否则在根目录创建
+    // 构建文件路径：如果有初始文件夹路径，在文件夹下创建；否则在 design 目录下创建
     let diagramPath: string;
     // 确保 initialFolderPath 是有效的非空字符串
     const folderPath = initialFolderPath.value && typeof initialFolderPath.value === 'string' && initialFolderPath.value.trim() !== ''
@@ -495,8 +542,8 @@ const handleCreate = async () => {
       // 在文件夹下创建：文件夹路径/文件名.扩展名
       diagramPath = `${folderPath}/${diagramName}.${extension}`;
     } else {
-      // 在 vault 根目录创建：文件名.扩展名
-      diagramPath = `${diagramName}.${extension}`;
+      // 默认在 design 目录下创建：design/文件名.扩展名
+      diagramPath = `design/${diagramName}.${extension}`;
     }
     
     console.log('[CreateDesignForm] Path building', {
@@ -547,6 +594,14 @@ const handleCreate = async () => {
     });
 
     console.log('[CreateDesignForm] Design diagram created successfully', result);
+    console.log('[CreateDesignForm] Full result object:', JSON.stringify(result, null, 2));
+    console.log('[CreateDesignForm] contentLocation from result:', result?.contentLocation);
+    console.log('[CreateDesignForm] Has contentLocation:', !!result?.contentLocation);
+    
+    if (!result?.contentLocation) {
+      console.error('[CreateDesignForm] WARNING: contentLocation is missing in result!', result);
+    }
+    
     ElMessage.success('设计图创建成功');
     emit('created', result);
     
@@ -557,16 +612,24 @@ const handleCreate = async () => {
       const vaultsResult = await extensionService.call<Vault[]>('vault.list', {});
       const vault = vaultsResult?.find(v => v.id === initialVaultId.value);
       const targetFolderPath = folderPath;
+      const messageParams = {
+        vaultName: vault?.name,
+        folderPath: targetFolderPath,
+        filePath: diagramPath,
+        contentLocation: result?.contentLocation,
+      };
+      console.log('[CreateDesignForm] Sending designCreated message with params:', messageParams);
+      console.log('[CreateDesignForm] Message will be sent:', JSON.stringify({
+        method: 'designCreated',
+        params: messageParams,
+      }, null, 2));
       vscode.postMessage({ 
         method: 'designCreated',
-        params: {
-          vaultName: vault?.name,
-          folderPath: targetFolderPath,
-          filePath: diagramPath,
-          contentLocation: result.contentLocation,
-        }
+        params: messageParams,
       });
       // 注意：不需要单独发送 close 消息，后端会在处理完 designCreated 后自动关闭
+    } else {
+      console.error('[CreateDesignForm] VSCode API not available!');
     }
   } catch (err: any) {
     console.error('[CreateDesignForm] Failed to create design diagram', {

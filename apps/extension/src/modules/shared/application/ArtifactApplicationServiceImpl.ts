@@ -97,23 +97,51 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       }
     }
     
-    // 如果没有模板ID或模板获取失败，且没有提供content，尝试从默认模板获取
+    // 如果没有模板ID或模板获取失败，且没有提供content，使用内置默认模板
     if (!fileContent) {
-      // 尝试从模板获取内容（通过领域服务，用于 archimate 等设计图）
-      const architoolRoot = this.fileAdapter.getArtifactRoot();
-      const templateContent = this.fileOperationService.getDesignTemplateContent(
-        opts.viewType,
-        opts.format,
-        opts.templateViewType,
-        opts.title,
-        architoolRoot
-      );
-      if (templateContent) {
-        fileContent = templateContent;
-      } else {
-        // 如果没有模板，使用默认内容
-        fileContent = this.fileOperationService.generateDefaultContent(opts.title, opts.format || 'md');
+      // 对于 archimate 设计图，如果有特定的视图类型，尝试加载对应的模板
+      if (opts.viewType === 'design' && opts.format === 'archimate' && opts.templateViewType) {
+        const architoolRoot = this.fileAdapter.getArtifactRoot();
+        const templateContent = this.fileOperationService.getDesignTemplateContent(
+          opts.viewType,
+          opts.format,
+          opts.templateViewType,
+          opts.title,
+          architoolRoot
+        );
+        if (templateContent) {
+          fileContent = templateContent;
+          this.logger.info('[ArtifactApplicationService] Using design template for view type', {
+            viewType: opts.templateViewType,
+            format: opts.format
+          });
+        }
       }
+      
+      // 如果没有特定模板，使用内置的默认模板（从内置模板文件加载）
+      if (!fileContent) {
+        fileContent = this.fileOperationService.generateDefaultContent(opts.title, opts.format || 'md');
+        this.logger.info('[ArtifactApplicationService] Using built-in default template', {
+          format: opts.format,
+          viewType: opts.viewType
+        });
+      }
+    }
+
+    // 对于设计图类型的文件，确保内容不包含 markdown 格式
+    // 这是最后的清理步骤，确保所有来源的内容都被清理
+    if (opts.viewType === 'design' && fileContent) {
+      // 移除开头的 markdown 标题（如 #### 文件名 或 # 文件名）
+      fileContent = fileContent.replace(/^#{1,6}\s+.*$/gm, '');
+      // 移除 markdown 代码块包装（如 ```mermaid ... ``` 或 ``` ... ```）
+      // 先移除开头的代码块标记（可能包含语言标识符，如 ```mermaid 或 ```）
+      fileContent = fileContent.replace(/^```[\w]*\s*\n?/gm, '');
+      // 移除结尾的代码块标记（可能在行尾或单独一行）
+      fileContent = fileContent.replace(/\n?```\s*$/gm, '');
+      // 移除多余的空白行（连续的空行）
+      fileContent = fileContent.replace(/\n{3,}/g, '\n\n');
+      // 移除开头和结尾的空白
+      fileContent = fileContent.trim();
     }
 
     const writeResult = await this.fileAdapter.writeArtifact(
@@ -1856,11 +1884,28 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
 
       // 使用 Jinja2 渲染模板内容
       const templateStructureService = new TemplateStructureDomainServiceImpl();
-      const renderedContent = templateStructureService.renderTemplate(templateContent, variables);
+      let renderedContent = templateStructureService.renderTemplate(templateContent, variables);
+
+      // 对于设计图类型的文件，移除可能的 markdown 包装（如 #### 标题 和 ``` 代码块）
+      // 设计图文件（.mmd, .puml, .archimate）应该是纯内容，不应该包含 markdown 格式
+      if (viewType === 'design') {
+        // 移除开头的 markdown 标题（如 #### 文件名 或 # 文件名），支持多行匹配
+        renderedContent = renderedContent.replace(/^#{1,6}\s+.*$/gm, '');
+        // 移除 markdown 代码块包装（如 ```mermaid ... ``` 或 ``` ... ```）
+        // 先移除开头的代码块标记（可能包含语言标识符，如 ```mermaid 或 ```）
+        renderedContent = renderedContent.replace(/^```[\w]*\s*\n?/gm, '');
+        // 移除结尾的代码块标记（可能在行尾或单独一行）
+        renderedContent = renderedContent.replace(/\n?```\s*$/gm, '');
+        // 移除多余的空白行（连续的空行）
+        renderedContent = renderedContent.replace(/\n{3,}/g, '\n\n');
+        // 移除开头和结尾的空白
+        renderedContent = renderedContent.trim();
+      }
 
       this.logger.info('[ArtifactApplicationService] Template rendered', {
         templateId,
-        renderedLength: renderedContent.length
+        renderedLength: renderedContent.length,
+        viewType
       });
 
       return { success: true, value: renderedContent };

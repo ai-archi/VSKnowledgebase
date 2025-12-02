@@ -39,6 +39,34 @@ export interface FileOperationDomainService {
   generateDefaultContent(fileName: string, fileType?: string): string;
 
   /**
+   * 生成默认 Markdown 文档内容
+   * @param fileName 文件名（不含扩展名）
+   * @returns Markdown 内容
+   */
+  generateDefaultMarkdownContent(fileName: string): string;
+
+  /**
+   * 生成默认 Mermaid 设计图内容
+   * @param fileName 文件名（不含扩展名）
+   * @returns Mermaid 内容（纯代码，不包含 markdown 格式）
+   */
+  generateDefaultMermaidContent(fileName: string): string;
+
+  /**
+   * 生成默认 PlantUML 设计图内容
+   * @param fileName 文件名（不含扩展名）
+   * @returns PlantUML 内容
+   */
+  generateDefaultPlantUMLContent(fileName: string): string;
+
+  /**
+   * 生成默认 Archimate 设计图内容
+   * @param fileName 文件名（不含扩展名）
+   * @returns Archimate XML 内容
+   */
+  generateDefaultArchimateContent(fileName: string): string;
+
+  /**
    * 获取设计图模板内容
    * @param viewType 视图类型
    * @param format 文件格式
@@ -60,6 +88,33 @@ export interface FileOperationDomainService {
  * 文件操作领域服务实现
  */
 export class FileOperationDomainServiceImpl implements FileOperationDomainService {
+  /**
+   * 获取扩展路径（用于加载内置模板）
+   */
+  private getExtensionPath(): string | null {
+    try {
+      // 从 __dirname 推断扩展路径
+      const currentDir = __dirname;
+      
+      // 查找包含 'dist/extension' 或 'src' 的路径
+      if (currentDir.includes('dist/extension')) {
+        // 打包后：文件在 dist/extension/modules/... 下
+        // 扩展根目录应该是包含 dist/extension 的目录
+        const distIndex = currentDir.indexOf('dist/extension');
+        const extensionRoot = currentDir.substring(0, distIndex + 'dist/extension'.length);
+        return extensionRoot;
+      } else if (currentDir.includes('src')) {
+        // 开发环境：文件在 src/modules/... 下
+        // 扩展根目录应该是包含 src 的目录
+        const srcIndex = currentDir.indexOf('src');
+        return currentDir.substring(0, srcIndex);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   // 设计图模板文件映射
   private readonly designTemplateMap: Map<string, string> = new Map([
     // Archimate 视图类型 -> 模板文件路径（相对于 templates/content/archimate/）
@@ -129,18 +184,64 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
 
   generateDefaultContent(fileName: string, fileType?: string): string {
     if (!fileType) {
-      return `# ${fileName}\n\n`;
+      return this.generateDefaultMarkdownContent(fileName);
     }
 
+    // 尝试从内置模板文件读取
+    const templateContent = this.loadBuiltinTemplate(fileType, fileName);
+    if (templateContent) {
+      return templateContent;
+    }
+
+    // 根据文件类型调用相应的专门方法
     switch (fileType.toLowerCase()) {
       case 'mermaid':
       case 'mmd':
-        return `# ${fileName}\n\n\`\`\`mermaid\ngraph TD\n    A[Start] --> B[End]\n\`\`\`\n`;
+        return this.generateDefaultMermaidContent(fileName);
       case 'puml':
-        return `@startuml\n!theme plain\n\ntitle ${fileName}\n\n[Component1] --> [Component2]\n\n@enduml\n`;
+        return this.generateDefaultPlantUMLContent(fileName);
       case 'archimate':
-        return `<?xml version="1.0" encoding="UTF-8"?>
-<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-${fileName.toLowerCase().replace(/\s+/g, '-')}-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+        return this.generateDefaultArchimateContent(fileName);
+      default:
+        return this.generateDefaultMarkdownContent(fileName);
+    }
+  }
+
+  generateDefaultMarkdownContent(fileName: string): string {
+    // Markdown 文档使用简单的硬编码内容
+    return `# ${fileName}\n\n`;
+  }
+
+  generateDefaultMermaidContent(fileName: string): string {
+    // 尝试从内置模板文件加载
+    const templateContent = this.loadBuiltinTemplate('mmd', fileName);
+    if (templateContent) {
+      return templateContent;
+    }
+    // 如果无法加载，使用硬编码的默认内容
+    return `graph TD\n    A[Start] --> B[End]\n`;
+  }
+
+  generateDefaultPlantUMLContent(fileName: string): string {
+    // 尝试从内置模板文件加载
+    const templateContent = this.loadBuiltinTemplate('puml', fileName);
+    if (templateContent) {
+      return templateContent;
+    }
+    // 如果无法加载，使用硬编码的默认内容
+    return `@startuml\n!theme plain\n\ntitle ${fileName}\n\n[Component1] --> [Component2]\n\n@enduml\n`;
+  }
+
+  generateDefaultArchimateContent(fileName: string): string {
+    // 尝试从内置模板文件加载
+    const templateContent = this.loadBuiltinTemplate('archimate', fileName);
+    if (templateContent) {
+      return templateContent;
+    }
+    // 如果无法加载，使用硬编码的默认内容
+    const sanitizedFileName = fileName.toLowerCase().replace(/\s+/g, '-');
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-${sanitizedFileName}-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
   <archimate:name>${fileName}</archimate:name>
   <archimate:documentation>${fileName} 架构图</archimate:documentation>
   <archimate:elements>
@@ -156,8 +257,65 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
   <archimate:relationships>
   </archimate:relationships>
 </archimate:model>`;
-      default:
-        return `# ${fileName}\n\n`;
+  }
+
+  /**
+   * 从内置模板文件加载内容
+   * @param fileType 文件类型
+   * @param fileName 文件名（用于替换占位符）
+   * @returns 模板内容，如果找不到则返回 null
+   */
+  private loadBuiltinTemplate(fileType: string, fileName: string): string | null {
+    const extensionPath = this.getExtensionPath();
+    if (!extensionPath) {
+      return null;
+    }
+
+    try {
+      // 确定模板文件名
+      let templateFileName: string;
+      switch (fileType.toLowerCase()) {
+        case 'mermaid':
+        case 'mmd':
+          templateFileName = 'empty.mmd';
+          break;
+        case 'puml':
+          templateFileName = 'empty.puml';
+          break;
+        case 'archimate':
+          templateFileName = 'empty.archimate';
+          break;
+        default:
+          return null;
+      }
+
+      // 尝试从多个可能的位置加载模板
+      const possiblePaths = [
+        // 开发环境：从源码目录加载
+        path.join(extensionPath, 'src', 'resources', 'templates', templateFileName),
+        // 打包后：从 dist/extension/resources 目录加载（资源文件会被复制到这里）
+        path.join(extensionPath, 'resources', 'templates', templateFileName),
+        // 如果 extensionPath 是 dist/extension，resources 在同级目录
+        path.join(extensionPath, '..', 'resources', 'templates', templateFileName),
+        // 备用路径：从扩展根目录的 resources 加载
+        path.join(path.dirname(extensionPath), 'resources', 'templates', templateFileName),
+      ];
+
+      for (const templatePath of possiblePaths) {
+        if (fs.existsSync(templatePath)) {
+          let content = fs.readFileSync(templatePath, 'utf-8');
+          // 替换模板中的占位符
+          const sanitizedFileName = fileName.toLowerCase().replace(/\s+/g, '-');
+          content = content.replace(/\{\{fileName\}\}/g, fileName);
+          content = content.replace(/\{\{sanitizedFileName\}\}/g, sanitizedFileName);
+          return content;
+        }
+      }
+
+      return null;
+    } catch (error: any) {
+      // 如果加载失败，返回 null，将使用硬编码的默认内容
+      return null;
     }
   }
 
