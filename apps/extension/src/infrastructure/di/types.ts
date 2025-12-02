@@ -22,6 +22,7 @@ export const TYPES = {
   VaultRepository: Symbol.for('VaultRepository'),
   ChangeRepository: Symbol.for('ChangeRepository'),
   ChangeDetector: Symbol.for('ChangeDetector'),
+  AICommandRepository: Symbol.for('AICommandRepository'),
 
   // Application Services
   ArtifactApplicationService: Symbol.for('ArtifactApplicationService'),
@@ -33,6 +34,7 @@ export const TYPES = {
   TaskApplicationService: Symbol.for('TaskApplicationService'),
   TemplateApplicationService: Symbol.for('TemplateApplicationService'),
   AIApplicationService: Symbol.for('AIApplicationService'),
+  AICommandApplicationService: Symbol.for('AICommandApplicationService'),
   MCPApplicationService: Symbol.for('MCPApplicationService'),
 
   // VSCode API Adapters
@@ -48,10 +50,11 @@ export const TYPES = {
   DocumentTreeViewProvider: Symbol.for('DocumentTreeViewProvider'),
   TaskTreeDataProvider: Symbol.for('TaskTreeDataProvider'),
   ViewpointTreeDataProvider: Symbol.for('ViewpointTreeDataProvider'),
-  TemplateTreeDataProvider: Symbol.for('TemplateTreeDataProvider'),
+  AssistantsTreeDataProvider: Symbol.for('AssistantsTreeDataProvider'),
 
   // Domain Services
   FileTreeDomainService: Symbol.for('FileTreeDomainService'),
   FileOperationDomainService: Symbol.for('FileOperationDomainService'),
+  CommandTemplateDomainService: Symbol.for('CommandTemplateDomainService'),
 };
 

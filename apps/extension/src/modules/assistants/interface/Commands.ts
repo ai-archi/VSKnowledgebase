@@ -1,18 +1,91 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { TemplateApplicationService } from '../application/TemplateApplicationService';
+import { TemplateApplicationService } from '../../template/application/TemplateApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { Logger } from '../../../core/logger/Logger';
 import { CommandAdapter, CommandDefinition } from '../../../core/vscode-api/CommandAdapter';
-import { TemplateTreeDataProvider, TemplateTreeItem } from './TemplateTreeDataProvider';
+import { AssistantsTreeDataProvider, AssistantsTreeItem } from './AssistantsTreeDataProvider';
 import { WebviewAdapter } from '../../../core/vscode-api/WebviewAdapter';
 import { BaseFileTreeCommands } from '../../shared/interface/commands/BaseFileTreeCommands';
 import { FileTreeDomainService } from '../../shared/domain/services/FileTreeDomainService';
 import { FileOperationDomainService } from '../../shared/domain/services/FileOperationDomainService';
 import { PathUtils } from '../../shared/infrastructure/utils/PathUtils';
+import { BaseArtifactTreeViewProvider } from '../../shared/interface/tree/BaseArtifactTreeViewProvider';
 
-export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
+/**
+ * 适配器：将 AssistantsTreeDataProvider 适配为 BaseArtifactTreeViewProvider
+ * 用于在 BaseFileTreeCommands 中使用
+ */
+class AssistantsTreeDataProviderAdapter extends BaseArtifactTreeViewProvider<AssistantsTreeItem> {
+  constructor(
+    private assistantsProvider: AssistantsTreeDataProvider,
+    vaultService: VaultApplicationService,
+    treeService: ArtifactApplicationService,
+    logger: Logger
+  ) {
+    super(vaultService, treeService, logger);
+  }
+
+  protected getRootDirectory(): string {
+    return 'templates'; // 默认使用 templates，但实际会通过 assistantsProvider 处理
+  }
+
+  protected createTreeItem(
+    label: string,
+    collapsibleState: vscode.TreeItemCollapsibleState,
+    vaultName?: string,
+    vaultId?: string,
+    folderPath?: string,
+    filePath?: string,
+    contextValue?: string
+  ): AssistantsTreeItem {
+    return new AssistantsTreeItem(
+      label,
+      collapsibleState,
+      vaultName,
+      vaultId,
+      folderPath,
+      filePath,
+      contextValue
+    );
+  }
+
+  protected getItemContextValue(
+    item: AssistantsTreeItem | undefined,
+    type: 'vault' | 'folder' | 'file'
+  ): string {
+    if (type === 'vault') return 'vault';
+    if (type === 'folder') return 'template.directory';
+    return 'template.file';
+  }
+
+  protected getItemIcon(
+    item: AssistantsTreeItem,
+    node: any
+  ): vscode.ThemeIcon | undefined {
+    return undefined; // 由 assistantsProvider 处理
+  }
+
+  // 重写 refresh 方法，委托给 assistantsProvider
+  refresh(element?: AssistantsTreeItem | undefined | null | void): void {
+    this.assistantsProvider.refresh(element as any);
+  }
+
+  // 重写 getChildren 方法，委托给 assistantsProvider
+  async getChildren(element?: AssistantsTreeItem): Promise<AssistantsTreeItem[]> {
+    const children = await this.assistantsProvider.getChildren(element as any);
+    return children as AssistantsTreeItem[];
+  }
+
+  // 重写 getParent 方法，委托给 assistantsProvider
+  async getParent(element: AssistantsTreeItem): Promise<AssistantsTreeItem | undefined> {
+    const parent = await this.assistantsProvider.getParent(element as any);
+    return parent as AssistantsTreeItem | undefined;
+  }
+}
+
+export class AssistantsCommands extends BaseFileTreeCommands<AssistantsTreeItem> {
   constructor(
     private templateService: TemplateApplicationService,
     artifactService: ArtifactApplicationService,
@@ -21,10 +94,13 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
     fileOperationDomainService: FileOperationDomainService,
     logger: Logger,
     context: vscode.ExtensionContext,
-    treeViewProvider: TemplateTreeDataProvider,
+    treeViewProvider: AssistantsTreeDataProvider,
     treeView: vscode.TreeView<vscode.TreeItem>,
     webviewAdapter: WebviewAdapter
   ) {
+    // 创建适配器
+    const adapter = new AssistantsTreeDataProviderAdapter(treeViewProvider, vaultService, artifactService, logger);
+    
     super(
       vaultService,
       artifactService,
@@ -32,7 +108,7 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
       fileOperationDomainService,
       logger,
       context,
-      treeViewProvider,
+      adapter,
       treeView,
       webviewAdapter
     );
@@ -64,7 +140,7 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
       },
       {
         command: this.getDeleteCommandName(),
-        callback: async (item?: TemplateTreeItem) => {
+        callback: async (item?: AssistantsTreeItem) => {
           await this.deleteItem(item);
         },
       },
@@ -101,7 +177,7 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
     return 'archi.template.delete';
   }
 
-  protected async handleDelete(item: TemplateTreeItem): Promise<void> {
+  protected async handleDelete(item: AssistantsTreeItem): Promise<void> {
     // 先判断是否是文件或文件夹（优先级高于 vault）
     if (item.filePath || item.folderPath !== undefined) {
       // 删除文件或文件夹
@@ -195,31 +271,31 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
     commandAdapter.registerCommands([
       {
         command: this.getCreateFileCommandName(),
-        callback: async (item?: TemplateTreeItem) => {
+        callback: async (item?: AssistantsTreeItem) => {
           await this.showCreateTemplateFileDialog(item);
         },
       },
       {
         command: this.getCreateFolderCommandName(),
-        callback: async (item?: TemplateTreeItem) => {
+        callback: async (item?: AssistantsTreeItem) => {
           await this.showCreateTemplateFolderDialog(item);
         },
       },
       {
         command: 'archi.template.addArchimateDesign',
-        callback: async (item?: TemplateTreeItem) => {
+        callback: async (item?: AssistantsTreeItem) => {
           await this.showCreateTemplateDesignDialog(item, 'archimate');
         },
       },
       {
         command: 'archi.template.addPlantUMLDesign',
-        callback: async (item?: TemplateTreeItem) => {
+        callback: async (item?: AssistantsTreeItem) => {
           await this.showCreateTemplateDesignDialog(item, 'puml');
         },
       },
       {
         command: 'archi.template.addMermaidDesign',
-        callback: async (item?: TemplateTreeItem) => {
+        callback: async (item?: AssistantsTreeItem) => {
           await this.showCreateTemplateDesignDialog(item, 'mermaid');
         },
       },
@@ -332,7 +408,7 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
   /**
    * 显示创建模板文件对话框
    */
-  private async showCreateTemplateFileDialog(item?: TemplateTreeItem): Promise<void> {
+  private async showCreateTemplateFileDialog(item?: AssistantsTreeItem): Promise<void> {
     try {
       const vault = await this.validateAndGetVault(item, 'create');
       if (!vault) {
@@ -380,7 +456,7 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
   /**
    * 显示创建模板文件夹对话框
    */
-  private async showCreateTemplateFolderDialog(item?: TemplateTreeItem): Promise<void> {
+  private async showCreateTemplateFolderDialog(item?: AssistantsTreeItem): Promise<void> {
     try {
       const vault = await this.validateAndGetVault(item, 'create');
       if (!vault) {
@@ -427,7 +503,7 @@ export class TemplateCommands extends BaseFileTreeCommands<TemplateTreeItem> {
   /**
    * 显示创建模板设计图对话框
    */
-  private async showCreateTemplateDesignDialog(item?: TemplateTreeItem, designType?: string): Promise<void> {
+  private async showCreateTemplateDesignDialog(item?: AssistantsTreeItem, designType?: string): Promise<void> {
     try {
       const vault = await this.validateAndGetVault(item, 'create');
       if (!vault) {

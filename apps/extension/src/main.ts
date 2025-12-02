@@ -17,8 +17,8 @@ import { ViewpointApplicationService } from './modules/viewpoint/application/Vie
 import { ViewpointTreeDataProvider } from './modules/viewpoint/interface/ViewpointTreeDataProvider';
 import { ViewpointCommands } from './modules/viewpoint/interface/Commands';
 import { TemplateApplicationService } from './modules/template/application/TemplateApplicationService';
-import { TemplateTreeDataProvider } from './modules/template/interface/TemplateTreeDataProvider';
-import { TemplateCommands } from './modules/template/interface/Commands';
+import { AssistantsTreeDataProvider } from './modules/assistants/interface/AssistantsTreeDataProvider';
+import { AssistantsCommands } from './modules/assistants/interface/Commands';
 import { AIApplicationService } from './modules/ai/application/AIApplicationService';
 import { AICommands } from './modules/ai/interface/Commands';
 import { SqliteRuntimeIndex } from './modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
@@ -184,11 +184,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const viewpointCommands = new ViewpointCommands(viewpointService, vaultService, logger);
   viewpointCommands.registerCommands(context);
 
-  // 10. 初始化模板视图
-  const templateTreeService = artifactService;
-  const templateTreeDataProvider = new TemplateTreeDataProvider(vaultService, templateTreeService, logger);
-  const templateTreeView = vscode.window.createTreeView('architool.templateView', { treeDataProvider: templateTreeDataProvider });
-  const templateCommands = new TemplateCommands(
+  // 10. 初始化助手视图（包含templates和ai-enhancements）
+  const assistantsTreeDataProvider = new AssistantsTreeDataProvider(vaultService, artifactService, logger);
+  const assistantsTreeView = vscode.window.createTreeView('architool.assistantsView', { treeDataProvider: assistantsTreeDataProvider });
+  const assistantsCommands = new AssistantsCommands(
     templateService,
     artifactService,
     vaultService,
@@ -196,11 +195,11 @@ export async function activate(context: vscode.ExtensionContext) {
     fileOperationDomainService,
     logger,
     context,
-    templateTreeDataProvider,
-    templateTreeView,
+    assistantsTreeDataProvider,
+    assistantsTreeView,
     webviewRPC.getAdapter()
   );
-  templateCommands.register(commandAdapter);
+  assistantsCommands.register(commandAdapter);
 
   // 11. 初始化 AI 服务命令
   const changeRepository = container.get<import('./modules/shared/infrastructure/ChangeRepository').ChangeRepository>(TYPES.ChangeRepository);
@@ -317,7 +316,7 @@ export async function activate(context: vscode.ExtensionContext) {
           documentTreeViewProvider.refresh();
           taskTreeDataProvider.refresh();
           viewpointTreeDataProvider.refresh();
-          templateTreeDataProvider.refresh();
+          assistantsTreeDataProvider.refresh();
         } else {
           vscode.window.showErrorMessage(`Failed to add vault: ${result.error.message}`);
         }
@@ -429,7 +428,7 @@ export async function activate(context: vscode.ExtensionContext) {
           documentTreeViewProvider.refresh();
           taskTreeDataProvider.refresh();
           viewpointTreeDataProvider.refresh();
-          templateTreeDataProvider.refresh();
+          assistantsTreeDataProvider.refresh();
         } else {
           vscode.window.showErrorMessage(`Failed to clone vault from Git: ${result.error.message}`);
         }
