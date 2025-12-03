@@ -1,0 +1,227 @@
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 14px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  height: 100vh;
+  min-width: 100%;
+  background: #ffffff;
+}
+
+/* Workspace */
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  min-width: 100%;
+}
+
+.diagram-panel {
+  flex: 1;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.workspace-divider {
+  width: 6px;
+  cursor: col-resize;
+  background: #f1f3f5;
+  border-left: 1px solid #e9ecef;
+  border-right: 1px solid #e9ecef;
+  flex: 0 0 auto;
+}
+
+.workspace-divider:hover,
+.workspace-divider.dragging {
+  background: #e0e4e8;
+}
+
+.workspace.resizing,
+.workspace.resizing * {
+  cursor: col-resize !important;
+}
+
+.diagram-container {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  background: #f8f9fa;
+  background-image: 
+    linear-gradient(45deg, #e9ecef 25%, transparent 25%),
+    linear-gradient(-45deg, #e9ecef 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e9ecef 75%),
+    linear-gradient(-45deg, transparent 75%, #e9ecef 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+.zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1000;
+}
+
+.zoom-controls button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #dee2e6;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.zoom-controls button:hover:not(:disabled) {
+  background: #e9ecef;
+}
+
+.zoom-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.source-panel {
+  width: 40%;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-left: 1px solid #e9ecef;
+}
+
+.panel-header {
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.source-editor {
+  flex: 1;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  outline: none;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  background: #ffffff;
+  color: #212529;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.source-editor:focus {
+  outline: none;
+}
+
+/* Error message */
+.error {
+  padding: 8px 16px;
+  background: #f8d7da;
+  color: #721c24;
+  border-top: 1px solid #f5c6cb;
+  font-size: 13px;
+  display: none;
+}
+
+.error.show {
+  display: block;
+}
+
+/* VSCode 主题适配 */
+@media (prefers-color-scheme: dark) {
+  .app {
+    background: var(--vscode-editor-background, #1e1e1e);
+    color: var(--vscode-editor-foreground, #cccccc);
+  }
+  
+  .diagram-container {
+    background: var(--vscode-editor-background, #1e1e1e);
+    background-image: 
+      linear-gradient(45deg, #2d2d2d 25%, transparent 25%),
+      linear-gradient(-45deg, #2d2d2d 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #2d2d2d 75%),
+      linear-gradient(-45deg, transparent 75%, #2d2d2d 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  }
+  
+  .source-panel {
+    background: var(--vscode-editor-background, #1e1e1e);
+    border-left-color: var(--vscode-panel-border, #3e3e3e);
+  }
+  
+  .panel-header {
+    background: var(--vscode-panel-background, #252526);
+    border-bottom-color: var(--vscode-panel-border, #3e3e3e);
+  }
+  
+  .panel-title {
+    color: var(--vscode-panel-title-activeForeground, #cccccc);
+  }
+  
+  .source-editor {
+    background: var(--vscode-editor-background, #1e1e1e);
+    color: var(--vscode-editor-foreground, #cccccc);
+  }
+  
+  .workspace-divider {
+    background: var(--vscode-panel-border, #3e3e3e);
+    border-left-color: var(--vscode-panel-border, #3e3e3e);
+    border-right-color: var(--vscode-panel-border, #3e3e3e);
+  }
+  
+  .workspace-divider:hover,
+  .workspace-divider.dragging {
+    background: var(--vscode-panel-border, #4e4e4e);
+  }
+  
+  .zoom-controls button {
+    background: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #ffffff);
+    border-color: var(--vscode-button-border, #0e639c);
+  }
+  
+  .zoom-controls button:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground, #1177bb);
+  }
+}
+

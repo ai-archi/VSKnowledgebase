@@ -569,6 +569,7 @@
     "@electron/rebuild": "^4.0.1",
     "@types/better-sqlite3": "^7.6.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/minimatch": "^6.0.0",
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.6",
     "@types/vscode": "^1.80.0",

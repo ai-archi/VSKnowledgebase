@@ -23,10 +23,13 @@ import { VaultReference } from '../domain/value_object/VaultReference';
 import { Logger } from '../../../core/logger/Logger';
 import { TemplateStructureDomainServiceImpl, TemplateStructureItem } from '../domain/services/TemplateStructureDomainService';
 import { FileOperationDomainService } from '../domain/services/FileOperationDomainService';
+import { VaultRepository } from '../infrastructure/VaultRepository';
+import { ConfigManager } from '../../../core/config/ConfigManager';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
+import * as vscode from 'vscode';
 
 @injectable()
 export class ArtifactApplicationServiceImpl implements ArtifactApplicationService {
@@ -37,6 +40,8 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
     @inject(TYPES.ArtifactRepository) private artifactRepository: ArtifactRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
+    @inject(TYPES.VaultRepository) private vaultRepository: VaultRepository,
+    @inject(TYPES.ConfigManager) private configManager: ConfigManager,
     @inject(TYPES.FileOperationDomainService) private fileOperationService: FileOperationDomainService,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
@@ -1121,6 +1126,168 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         ),
       };
     }
+  }
+
+  /**
+   * 根据代码路径查找所有关联的文档
+   */
+  async findArtifactsByCodePath(codePath: string): Promise<Result<Artifact[], ArtifactError>> {
+    try {
+      this.logger.info('[ArtifactApplicationService] findArtifactsByCodePath called', { codePath });
+
+      // 规范化代码路径（相对于工作区根目录）
+      const normalizedCodePath = this.normalizeCodePath(codePath);
+      this.logger.info('[ArtifactApplicationService] normalized code path', {
+        original: codePath,
+        normalized: normalizedCodePath
+      });
+
+      // 通过 MetadataRepository 查询关联的元数据
+      const metadataResult = await this.metadataRepo.findByCodePath(normalizedCodePath);
+      if (!metadataResult.success) {
+        this.logger.warn('[ArtifactApplicationService] findByCodePath failed', metadataResult.error);
+        return {
+          success: false,
+          error: metadataResult.error,
+        };
+      }
+
+      this.logger.info('[ArtifactApplicationService] found metadata', {
+        count: metadataResult.value.length,
+        metadataIds: metadataResult.value.map(m => m.id)
+      });
+
+      // 根据元数据获取对应的 Artifact
+      const artifacts: Artifact[] = [];
+      for (const metadata of metadataResult.value) {
+        let artifact: Artifact | null = null;
+
+        // 检查是否是特殊格式的 artifactId（file:、folder:、vault:）
+        if (metadata.artifactId.includes(':')) {
+          const parts = metadata.artifactId.split(':');
+          if (parts.length === 3 && (parts[0] === 'file' || parts[0] === 'folder' || parts[0] === 'vault')) {
+            // 特殊格式：file:demo-vault:aaaa.md
+            const targetType = parts[0] as 'file' | 'folder' | 'vault';
+            const vaultId = parts[1];
+            const targetId = parts[2];
+
+            // 从 metadata 的 properties 中获取信息，或使用 targetId
+            const targetPath = metadata.properties?.targetId || targetId;
+
+            // 查找 vault
+            const vaultResult = await this.vaultRepository.findById(vaultId);
+            if (vaultResult.success && vaultResult.value) {
+              const vault = vaultResult.value;
+
+              // 构建文件路径
+              const filePath = path.join(
+                this.vaultAdapter.getVaultPath(vault.name),
+                'artifacts',
+                targetPath
+              );
+
+              // 如果文件存在，构建 Artifact 对象
+              if (fs.existsSync(filePath)) {
+                const stats = fs.statSync(filePath);
+                const name = path.basename(targetPath, path.extname(targetPath));
+                const format = path.extname(targetPath).slice(1) || 'md';
+
+                artifact = {
+                  id: metadata.artifactId,
+                  vault: {
+                    id: vaultId,
+                    name: vault.name,
+                  },
+                  nodeType: targetType === 'file' ? 'FILE' : 'DIRECTORY',
+                  path: targetPath,
+                  name: name,
+                  format: format,
+                  contentLocation: filePath,
+                  viewType: (metadata.type as any) || 'document',
+                  category: metadata.category,
+                  title: name,
+                  description: undefined,
+                  status: 'draft',
+                  createdAt: metadata.createdAt || stats.birthtime.toISOString(),
+                  updatedAt: metadata.updatedAt || stats.mtime.toISOString(),
+                  metadataId: metadata.id,
+                  tags: metadata.tags,
+                };
+
+                this.logger.info('[ArtifactApplicationService] built artifact from metadata (special format)', {
+                  artifactId: metadata.artifactId,
+                  artifactTitle: artifact.title,
+                  vaultId: vaultId,
+                  targetType: targetType,
+                  targetId: targetId
+                });
+              }
+            }
+          }
+        }
+
+        // 如果不是特殊格式或特殊格式构建失败，尝试常规查找
+        if (!artifact) {
+          const vaultsResult = await this.vaultRepository.findAll();
+          if (vaultsResult.success) {
+            for (const vault of vaultsResult.value) {
+              const artifactResult = await this.artifactRepository.findById(vault.id, metadata.artifactId);
+              if (artifactResult.success && artifactResult.value) {
+                artifact = artifactResult.value;
+                this.logger.info('[ArtifactApplicationService] found artifact', {
+                  artifactId: metadata.artifactId,
+                  artifactTitle: artifact.title,
+                  vaultId: vault.id
+                });
+                break; // 找到后跳出循环
+              }
+            }
+          }
+        }
+
+        if (artifact) {
+          artifacts.push(artifact);
+        } else {
+          this.logger.warn('[ArtifactApplicationService] artifact not found', {
+            artifactId: metadata.artifactId,
+            vaultId: metadata.vaultId,
+            metadataProperties: metadata.properties
+          });
+        }
+      }
+
+      this.logger.info('[ArtifactApplicationService] findArtifactsByCodePath result', {
+        artifactCount: artifacts.length,
+        artifactTitles: artifacts.map(a => a.title)
+      });
+
+      return { success: true, value: artifacts };
+    } catch (error: any) {
+      this.logger.error('[ArtifactApplicationService] findArtifactsByCodePath error', error);
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to find artifacts by code path: ${error.message}`,
+          { codePath },
+          error
+        ),
+      };
+    }
+  }
+
+  /**
+   * 规范化代码路径（相对于工作区根目录）
+   */
+  private normalizeCodePath(codePath: string): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      if (path.isAbsolute(codePath) && codePath.startsWith(workspaceRoot)) {
+        return path.normalize(path.relative(workspaceRoot, codePath)).replace(/\\/g, '/');
+      }
+    }
+    return path.normalize(codePath).replace(/\\/g, '/');
   }
 
   async createFolderStructureFromTemplate(

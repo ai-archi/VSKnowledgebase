@@ -420,51 +420,10 @@ export class ViewpointApplicationServiceImpl implements ViewpointApplicationServ
   }
 
   /**
-   * 获取代码文件关联的文档
+   * 获取代码文件关联的文档（代理方法，实际调用 ArtifactApplicationService）
    */
   async getRelatedArtifacts(codePath: string): Promise<Result<Artifact[], ArtifactError>> {
-    try {
-      // 规范化代码路径（相对于工作区根目录）
-      const normalizedCodePath = this.normalizeCodePath(codePath);
-
-      // 通过 MetadataRepository 查询关联的元数据
-      const metadataResult = await this.metadataRepository.findByCodePath(normalizedCodePath);
-      if (!metadataResult.success) {
-        return {
-          success: false,
-          error: metadataResult.error,
-        };
-      }
-
-      // 根据元数据获取对应的 Artifact
-      const artifacts: Artifact[] = [];
-      for (const metadata of metadataResult.value) {
-        // 需要根据 artifactId 查找 Artifact
-        // 由于 ArtifactRepository 需要 vaultId，我们需要遍历所有 vault
-        const vaultsResult = await this.vaultRepository.findAll();
-        if (vaultsResult.success) {
-          for (const vault of vaultsResult.value) {
-            const artifactResult = await this.artifactRepository.findById(vault.id, metadata.artifactId);
-            if (artifactResult.success && artifactResult.value) {
-              artifacts.push(artifactResult.value);
-              break; // 找到后跳出循环
-            }
-          }
-        }
-      }
-
-      return { success: true, value: artifacts };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: new ArtifactError(
-          ArtifactErrorCode.OPERATION_FAILED,
-          `Failed to get related artifacts: ${error.message}`,
-          { codePath },
-          error
-        ),
-      };
-    }
+    return await this.artifactService.findArtifactsByCodePath(codePath);
   }
 
   /**
@@ -642,7 +601,19 @@ export class ViewpointApplicationServiceImpl implements ViewpointApplicationServ
    */
   private normalizeCodePath(codePath: string): string {
     // 如果路径是绝对路径，需要转换为相对路径
-    // 这里简化处理，假设传入的路径已经是相对路径或可以使用的路径
+    if (path.isAbsolute(codePath)) {
+      // 获取工作区根目录
+      const workspaceFolders = require('vscode').workspace.workspaceFolders;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
+        if (codePath.startsWith(workspaceRoot)) {
+          // 转换为相对路径
+          const relativePath = path.relative(workspaceRoot, codePath);
+          return path.normalize(relativePath).replace(/\\/g, '/');
+        }
+      }
+    }
+    // 如果已经是相对路径，直接规范化
     return path.normalize(codePath).replace(/\\/g, '/');
   }
 }

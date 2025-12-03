@@ -177,6 +177,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // 9. 初始化视点视图
   const viewpointTreeDataProvider = new ViewpointTreeDataProvider(
     viewpointService,
+    artifactService,
     vaultService,
     configManager,
     logger

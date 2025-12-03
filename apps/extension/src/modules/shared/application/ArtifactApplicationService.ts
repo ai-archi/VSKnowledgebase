@@ -167,6 +167,13 @@ export interface ArtifactApplicationService {
   ): Promise<Result<string[], ArtifactError>>;
   
   /**
+   * 根据代码路径查找所有关联的文档
+   * @param codePath 代码路径（相对于工作区根目录）
+   * @returns 关联的 Artifact 列表
+   */
+  findArtifactsByCodePath(codePath: string): Promise<Result<Artifact[], ArtifactError>>;
+  
+  /**
    * 列出 vault 中的所有文件和文件夹（不限制文件类型）
    * @param vaultId Vault ID（可选，不指定则列出所有 vault）
    * @param options 查询选项
