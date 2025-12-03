@@ -4,20 +4,13 @@
     <div class="header-section">
       <div class="action-buttons-section">
         <el-button-group>
-          <el-button @click="generatePrompt('summarize')" :disabled="!canCreate">
-            总结
-          </el-button>
-          <el-button @click="generatePrompt('refactor')" :disabled="!canCreate">
-            重构
-          </el-button>
-          <el-button @click="generatePrompt('review')" :disabled="!canCreate">
-            检查
-          </el-button>
-          <el-button @click="generatePrompt('analyze')" :disabled="!canCreate">
-            分析
-          </el-button>
-          <el-button @click="generatePrompt('optimize')" :disabled="!canCreate">
-            优化
+          <el-button
+            v-for="cmd in commands"
+            :key="cmd.id"
+            @click="executeCommand(cmd.id)"
+            :disabled="!canCreate"
+          >
+            {{ cmd.name }}
           </el-button>
         </el-button-group>
       </div>
@@ -251,6 +244,7 @@ const formData = ref<FormData>({
 const initialFolderPath = ref<string | undefined>(undefined);
 const vaults = ref<Vault[]>([]);
 const allTemplates = ref<Template[]>([]);
+const commands = ref<Array<{ id: string; name: string; description?: string }>>([]);
 const selectedFiles = ref<FileItem[]>([]);
 const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
@@ -323,6 +317,7 @@ onMounted(() => {
     return;
   }
   loadVaults();
+  loadCommands();
   // 加载模板和文件
   if (formData.value.vaultId) {
     loadTemplates(formData.value.vaultId);
@@ -542,65 +537,67 @@ const handleCreate = async () => {
   }
 };
 
-const generatePrompt = (action: string) => {
+const loadCommands = async () => {
+  try {
+    // 不传递 vaultId，加载所有 vault 的命令
+    const commandsList = await extensionService.call<any[]>('aiCommand.list', { targetType: 'folder' });
+    commands.value = commandsList || [];
+    console.log('[CreateFolderForm] Commands loaded:', commands.value.length, commands.value);
+  } catch (err: any) {
+    console.error('Failed to load commands', err);
+    commands.value = [];
+  }
+};
+
+const executeCommand = async (commandId: string) => {
   if (!canCreate.value) {
     ElMessage.warning('请先输入文件夹名称并选择 Vault');
     return;
   }
 
-  const actionMap: Record<string, string> = {
-    summarize: '总结',
-    refactor: '重构',
-    review: '检查',
-    analyze: '分析',
-    optimize: '优化',
-  };
-
-  const actionName = actionMap[action] || action;
-  
-  let fileNames = '';
-  let filePaths = '';
-  let targetInfo = '';
-
-  if (selectedFiles.value.length > 0) {
-    // 如果有选中的文件，使用选中的文件
-    fileNames = selectedFiles.value.map(f => f.title || f.name).join('、');
-    filePaths = selectedFiles.value.map(f => f.path).join('\n');
-    targetInfo = `文件：${fileNames}\n\n路径：\n${filePaths}`;
-  } else if (formData.value.folderName.trim() !== '') {
-    // 如果输入框有内容，使用输入框的内容
-    const folderName = formData.value.folderName.trim();
-    targetInfo = `文件夹/路径：${folderName}`;
+  if (!formData.value.vaultId) {
+    ElMessage.warning('请先选择 Vault');
+    return;
   }
 
-  let prompt = '';
-  switch (action) {
-    case 'summarize':
-      prompt = `请总结以下内容：\n\n${targetInfo}`;
-      break;
-    case 'refactor':
-      prompt = `请重构以下内容：\n\n${targetInfo}\n\n请提供重构建议和优化方案。`;
-      break;
-    case 'review':
-      prompt = `请检查以下内容的代码质量和潜在问题：\n\n${targetInfo}\n\n请提供代码审查意见。`;
-      break;
-    case 'analyze':
-      prompt = `请分析以下内容：\n\n${targetInfo}\n\n请分析文件结构、依赖关系和设计模式。`;
-      break;
-    case 'optimize':
-      prompt = `请优化以下内容：\n\n${targetInfo}\n\n请提供性能优化和代码优化建议。`;
-      break;
-    default:
-      prompt = `${actionName}以下内容：\n\n${targetInfo}`;
-  }
+  try {
+    // 构建执行上下文（确保所有数据都是可序列化的）
+    const context = {
+      vaultId: formData.value.vaultId,
+      vaultName: vaults.value.find(v => v.id === formData.value.vaultId)?.name || '',
+      fileName: formData.value.folderName.trim(),
+      folderPath: initialFolderPath.value || undefined,
+      selectedFiles: selectedFiles.value.map(f => ({
+        id: f.id || undefined,
+        path: f.path || '',
+        name: f.name || '',
+        title: f.title || undefined,
+        vault: f.vault ? {
+          id: f.vault.id || '',
+          name: f.vault.name || '',
+        } : undefined,
+      })),
+    };
+
+    // 调用后端执行命令
+    const result = await extensionService.call<string>('aiCommand.execute', {
+      commandId,
+      vaultId: formData.value.vaultId,
+      context,
+    });
 
   // 复制到剪贴板
-  navigator.clipboard.writeText(prompt).then(() => {
-    ElMessage.success(`提示词已复制到剪贴板：${actionName}`);
+    navigator.clipboard.writeText(result).then(() => {
+      const command = commands.value.find(c => c.id === commandId);
+      ElMessage.success(`提示词已复制到剪贴板：${command?.name || commandId}`);
   }).catch(err => {
     console.error('Failed to copy to clipboard', err);
     ElMessage.error('复制到剪贴板失败');
   });
+  } catch (err: any) {
+    console.error('Failed to execute command', err);
+    ElMessage.error(`执行命令失败：${err.message || '未知错误'}`);
+  }
 };
 </script>
 

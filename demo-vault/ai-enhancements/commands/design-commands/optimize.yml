@@ -1,0 +1,28 @@
+name: 优化
+description: 优化设计图，提供性能优化和设计优化建议
+targetTypes:
+  - design
+enabled: true
+order: 5
+commandContent: |
+  请优化以下设计图：
+  
+  {% if fileName %}
+  设计图名称：{{ fileName }}
+  {% endif %}
+  
+  {% if diagramType %}
+  设计图类型：{{ diagramType }}
+  {% endif %}
+  
+  {% if selectedFiles %}
+  相关文件：
+  {% for file in selectedFiles %}
+  - {{ file.title or file.name }} ({{ file.path }})
+  {% endfor %}
+  {% endif %}
+  
+  请提供性能优化和设计优化建议。
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

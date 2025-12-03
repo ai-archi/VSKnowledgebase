@@ -167,17 +167,17 @@
       },
       {
         "command": "archi.document.addArchimateDesign",
-        "title": "Add Archimate Design",
+        "title": "Add Diagram:Archimate",
         "icon": "$(graph-line)"
       },
       {
         "command": "archi.document.addPlantUMLDesign",
-        "title": "Add PlantUML Design",
+        "title": "Add Diagram:PlantUML",
         "icon": "$(graph-line)"
       },
       {
         "command": "archi.document.addMermaidDesign",
-        "title": "Add Mermaid Design",
+        "title": "Add Diagram:Mermaid",
         "icon": "$(graph-line)"
       },
       {
@@ -320,12 +320,12 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addArchimateDesign",
+          "command": "archi.document.addPlantUMLDesign",
           "when": "view == architool.documentView && viewItem == vault",
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addPlantUMLDesign",
+          "command": "archi.document.addArchimateDesign",
           "when": "view == architool.documentView && viewItem == vault",
           "group": "1_actions"
         },
@@ -355,12 +355,12 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addArchimateDesign",
+          "command": "archi.document.addPlantUMLDesign",
           "when": "view == architool.documentView && viewItem == document",
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addPlantUMLDesign",
+          "command": "archi.document.addArchimateDesign",
           "when": "view == architool.documentView && viewItem == document",
           "group": "1_actions"
         },
@@ -390,12 +390,12 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addArchimateDesign",
+          "command": "archi.document.addPlantUMLDesign",
           "when": "view == architool.documentView && viewItem == folder",
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addPlantUMLDesign",
+          "command": "archi.document.addArchimateDesign",
           "when": "view == architool.documentView && viewItem == folder",
           "group": "1_actions"
         },

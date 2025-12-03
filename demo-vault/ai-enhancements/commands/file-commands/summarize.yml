@@ -1,0 +1,23 @@
+name: 总结
+description: 总结选中的文件内容
+targetTypes:
+  - file
+enabled: true
+order: 1
+commandContent: |
+  请总结以下文件的内容：
+  
+  {% if selectedFiles %}
+  文件：
+  {% for file in selectedFiles %}
+  - {{ file.title or file.name }}
+  {% endfor %}
+  
+  路径：
+  {% for file in selectedFiles %}
+  {{ file.path }}
+  {% endfor %}
+  {% endif %}
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

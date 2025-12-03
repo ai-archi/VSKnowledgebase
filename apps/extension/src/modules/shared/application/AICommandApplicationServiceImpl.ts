@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { AICommandApplicationService } from './AICommandApplicationService';
-import { AICommand, AICommandContext } from '../domain/entity/AICommand';
+import { AICommand, CommandTargetType } from '../domain/entity/AICommand';
 import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { AICommandRepository } from '../infrastructure/AICommandRepository';
 import { VaultApplicationService } from './VaultApplicationService';
@@ -24,16 +24,16 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
-  async getCommands(vaultId?: string, context?: AICommandContext): Promise<Result<AICommand[], ArtifactError>> {
+  async getCommands(vaultId?: string, targetType?: CommandTargetType): Promise<Result<AICommand[], ArtifactError>> {
     try {
-      return await this.commandRepository.findAll(vaultId, context);
+      return await this.commandRepository.findAll(vaultId, targetType);
     } catch (error: any) {
       return {
         success: false,
         error: new ArtifactError(
           ArtifactErrorCode.OPERATION_FAILED,
           `Failed to get commands: ${error.message}`,
-          { vaultId, context },
+          { vaultId, targetType },
           error
         ),
       };
@@ -95,8 +95,8 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
       // 生成指令ID（基于名称，转换为kebab-case）
       const commandId = this.generateCommandId(command.name);
 
-      // 确定文件路径（根据context确定子目录）
-      const subDir = this.getContextSubDirectory(command.contexts[0] || 'all');
+      // 确定文件路径（根据targetType确定子目录）
+      const subDir = this.getTargetTypeSubDirectory(command.targetTypes[0] || 'all');
       const fileName = `${commandId}.md`;
       const filePath = `${this.COMMANDS_DIR}/${subDir}/${fileName}`;
 
@@ -199,13 +199,31 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
     context: CommandExecutionContext
   ): Promise<Result<string, ArtifactError>> {
     try {
-      // 获取指令
-      const commandResult = await this.getCommand(vaultId, commandId);
-      if (!commandResult.success) {
-        return commandResult;
+      // 在所有 vault 中查找命令（不限制 vaultId）
+      const allCommandsResult = await this.commandRepository.findAll(undefined);
+      if (!allCommandsResult.success) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            `Failed to find commands: ${allCommandsResult.error.message}`,
+            { commandId },
+            allCommandsResult.error
+          ),
+        };
       }
 
-      const command = commandResult.value;
+      const command = allCommandsResult.value.find(c => c.id === commandId);
+      if (!command) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Command not found: ${commandId}`,
+            { commandId }
+          ),
+        };
+      }
 
       // 验证变量
       const missingVars = this.templateService.validateVariables(command, context);
@@ -250,10 +268,10 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
   }
 
   /**
-   * 根据context获取子目录
+   * 根据targetType获取子目录
    */
-  private getContextSubDirectory(context: AICommandContext): string {
-    switch (context) {
+  private getTargetTypeSubDirectory(targetType: CommandTargetType): string {
+    switch (targetType) {
       case 'file':
         return 'file-commands';
       case 'folder':

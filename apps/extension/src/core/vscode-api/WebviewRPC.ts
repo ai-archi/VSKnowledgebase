@@ -5,6 +5,8 @@ import { DocumentApplicationService } from '../../modules/document/application/D
 import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
 import { ArtifactApplicationService } from '../../modules/shared/application/ArtifactApplicationService';
 import { CodeFileSystemApplicationService } from '../../modules/shared/application/CodeFileSystemApplicationService';
+import { AICommandApplicationService } from '../../modules/shared/application/AICommandApplicationService';
+import { CommandExecutionContext } from '../../modules/shared/domain/value_object/CommandExecutionContext';
 import { WebviewAdapter, WebviewMessage } from './WebviewAdapter';
 
 /**
@@ -20,7 +22,8 @@ export class WebviewRPC {
     private documentService: DocumentApplicationService,
     private templateService: TemplateApplicationService,
     private artifactService: ArtifactApplicationService,
-    private codeFileService: CodeFileSystemApplicationService
+    private codeFileService: CodeFileSystemApplicationService,
+    private aiCommandService: AICommandApplicationService
   ) {
     this.webviewAdapter = new WebviewAdapter(logger);
     this.registerAllMethods();
@@ -501,6 +504,45 @@ export class WebviewRPC {
           vaultId: params.vaultId,
           path: params.path
         });
+        throw error;
+      }
+    });
+
+    // AI 命令相关方法
+    this.webviewAdapter.registerMethod('aiCommand.list', async (params: { vaultId?: string; targetType?: string }) => {
+      try {
+        this.logger.info('[WebviewRPC] aiCommand.list called', { vaultId: params.vaultId, targetType: params.targetType });
+        const result = await this.aiCommandService.getCommands(params.vaultId, params.targetType as any);
+        if (!result.success) {
+          this.logger.error('[WebviewRPC] aiCommand.list failed', { error: result.error.message });
+          throw new Error(result.error.message);
+        }
+        const mapped = result.value.map(cmd => ({
+          id: cmd.id,
+          name: cmd.name,
+          description: cmd.description,
+          targetTypes: cmd.targetTypes,
+          enabled: cmd.enabled,
+          order: cmd.order,
+        }));
+        this.logger.info('[WebviewRPC] aiCommand.list returning', { count: mapped.length, targetType: params.targetType });
+        return mapped;
+      } catch (error: any) {
+        this.logger.error('[WebviewRPC] aiCommand.list exception', { error: error.message, stack: error.stack });
+        throw error;
+      }
+    });
+
+    this.webviewAdapter.registerMethod('aiCommand.execute', async (params: { commandId: string; vaultId: string; context: CommandExecutionContext }) => {
+      try {
+        this.logger.info('[WebviewRPC] aiCommand.execute called', { commandId: params.commandId, vaultId: params.vaultId });
+        const result = await this.aiCommandService.executeCommand(params.commandId, params.vaultId, params.context);
+        if (!result.success) {
+          throw new Error(result.error.message);
+        }
+        return result.value;
+      } catch (error: any) {
+        this.logger.error('[WebviewRPC] aiCommand.execute exception', { error: error.message, stack: error.stack });
         throw error;
       }
     });

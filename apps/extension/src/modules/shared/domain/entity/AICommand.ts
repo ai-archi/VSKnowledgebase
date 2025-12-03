@@ -1,7 +1,7 @@
 /**
- * AI指令适用场景
+ * AI指令目标类型
  */
-export type AICommandContext = 'file' | 'folder' | 'design' | 'all';
+export type CommandTargetType = 'file' | 'folder' | 'design' | 'all';
 
 /**
  * 变量定义
@@ -27,8 +27,8 @@ export interface AICommand {
   description?: string; // 指令描述
   icon?: string; // 图标名称（VSCode ThemeIcon）
   
-  // 适用场景
-  contexts: AICommandContext[]; // 适用场景：file, folder, design, all
+  // 目标类型
+  targetTypes: CommandTargetType[]; // 针对的文件类型：file, folder, design, all
   
   // 状态
   enabled: boolean; // 是否启用

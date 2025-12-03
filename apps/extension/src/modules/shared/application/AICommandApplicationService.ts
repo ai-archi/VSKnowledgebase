@@ -1,5 +1,5 @@
 import { Result } from '../../../core/types/Result';
-import { AICommand, AICommandContext } from '../domain/entity/AICommand';
+import { AICommand, CommandTargetType } from '../domain/entity/AICommand';
 import { ArtifactError } from '../domain/errors';
 import { CommandExecutionContext } from '../domain/value_object/CommandExecutionContext';
 
@@ -10,9 +10,9 @@ export interface AICommandApplicationService {
   /**
    * 获取所有指令
    * @param vaultId Vault ID，如果提供则只查找该Vault的指令
-   * @param context 过滤上下文，如果提供则只返回适用于该上下文的指令
+   * @param targetType 过滤目标类型，如果提供则只返回适用于该目标类型的指令
    */
-  getCommands(vaultId?: string, context?: AICommandContext): Promise<Result<AICommand[], ArtifactError>>;
+  getCommands(vaultId?: string, targetType?: CommandTargetType): Promise<Result<AICommand[], ArtifactError>>;
 
   /**
    * 获取指令

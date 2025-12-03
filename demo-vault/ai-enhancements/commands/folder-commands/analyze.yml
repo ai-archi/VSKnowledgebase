@@ -1,0 +1,28 @@
+name: 分析
+description: 分析文件夹结构、依赖关系和设计模式
+targetTypes:
+  - folder
+enabled: true
+order: 4
+commandContent: |
+  请分析以下内容：
+  
+  {% if fileName %}
+  文件夹名称：{{ fileName }}
+  {% endif %}
+  
+  {% if folderPath %}
+  文件夹路径：{{ folderPath }}
+  {% endif %}
+  
+  {% if selectedFiles %}
+  相关文件：
+  {% for file in selectedFiles %}
+  - {{ file.title or file.name }} ({{ file.path }})
+  {% endfor %}
+  {% endif %}
+  
+  请分析文件结构、依赖关系和设计模式。
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

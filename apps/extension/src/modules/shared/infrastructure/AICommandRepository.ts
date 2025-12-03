@@ -1,4 +1,4 @@
-import { AICommand, AICommandContext } from '../domain/entity/AICommand';
+import { AICommand, CommandTargetType } from '../domain/entity/AICommand';
 import { Result, ArtifactError } from '../domain/errors';
 
 /**
@@ -18,9 +18,9 @@ export interface AICommandRepository {
   /**
    * 查找所有指令
    * @param vaultId Vault ID，如果提供则只查找该Vault的指令
-   * @param context 过滤上下文，如果提供则只返回适用于该上下文的指令
+   * @param targetType 过滤目标类型，如果提供则只返回适用于该目标类型的指令
    */
-  findAll(vaultId?: string, context?: AICommandContext): Promise<Result<AICommand[], ArtifactError>>;
+  findAll(vaultId?: string, targetType?: CommandTargetType): Promise<Result<AICommand[], ArtifactError>>;
 
   /**
    * 保存指令

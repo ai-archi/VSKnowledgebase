@@ -4,20 +4,13 @@
     <div class="header-section">
       <div class="action-buttons-section">
         <el-button-group>
-          <el-button @click="generatePrompt('summarize')" :disabled="selectedFiles.length === 0">
-            总结
-          </el-button>
-          <el-button @click="generatePrompt('refactor')" :disabled="selectedFiles.length === 0">
-            重构
-          </el-button>
-          <el-button @click="generatePrompt('review')" :disabled="selectedFiles.length === 0">
-            检查
-          </el-button>
-          <el-button @click="generatePrompt('analyze')" :disabled="selectedFiles.length === 0">
-            分析
-          </el-button>
-          <el-button @click="generatePrompt('optimize')" :disabled="selectedFiles.length === 0">
-            优化
+          <el-button
+            v-for="cmd in commands"
+            :key="cmd.id"
+            @click="executeCommand(cmd.id)"
+            :disabled="!canCreate"
+          >
+            {{ cmd.name }}
           </el-button>
         </el-button-group>
       </div>
@@ -279,6 +272,7 @@ const formData = ref<FormData>({
 const initialVaultId = ref<string | undefined>(undefined);
 const initialFolderPath = ref<string | undefined>(undefined);
 const templates = ref<Template[]>([]);
+const commands = ref<Array<{ id: string; name: string; description?: string }>>([]);
 const selectedFiles = ref<FileItem[]>([]);
 const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
@@ -401,6 +395,7 @@ onMounted(() => {
     loadTemplates(initialVaultId.value);
     loadFiles();
   }
+  loadCommands();
 });
 
 const loadTemplates = async (vaultId: string) => {
@@ -647,52 +642,67 @@ const handleCreate = async () => {
 
 
 
-const generatePrompt = (action: string) => {
-  if (selectedFiles.value.length === 0) {
-    ElMessage.warning('请先选择文件');
+const loadCommands = async () => {
+  try {
+    // 不传递 vaultId，加载所有 vault 的命令
+    const commandsList = await extensionService.call<any[]>('aiCommand.list', { targetType: 'design' });
+    commands.value = commandsList || [];
+    console.log('[CreateDesignForm] Commands loaded:', commands.value.length, commands.value);
+  } catch (err: any) {
+    console.error('Failed to load commands', err);
+    commands.value = [];
+  }
+};
+
+const executeCommand = async (commandId: string) => {
+  if (!canCreate.value) {
+    ElMessage.warning('请先输入设计图名称');
     return;
   }
 
-  const actionMap: Record<string, string> = {
-    summarize: '总结',
-    refactor: '重构',
-    review: '检查',
-    analyze: '分析',
-    optimize: '优化',
-  };
+  try {
+    // 获取 vault 名称
+    const vaultsResult = await extensionService.call<any[]>('vault.list', {});
+    const vault = vaultsResult?.find((v: any) => v.id === initialVaultId.value);
 
-  const actionName = actionMap[action] || action;
-  const fileNames = selectedFiles.value.map(f => f.title || f.name).join('、');
-  const filePaths = selectedFiles.value.map(f => f.path).join('\n');
+    // 构建执行上下文（确保所有数据都是可序列化的）
+    const context = {
+      vaultId: initialVaultId.value,
+      vaultName: vault?.name || '',
+      fileName: formData.value.diagramName.trim() || undefined,
+      folderPath: initialFolderPath.value || undefined,
+      diagramType: formData.value.diagramType || undefined,
+      selectedFiles: selectedFiles.value.map(f => ({
+        id: f.id || undefined,
+        path: f.path || '',
+        name: f.name || '',
+        title: f.title || undefined,
+        vault: f.vault ? {
+          id: f.vault.id || '',
+          name: f.vault.name || '',
+        } : undefined,
+      })),
+    };
 
-  let prompt = '';
-  switch (action) {
-    case 'summarize':
-      prompt = `请总结以下文件的内容：\n\n文件：${fileNames}\n\n路径：\n${filePaths}`;
-      break;
-    case 'refactor':
-      prompt = `请重构以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请提供重构建议和优化方案。`;
-      break;
-    case 'review':
-      prompt = `请检查以下文件的代码质量和潜在问题：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请提供代码审查意见。`;
-      break;
-    case 'analyze':
-      prompt = `请分析以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请分析文件结构、依赖关系和设计模式。`;
-      break;
-    case 'optimize':
-      prompt = `请优化以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}\n\n请提供性能优化和代码优化建议。`;
-      break;
-    default:
-      prompt = `${actionName}以下文件：\n\n文件：${fileNames}\n\n路径：\n${filePaths}`;
-  }
+    // 调用后端执行命令
+    const result = await extensionService.call<string>('aiCommand.execute', {
+      commandId,
+      vaultId: initialVaultId.value,
+      context,
+    });
 
   // 复制到剪贴板
-  navigator.clipboard.writeText(prompt).then(() => {
-    ElMessage.success(`提示词已复制到剪贴板：${actionName}`);
+    navigator.clipboard.writeText(result).then(() => {
+      const command = commands.value.find(c => c.id === commandId);
+      ElMessage.success(`提示词已复制到剪贴板：${command?.name || commandId}`);
   }).catch(err => {
     console.error('Failed to copy to clipboard', err);
     ElMessage.error('复制到剪贴板失败');
   });
+  } catch (err: any) {
+    console.error('Failed to execute command', err);
+    ElMessage.error(`执行命令失败：${err.message || '未知错误'}`);
+  }
 };
 </script>
 

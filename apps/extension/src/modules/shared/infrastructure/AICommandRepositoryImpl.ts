@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { AICommandRepository } from './AICommandRepository';
-import { AICommand, AICommandContext } from '../domain/entity/AICommand';
+import { AICommand, CommandTargetType } from '../domain/entity/AICommand';
 import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';
 import { VaultRepository } from './VaultRepository';
@@ -87,7 +87,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
     }
   }
 
-  async findAll(vaultId?: string, context?: AICommandContext): Promise<Result<AICommand[], ArtifactError>> {
+  async findAll(vaultId?: string, targetType?: CommandTargetType): Promise<Result<AICommand[], ArtifactError>> {
     try {
       const commands: AICommand[] = [];
 
@@ -127,12 +127,18 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         }
       }
 
-      // 根据context过滤
+      // 根据targetType过滤
       let filteredCommands = commands;
-      if (context && context !== 'all') {
-        filteredCommands = commands.filter(cmd => 
-          cmd.enabled && (cmd.contexts.includes(context) || cmd.contexts.includes('all'))
-        );
+      if (targetType && targetType !== 'all') {
+        this.logger.info(`[AICommandRepository] Filtering commands by targetType: ${targetType}, total commands: ${commands.length}`);
+        filteredCommands = commands.filter(cmd => {
+          const matches = cmd.enabled && (cmd.targetTypes.includes(targetType) || cmd.targetTypes.includes('all'));
+          if (!matches) {
+            this.logger.debug(`[AICommandRepository] Command ${cmd.id} filtered out: enabled=${cmd.enabled}, targetTypes=${cmd.targetTypes.join(',')}`);
+          }
+          return matches;
+        });
+        this.logger.info(`[AICommandRepository] Filtered commands count: ${filteredCommands.length}`);
       } else {
         filteredCommands = commands.filter(cmd => cmd.enabled);
       }
@@ -140,6 +146,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
       // 按order排序
       filteredCommands.sort((a, b) => a.order - b.order);
 
+      this.logger.info(`[AICommandRepository] Returning ${filteredCommands.length} commands for targetType: ${targetType || 'all'}`);
       return { success: true, value: filteredCommands };
     } catch (error: any) {
       return {
@@ -147,7 +154,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         error: new ArtifactError(
           ArtifactErrorCode.OPERATION_FAILED,
           `Failed to find all commands: ${error.message}`,
-          { vaultId, context },
+          { vaultId, targetType },
           error
         ),
       };
@@ -176,7 +183,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         name: command.name,
         description: command.description,
         icon: command.icon,
-        contexts: command.contexts,
+        targetTypes: command.targetTypes,
         enabled: command.enabled,
         order: command.order,
         variables: command.variables,
@@ -265,38 +272,63 @@ export class AICommandRepositoryImpl implements AICommandRepository {
     try {
       // 使用ArtifactService扫描commands目录
       const vaultRef = { id: vaultId, name: vaultName };
+      this.logger.info(`[AICommandRepository] Loading commands from vault: ${vaultName}, directory: ${this.COMMANDS_DIR}`);
       const listResult = await this.artifactService.listDirectory(vaultRef, this.COMMANDS_DIR, { recursive: true });
       
       if (!listResult.success) {
-        this.logger.warn(`Failed to list directory for commands: ${listResult.error.message}`);
+        this.logger.warn(`[AICommandRepository] Failed to list directory for commands: ${listResult.error.message}`);
         return commands;
       }
 
-      // 扫描所有.md文件
+      this.logger.info(`[AICommandRepository] Found ${listResult.value.length} items in commands directory`);
+
+      // 扫描所有.yml和.md文件（兼容旧格式）
       for (const node of listResult.value) {
-        if (node.isFile && node.name.endsWith('.md')) {
-          // 解析Markdown文件
-          // node.path是相对于COMMANDS_DIR的路径，需要拼接完整路径
-          const commandPath = `${this.COMMANDS_DIR}/${node.path}`;
-          const fullPath = path.join(
+        if (node.isFile && (node.name.endsWith('.yml') || node.name.endsWith('.yaml') || node.name.endsWith('.md'))) {
+          // 解析命令文件
+          // node.path 是相对于 dirPath (COMMANDS_DIR) 的路径
+          // 例如：如果 COMMANDS_DIR 是 'ai-enhancements/commands'，node.path 可能是 'file-commands/summarize.yml'
+          // 所以 commandPath 应该是 'ai-enhancements/commands/file-commands/summarize.yml'
+          let commandPath: string;
+          if (node.path) {
+            // node.path 已经是相对于 COMMANDS_DIR 的路径，直接拼接
+            commandPath = node.path.startsWith(this.COMMANDS_DIR) 
+              ? node.path 
+              : `${this.COMMANDS_DIR}/${node.path}`;
+          } else {
+            // 如果 node.path 为空，说明文件直接在 COMMANDS_DIR 下
+            commandPath = `${this.COMMANDS_DIR}/${node.name}`;
+          }
+          
+          // 使用 node.fullPath 如果存在，否则拼接
+          const fullPath = node.fullPath || path.join(
             this.fileAdapter.getVaultPath(vaultName),
             commandPath
           );
+
+          this.logger.info(`[AICommandRepository] Processing command file: name=${node.name}, path=${node.path}, commandPath=${commandPath}, fullPath=${fullPath}, exists=${fs.existsSync(fullPath)}`);
 
           if (fs.existsSync(fullPath)) {
             try {
               const command = this.parseCommandFileSync(vaultId, vaultName, commandPath, fullPath);
               if (command) {
+                this.logger.info(`[AICommandRepository] Successfully loaded command: ${command.id} (${command.name}), targetTypes: ${command.targetTypes.join(',')}`);
                 commands.push(command);
+              } else {
+                this.logger.warn(`[AICommandRepository] Failed to parse command file: ${commandPath} (returned null)`);
               }
             } catch (error: any) {
-              this.logger.warn(`Failed to parse command file: ${commandPath}`, { error: error.message });
+              this.logger.warn(`[AICommandRepository] Failed to parse command file: ${commandPath}`, { error: error.message, stack: error.stack });
             }
+          } else {
+            this.logger.warn(`[AICommandRepository] Command file not found: ${fullPath}`);
           }
         }
       }
+
+      this.logger.info(`[AICommandRepository] Loaded ${commands.length} commands from vault: ${vaultName}`);
     } catch (error: any) {
-      this.logger.error(`Failed to load commands from vault: ${vaultName}`, { error: error.message });
+      this.logger.error(`[AICommandRepository] Failed to load commands from vault: ${vaultName}`, { error: error.message, stack: error.stack });
     }
 
     return commands;
@@ -348,7 +380,39 @@ export class AICommandRepositoryImpl implements AICommandRepository {
     content: string
   ): AICommand | null {
     try {
-      // 解析Front Matter
+      const isYamlFile = commandPath.endsWith('.yml') || commandPath.endsWith('.yaml');
+      
+      if (isYamlFile) {
+        // 纯 YAML 格式：直接解析整个文件
+        const commandData = yaml.load(content) as any;
+        if (!commandData || !commandData.name) {
+          this.logger.warn(`Command file missing required fields: ${commandPath}`);
+          return null;
+        }
+
+        // ID使用从vault根目录开始的相对路径（包含扩展名）
+        const commandId = commandPath;
+
+        const command: AICommand = {
+          id: commandId,
+          vaultId,
+          vaultName,
+          name: commandData.name,
+          description: commandData.description,
+          icon: commandData.icon,
+          targetTypes: commandData.targetTypes || ['all'],
+          enabled: commandData.enabled !== false, // 默认启用
+          order: commandData.order || 0,
+          template: commandData.commandContent || commandData.template || '', // 支持新字段commandContent和旧字段template
+          variables: commandData.variables || [],
+          filePath: commandPath,
+          createdAt: commandData.createdAt,
+          updatedAt: commandData.updatedAt,
+        };
+
+        return command;
+      } else {
+        // Markdown + Front Matter 格式（兼容旧格式）
       const frontMatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
       const match = content.match(frontMatterRegex);
 
@@ -361,14 +425,13 @@ export class AICommandRepositoryImpl implements AICommandRepository {
       const templateContent = match[2].trim();
 
       const frontMatter = yaml.load(frontMatterText) as any;
-      if (!frontMatter || !frontMatter.id || !frontMatter.name) {
+        if (!frontMatter || !frontMatter.name) {
         this.logger.warn(`Command file missing required fields: ${commandPath}`);
         return null;
       }
 
-      // 提取文件名作为ID（如果front matter中没有id）
-      const fileName = path.basename(commandPath, '.md');
-      const commandId = frontMatter.id || fileName;
+        // ID使用从vault根目录开始的相对路径（包含扩展名）
+        const commandId = commandPath;
 
       const command: AICommand = {
         id: commandId,
@@ -377,7 +440,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         name: frontMatter.name,
         description: frontMatter.description,
         icon: frontMatter.icon,
-        contexts: frontMatter.contexts || ['all'],
+          targetTypes: frontMatter.targetTypes || frontMatter.contexts || ['all'], // 兼容旧格式
         enabled: frontMatter.enabled !== false, // 默认启用
         order: frontMatter.order || 0,
         template: templateContent,
@@ -388,6 +451,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
       };
 
       return command;
+      }
     } catch (error: any) {
       this.logger.error(`Failed to parse command content: ${commandPath}`, { error: error.message });
       return null;
