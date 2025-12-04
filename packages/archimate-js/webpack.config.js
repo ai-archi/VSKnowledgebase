@@ -21,6 +21,10 @@ module.exports = {
     path: outputPath,
     filename: 'app.js',
   },
+  resolve: {
+    extensions: ['.js', '.json'],
+    modules: ['node_modules', path.resolve(__dirname, 'src')]
+  },
   module: {
     rules: [
       {

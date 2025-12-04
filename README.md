@@ -1,0 +1,328 @@
+# ArchiTool
+
+**ArchiTool** 是一个 VS Code 扩展，用于架构管理和知识库管理。它提供了完整的架构文档管理、设计图编辑、以及通过 MCP (Model Context Protocol) 为 AI 助手提供知识库访问能力。
+
+## 📋 目录
+
+- [功能特性](#功能特性)
+- [快速开始](#快速开始)
+- [MCP 配置](#mcp-配置)
+- [项目结构](#项目结构)
+- [开发指南](#开发指南)
+- [相关文档](#相关文档)
+
+## ✨ 功能特性
+
+### 核心功能
+
+1. **知识库管理**
+   - 支持多个 Vault（知识库）
+   - 支持本地 Vault 和 Git Vault
+   - 文档、设计图、开发文档的统一管理
+
+2. **设计图编辑**
+   - **Mermaid 图表**：支持流程图、序列图、类图等
+   - **PlantUML 图表**：支持 UML 各种图表类型
+   - 可视化编辑和预览
+
+3. **文档管理**
+   - Markdown 文档支持
+   - 文档分类和标签
+   - 文档关联（文档间链接、代码关联）
+
+4. **视点视图**
+   - 多维度查看架构文档
+   - 按类型、分类、标签组织
+   - 代码与文档的关联视图
+
+5. **MCP 集成** ⭐
+   - 通过 MCP 协议为 AI 助手提供知识库访问
+   - 支持全文搜索、代码关联查询
+   - 与 Claude Desktop、Cursor 等 AI 工具集成
+
+### VS Code 视图
+
+扩展在 VS Code 侧边栏提供以下视图：
+
+- **Documents**：文档和设计图管理
+- **Tasks**：任务管理
+- **Viewpoints**：视点视图（多维度查看）
+- **Assistants**：模板和 AI 增强功能
+
+## 🚀 快速开始
+
+### 安装
+
+1. 在 VS Code 中打开扩展市场
+2. 搜索 "ArchiTool" 并安装
+3. 扩展会在工作区根目录创建 `.architool` 目录
+
+### 基本使用
+
+1. **创建 Vault**
+   - 点击侧边栏 "Documents" 视图的 "+" 按钮
+   - 选择 "Add Local Vault" 创建本地知识库
+   - 或选择 "Add Vault from Git" 从 Git 仓库导入
+
+2. **添加文档**
+   - 在 Vault 上右键，选择 "Add File" 创建文档
+   - 或选择 "Add Diagram" 创建设计图（Mermaid/PlantUML）
+
+3. **编辑设计图**
+   - 双击 `.mmd` 文件打开 Mermaid 编辑器
+   - 双击 `.puml` 文件打开 PlantUML 编辑器
+
+4. **关联代码**
+   - 在文档元数据中配置 `relatedCodePaths`
+   - 支持通配符匹配（如 `src/auth/*`）
+
+## 🔧 MCP 配置
+
+### 什么是 MCP？
+
+MCP (Model Context Protocol) 是一个标准协议，允许 AI 助手访问外部数据源和工具。ArchiTool 通过 MCP 为 AI 助手提供知识库访问能力。
+
+### 当前实现状态
+
+**当前架构**：进程内实现
+- MCP Server 作为 VS Code 扩展的一部分运行
+- 通过接口直接调用，无需外部配置
+- **无需多进程**：MCP 和扩展在同一进程中运行，简单高效
+- 适合当前阶段的功能验证和开发
+- 与 Cursor 等内置 AI 助手集成更方便
+
+**未来架构**：标准 MCP 协议（可选，计划中）
+- 如果需要与外部 MCP Client（如 Claude Desktop）集成
+- 可考虑混合架构：扩展启动 stdio MCP Server 子进程
+- 子进程通过 IPC 调用主进程的 MCP 接口
+- **注意**：会增加进程管理复杂度，仅在明确需要外部集成时考虑
+
+### MCP 提供的功能
+
+ArchiTool 通过 MCP 提供以下 3 个核心功能：
+
+#### 1. `search_knowledge_base` ⭐⭐⭐⭐⭐
+
+全文搜索知识库条目，覆盖 90% 的使用场景。
+
+**使用示例**：
+- 基本搜索：`search({ query: "用户登录", limit: 10 })`
+- 按标签过滤：`search({ query: "", tags: ["requirement"] })`
+- 指定 vault：`search({ query: "架构", vaultName: "demo-vault" })`
+
+**返回**：完整的 Artifact 数组，包含基本信息、完整内容（`body` 字段）和元数据。
+
+#### 2. `get_documents_for_code` ⭐⭐⭐⭐⭐
+
+根据代码路径查找关联的文档/设计图，覆盖 8% 的使用场景。
+
+**使用示例**：
+- 查看文件关联文档：`getDocumentsForCode({ codePath: "src/auth/login.ts" })`
+- 查看目录关联文档：`getDocumentsForCode({ codePath: "src/auth" })`
+
+**说明**：支持通配符匹配（如 `src/auth/*` 匹配 `src/auth/login.ts`），自动返回所有匹配的文档和设计图。
+
+#### 3. `list_entries` ⭐⭐
+
+列出知识库条目（按类型和分类过滤），使用频率较低（约 2%）。
+
+**使用示例**：
+- 列出所有设计图：`listEntries({ viewType: "design", limit: 20 })`
+- 获取 vault 列表：`listEntries({ limit: 1 })`
+
+### 内容返回策略
+
+- **默认行为**：返回完整内容（`body` 字段），AI 可直接使用
+- **大文件处理**：超过 1MB 的文件不加载内容，但提供 `contentSize` 字段
+- **可选控制**：通过 `includeContent: false` 只返回元数据
+
+### 使用配置
+
+**自动启动**：MCP Server 在扩展激活时自动启动，无需手动配置。
+
+**在扩展代码中使用**：
+
+通过依赖注入获取 `MCPTools` 实例：
+```typescript
+const mcpTools = container.get<MCPTools>(TYPES.MCPTools);
+const results = await mcpTools.search({ query: "用户登录" });
+```
+
+**验证运行状态**：检查扩展日志中的 `MCP Server initialized successfully` 消息。
+
+详细配置说明请参考 [MCP 功能方案文档](./MCP_FEATURES_PLAN.md#五mcp-配置和使用指南)。
+
+### 未来配置方式（计划中）
+
+当实现标准 MCP 协议后，可在 Claude Desktop 或 Cursor 的 MCP 配置中添加 ArchiTool 服务器配置。
+
+**⚠️ 重要提示**：
+- **这些配置方式会导致多进程**：外部 MCP Client 会启动独立的 MCP Server 进程
+- 如果 VS Code 扩展也在运行，会有多个进程（扩展进程 + MCP Server 进程）
+- 多个进程之间无法共享扩展的上下文和状态
+- 建议优先使用进程内实现（当前方式）
+
+**注意**：当前版本尚未实现标准 MCP 协议，上述配置方式为未来计划。详细说明请参考 [MCP 功能方案文档](./MCP_FEATURES_PLAN.md#52-未来配置方式可选计划中)。
+
+### MCP 设计原则
+
+- ✅ **只读操作**：MCP 只提供查询和搜索功能，不提供写操作
+- ✅ **批量优先**：优先支持批量查询，单个查询通过 `search` 实现
+- ✅ **聚焦核心**：只保留 AI 真正需要的功能
+- ✅ **内容优先**：默认返回完整内容，AI 可直接使用
+
+## 📁 项目结构
+
+```
+VSKnowledgebase/
+├── apps/
+│   ├── extension/          # VS Code 扩展主程序
+│   │   ├── src/
+│   │   │   ├── modules/
+│   │   │   │   ├── mcp/    # MCP 相关实现
+│   │   │   │   │   ├── MCPTools.ts        # MCP 工具接口和实现
+│   │   │   │   │   ├── MCPResources.ts    # MCP 资源接口和实现
+│   │   │   │   │   └── MCPServerStarter.ts # MCP Server 启动器
+│   │   │   │   ├── editor/ # 编辑器实现
+│   │   │   │   ├── shared/ # 共享业务逻辑
+│   │   │   │   └── ...
+│   │   │   └── main.ts     # 扩展入口
+│   │   └── package.json
+│   └── webview/            # Webview 前端
+├── packages/
+│   ├── archimate-js/       # ArchiMate 编辑器（基于 archimate-diagram-engine）
+│   ├── mermaid-editor/     # Mermaid 编辑器
+│   └── plantuml-js/        # PlantUML 编辑器
+├── demo-vault/             # 示例知识库
+│   ├── artifacts/          # 文档和设计图
+│   ├── metadata/           # 元数据
+│   └── templates/          # 模板
+├── MCP_FEATURES_PLAN.md    # MCP 功能方案文档
+└── README.md               # 本文档
+```
+
+### 关键目录说明
+
+- **`.architool/`**：工作区根目录下的配置和数据目录
+  - 每个 Vault 一个子目录
+  - 包含 artifacts、metadata、templates 等
+
+- **`apps/extension/src/modules/mcp/`**：MCP 实现
+  - `MCPTools.ts`：核心工具接口（3 个方法）
+  - `MCPResources.ts`：资源访问接口（可选）
+  - `MCPServerStarter.ts`：服务器启动器
+
+## 🛠️ 开发指南
+
+### 环境要求
+
+- Node.js >= 18.0.0
+- VS Code >= 1.80.0
+- pnpm（推荐）或 npm
+
+### 安装依赖
+
+```bash
+pnpm install
+cd apps/extension && pnpm run rebuild:electron  # 如果需要 Electron 环境
+```
+
+### 构建项目
+
+```bash
+pnpm run build              # 构建所有模块
+pnpm run build:extension    # 只构建扩展
+pnpm run build:webview      # 只构建 webview
+```
+
+### 开发模式
+
+```bash
+pnpm run watch  # 监听模式（自动编译）
+# 在 VS Code 中按 F5 启动调试
+```
+
+### 运行测试和代码规范
+
+```bash
+pnpm test              # 运行所有测试
+pnpm run format        # 格式化代码
+pnpm run lint          # 代码检查
+pnpm run typecheck     # 类型检查
+```
+
+## 📚 相关文档
+
+- [MCP 功能方案文档](./MCP_FEATURES_PLAN.md) - 详细的 MCP 功能设计和实施计划
+- [Mermaid 编辑器集成方案](./MERMAID_EDITOR_INTEGRATION_PLAN.md) - Mermaid 编辑器集成文档
+
+## 🔍 MCP 功能详细说明
+
+### 支持的功能
+
+| 功能 | 使用场景 | 状态 |
+|------|---------|------|
+| `search_knowledge_base` | 全文搜索（90%） | ✅ 已实现 |
+| `get_documents_for_code` | 代码关联查询（8%） | ✅ 已实现 |
+| `list_entries` | 列表浏览（2%） | ✅ 已实现 |
+
+### 不支持的功能
+
+以下功能已明确移除，不在 MCP 接口中提供：
+
+- `getEntry` - 单个查询（`search` 已覆盖）
+- `createEntry` - 写操作（AI 不需要）
+- `updateEntry` - 写操作（AI 不需要）
+- `deleteEntry` - 写操作（AI 不需要）
+- `listLinks` - 使用频率低
+- `createLink` - 写操作（AI 不需要）
+
+详细说明请参考 [MCP 功能方案文档](./MCP_FEATURES_PLAN.md)。
+
+## 🎯 使用场景示例
+
+### 场景 1：AI 助手搜索文档
+
+AI 助手搜索"登录"相关的文档，返回结果包含完整内容，可直接使用。
+
+### 场景 2：查看代码关联的文档
+
+用户打开 `src/auth/login.ts` 时，AI 自动获取相关文档和设计图，帮助理解代码的业务背景。
+
+### 场景 3：浏览特定类型的文档
+
+列出所有设计图或特定分类的文档，用于浏览和筛选。
+
+## 🔮 未来计划
+
+### 标准 MCP 协议支持
+
+- [ ] 实现 stdio 传输层
+- [ ] 支持与 Claude Desktop 集成
+- [ ] 支持与 Cursor 等 AI 工具集成
+- [ ] 自动工具注册和 schema 生成
+
+### 功能增强
+
+- [ ] 搜索结果的排序和相关性评分
+- [ ] 批量查询支持
+- [ ] 缓存机制优化
+
+## 📝 许可证
+
+[待添加]
+
+## 👥 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📧 联系方式
+
+[待添加]
+
+---
+
+**文档版本**：v1.0  
+**最后更新**：2024-12-19  
+**维护者**：ArchiTool Team
+

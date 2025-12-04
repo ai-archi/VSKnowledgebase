@@ -26,6 +26,7 @@ export interface Artifact {
   description?: string;
   body?: string; // 内容体，可选（大文件不加载到内存）
   contentHash?: string; // 内容哈希，用于变更检测
+  contentSize?: number; // 内容大小（字节），当内容未加载时提供
   
   // 元数据引用
   metadataId?: string; // 关联的元数据 ID

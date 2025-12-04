@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "bootstrap": "^5.2.0-beta1",
-    "archimate-js": "file:../../vendors/archimate-js"
+    "@arktect-co/archimate-diagram-engine": "^1.0.1",
+    "jointjs": "^3.4.2"
   }
 }

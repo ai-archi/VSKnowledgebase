@@ -76,9 +76,6 @@ importers:
 
   apps/extension:
     dependencies:
-      archimate-js:
-        specifier: 0.0.4
-        version: 0.0.4
       better-sqlite3:
         specifier: ^12.0.0
         version: 12.4.6
@@ -172,8 +169,8 @@ importers:
   packages/archimate-js:
     dependencies:
       archimate-js:
-        specifier: file:../../vendors/archimate-js
-        version: file:vendors/archimate-js
+        specifier: ^0.0.4
+        version: 0.0.4
       bootstrap:
         specifier: ^5.2.0-beta1
         version: 5.3.8(@popperjs/core@2.11.8)
@@ -193,43 +190,6 @@ importers:
       eslint-plugin-bpmn-io:
         specifier: ^0.12.0
         version: 0.12.0(eslint@7.32.0)
-      file-loader:
-        specifier: ^6.2.0
-        version: 6.2.0(webpack@5.103.0)
-      npm-run-all:
-        specifier: ^4.1.5
-        version: 4.1.5
-      raw-loader:
-        specifier: ^4.0.2
-        version: 4.0.2(webpack@5.103.0)
-      serve:
-        specifier: ^11.3.2
-        version: 11.3.2
-      style-loader:
-        specifier: ^2.0.0
-        version: 2.0.0(webpack@5.103.0)
-      webpack:
-        specifier: ^5.37.0
-        version: 5.103.0(webpack-cli@4.10.0)
-      webpack-cli:
-        specifier: ^4.7.0
-        version: 4.10.0(webpack@5.103.0)
-
-  packages/archimate-js-v2:
-    dependencies:
-      '@vsknowledgebase/archimate-js':
-        specifier: file:../../vendors/archimate.js
-        version: file:vendors/archimate.js
-    devDependencies:
-      copy-webpack-plugin:
-        specifier: ^8.1.1
-        version: 8.1.1(webpack@5.103.0)
-      css-loader:
-        specifier: ^5.2.4
-        version: 5.2.7(webpack@5.103.0)
-      eslint:
-        specifier: ^7.26.0
-        version: 7.32.0
       file-loader:
         specifier: ^6.2.0
         version: 6.2.0(webpack@5.103.0)
@@ -499,10 +459,6 @@ packages:
     engines: {node: '>=6.9.0'}
     peerDependencies:
       '@babel/core': ^7.0.0-0
-
-  '@babel/runtime@7.28.4':
-    resolution: {integrity: sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==}
-    engines: {node: '>=6.9.0'}
 
   '@babel/template@7.27.2':
     resolution: {integrity: sha512-LPDZ85aEJyYSd18/DkjNh4/y1ntkE5KwUHWTiqgRxruuZL2F1yuHligVHLvcHY2vMHXttKFpJn6LwfI7cw7ODw==}
@@ -1309,9 +1265,6 @@ packages:
   '@volar/typescript@1.11.1':
     resolution: {integrity: sha512-iU+t2mas/4lYierSnoFOeRFQUhAEMgsFuQxoxvwn5EdQopw43j+J27a4lt9LMInx1gLJBC6qL14WYGlgymaSMQ==}
 
-  '@vsknowledgebase/archimate-js@file:vendors/archimate.js':
-    resolution: {directory: vendors/archimate.js, type: directory}
-
   '@vue/compiler-core@3.5.24':
     resolution: {integrity: sha512-eDl5H57AOpNakGNAkFDH+y7kTqrQpJkZFXhWZQGyx/5Wh7B1uQYvcWkvZi11BDhscPgj8N7XV3oRwiPnx1Vrig==}
 
@@ -1552,14 +1505,8 @@ packages:
   archimate-font@0.0.2:
     resolution: {integrity: sha512-AKm4TRk6lX3JIQddhkzCL7FKIT2rfSaxNSGuXM9CriTP3rbF2yaAfOomn/kcuFNGna/P2P4X6vNqzFpjz5JubA==}
 
-  archimate-font@file:vendors/archimate-js/archimate-font:
-    resolution: {directory: vendors/archimate-js/archimate-font, type: directory}
-
   archimate-js@0.0.4:
     resolution: {integrity: sha512-PzYAt4Hh+DD43+zrBTTmTaGMva+XYxQRbZWWQlzQMs8VOcu7Skd10JazOjQap/ckcJyW/dQoHHf2u7x4WKhdAA==}
-
-  archimate-js@file:vendors/archimate-js:
-    resolution: {directory: vendors/archimate-js, type: directory}
 
   arg@2.0.0:
     resolution: {integrity: sha512-XxNTUzKnz1ctK3ZIcI2XUPlD96wbHP2nGqkPKpvk/HNRlPveYrXIVSTk9m3LcqOgDPg3B1nMvdV/K8wZd7PG4w==}
@@ -1926,9 +1873,6 @@ packages:
   compare-versions@3.6.0:
     resolution: {integrity: sha512-W6Af2Iw1z4CB7q4uU4hv646dW9GQuBM+YpC0UvUCWSD8w90SJjp+ujJuXaEMtAXBtSqGfMPuFOVn4/+FlaqfBA==}
 
-  complex.js@2.4.3:
-    resolution: {integrity: sha512-UrQVSUur14tNX6tiP4y8T4w4FeJAX3bi2cIv0pu/DTLFNxoq7z2Yh83Vfzztj6Px3X/lubqQ9IrPp7Bpn6p4MQ==}
-
   component-event@0.1.4:
     resolution: {integrity: sha512-GMwOG8MnUHP1l8DZx1ztFO0SJTFnIzZnBDkXAj8RM2ntV2A6ALlDxgbMY1Fvxlg6WPQ+5IM/a6vg4PEYbjg/Rw==}
 
@@ -2231,9 +2175,6 @@ packages:
       supports-color:
         optional: true
 
-  decimal.js@10.6.0:
-    resolution: {integrity: sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==}
-
   decompress-response@6.0.0:
     resolution: {integrity: sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ==}
     engines: {node: '>=10'}
@@ -2458,9 +2399,6 @@ packages:
   escalade@3.2.0:
     resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
     engines: {node: '>=6'}
-
-  escape-latex@1.2.0:
-    resolution: {integrity: sha512-nV5aVWW1K0wEiUIEdZ4erkGGH8mDxGyxSeqPzRNtWP7ataw+/olFObw7hujFWlVjNsaDFw5VZ5NzVSIqRgfTiw==}
 
   escape-string-regexp@1.0.5:
     resolution: {integrity: sha512-vbRorB5FUQWvla16U8R/qgaFIya2qGzwDrNmCZuYKrbdSUMG6I1ZCGQRefkRVhuOkIGVne7BQ35DSfo1qvJqFg==}
@@ -2748,9 +2686,6 @@ packages:
   foreground-child@3.3.1:
     resolution: {integrity: sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==}
     engines: {node: '>=14'}
-
-  fraction.js@4.3.7:
-    resolution: {integrity: sha512-ZsDfxO51wGAXREY55a7la9LScWpwv9RxIrYABrlvOFBlH/ShPnrtsXeuUIfXKKOVicNxQ+o8JTbJvjS4M89yew==}
 
   fs-constants@1.0.0:
     resolution: {integrity: sha512-y6OAwoSIf7FyjMIv94u+b5rdheZEjzR63GTyZJm5qh4Bi+2YgwLCcI/fPFZkL5PSixOt6ZNKm+w+Hfp/Bciwow==}
@@ -3239,9 +3174,6 @@ packages:
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
 
-  javascript-natural-sort@0.7.1:
-    resolution: {integrity: sha512-nO6jcEfZWQXDhOiBtG2KvKyEptz7RVbpGP4vTD2hLBdmNQSsCiicO2Ioinv6UI4y9ukqnBpy+XZ9H6uLNgJTlw==}
-
   jest-changed-files@29.7.0:
     resolution: {integrity: sha512-fEArFiwf1BpQ+4bXSprcDc3/x4HSzL4al2tozwVpDFpsxALjLYdyiIK4e5Vz66GQJIbXJ82+35PtysofptNX2w==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
@@ -3698,11 +3630,6 @@ packages:
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
-
-  mathjs@13.2.3:
-    resolution: {integrity: sha512-I67Op0JU7gGykFK64bJexkSAmX498x0oybxfVXn1rroEMZTmfxppORhnk8mEUnPrbTfabDKCqvm18vJKMk2UJQ==}
-    engines: {node: '>= 18'}
-    hasBin: true
 
   mdurl@1.0.1:
     resolution: {integrity: sha512-/sKlQJCBYVY9Ers9hqzKou4H6V5UWc/M59TH2dvkt+84itfnq7uFOMLpOiOS4ujvHP4etln18fmIxA5R5fll0g==}
@@ -4529,9 +4456,6 @@ packages:
     resolution: {integrity: sha512-eflK8wEtyOE6+hsaRVPxvUKYCpRgzLqDTb8krvAsRIwOGlHoSgYLgBXoubGgLd2fT41/OUYdb48v4k4WWHQurA==}
     engines: {node: '>= 10.13.0'}
 
-  seedrandom@3.0.5:
-    resolution: {integrity: sha512-8OwmbklUNzwezjGInmZ+2clQmExQPvomqjL7LFqOYqtmuxRgQYqOD3mHaU+MvZn5FLUeVxVfQjwLZW/n/JFuqg==}
-
   semver-compare@1.0.0:
     resolution: {integrity: sha512-YM3/ITh2MJ5MtzaM429anh+x2jiLVjqILF4m4oyQB18W7Ggea7BfqdH/wGMK7dDiMghv/6WG7znWMwUDzJiXow==}
 
@@ -4886,9 +4810,6 @@ packages:
     resolution: {integrity: sha512-Cc+OraorugtXNfs50hU9KS369rFXCfgGLpfCfvlc+Ud5u6VWmUQsOAa9HbTvheQdYnrdJqqv1e5oIqXppMYnSw==}
     engines: {node: '>=8'}
 
-  tiny-emitter@2.1.0:
-    resolution: {integrity: sha512-NB6Dk1A9xgQPMoGqC5CVXn123gWyte215ONT5Pp5a0yt4nlEoO1ZWeCwpncaekPHXO60i47ihFnZPiRPjRMq4Q==}
-
   tiny-svg@2.2.4:
     resolution: {integrity: sha512-NOi39lBknf4UdDEahNkbEAJnzhu1ZcN2j75IS2vLRmIhsfxdZpTChfLKBcN1ShplVmPIXJAIafk6YY5/Aa80lQ==}
 
@@ -5002,10 +4923,6 @@ packages:
   typed-array-length@1.0.7:
     resolution: {integrity: sha512-3KS2b+kL7fsuk/eJZ7EQdnEmQoaho/r6KUef7hxvltNA5DR8NAUM+8wJMbJyZ4G9/7i3v5zPBIMN5aybAh2/Jg==}
     engines: {node: '>= 0.4'}
-
-  typed-function@4.2.2:
-    resolution: {integrity: sha512-VwaXim9Gp1bngi/q3do8hgttYn2uC3MoT/gfuMWylnj1IeZBUAyPddHZlo1K05BDoj8DYPpMdiHqH1dDYdJf2A==}
-    engines: {node: '>= 18'}
 
   typed-rest-client@1.8.11:
     resolution: {integrity: sha512-5UvfMpd1oelmUPRbbaVnq+rHP7ng2cE4qoQkQeAqxRL6PklkxsM0g32/HL0yfvruK6ojQ5x8EE+HF4YV6DtuCA==}
@@ -5537,8 +5454,6 @@ snapshots:
     dependencies:
       '@babel/core': 7.28.5
       '@babel/helper-plugin-utils': 7.27.1
-
-  '@babel/runtime@7.28.4': {}
 
   '@babel/template@7.27.2':
     dependencies:
@@ -6452,23 +6367,6 @@ snapshots:
       '@volar/language-core': 1.11.1
       path-browserify: 1.0.1
 
-  '@vsknowledgebase/archimate-js@file:vendors/archimate.js':
-    dependencies:
-      css.escape: 1.5.1
-      diagram-js: 12.8.1
-      diagram-js-direct-editing: 2.1.2(diagram-js@12.8.1)
-      hex-and-rgba: 2.0.0
-      ids: 1.0.5
-      inherits: 2.0.4
-      inherits-browser: 0.1.0
-      mathjs: 13.2.3
-      min-dash: 3.8.1
-      min-dom: 3.2.1
-      moddle: 5.0.4
-      moddle-xml: 9.0.6
-      object-refs: 0.3.0
-      tiny-svg: 2.2.4
-
   '@vue/compiler-core@3.5.24':
     dependencies:
       '@babel/parser': 7.28.5
@@ -6756,8 +6654,6 @@ snapshots:
 
   archimate-font@0.0.2: {}
 
-  archimate-font@file:vendors/archimate-js/archimate-font: {}
-
   archimate-js@0.0.4:
     dependencies:
       archimate-font: 0.0.2
@@ -6769,25 +6665,6 @@ snapshots:
       ids: 1.0.5
       inherits: 2.0.4
       inherits-browser: 0.1.0
-      min-dash: 3.8.1
-      min-dom: 3.2.1
-      moddle: 5.0.4
-      moddle-xml: 9.0.6
-      object-refs: 0.3.0
-      tiny-svg: 2.2.4
-
-  archimate-js@file:vendors/archimate-js:
-    dependencies:
-      archimate-font: file:vendors/archimate-js/archimate-font
-      bpmn-font: 0.10.0
-      css.escape: 1.5.1
-      diagram-js: 12.8.1
-      diagram-js-direct-editing: 2.1.2(diagram-js@12.8.1)
-      hex-and-rgba: 2.0.0
-      ids: 1.0.5
-      inherits: 2.0.4
-      inherits-browser: 0.1.0
-      mathjs: 13.2.3
       min-dash: 3.8.1
       min-dom: 3.2.1
       moddle: 5.0.4
@@ -7237,8 +7114,6 @@ snapshots:
 
   compare-versions@3.6.0: {}
 
-  complex.js@2.4.3: {}
-
   component-event@0.1.4: {}
 
   component-event@0.2.1: {}
@@ -7589,8 +7464,6 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
-  decimal.js@10.6.0: {}
-
   decompress-response@6.0.0:
     dependencies:
       mimic-response: 3.1.0
@@ -7914,8 +7787,6 @@ snapshots:
       '@esbuild/win32-x64': 0.21.5
 
   escalade@3.2.0: {}
-
-  escape-latex@1.2.0: {}
 
   escape-string-regexp@1.0.5: {}
 
@@ -8258,8 +8129,6 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
       signal-exit: 4.1.0
-
-  fraction.js@4.3.7: {}
 
   fs-constants@1.0.0: {}
 
@@ -8760,8 +8629,6 @@ snapshots:
       '@isaacs/cliui': 8.0.2
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
-
-  javascript-natural-sort@0.7.1: {}
 
   jest-changed-files@29.7.0:
     dependencies:
@@ -9383,18 +9250,6 @@ snapshots:
   matches-selector@1.2.0: {}
 
   math-intrinsics@1.1.0: {}
-
-  mathjs@13.2.3:
-    dependencies:
-      '@babel/runtime': 7.28.4
-      complex.js: 2.4.3
-      decimal.js: 10.6.0
-      escape-latex: 1.2.0
-      fraction.js: 4.3.7
-      javascript-natural-sort: 0.7.1
-      seedrandom: 3.0.5
-      tiny-emitter: 2.1.0
-      typed-function: 4.2.2
 
   mdurl@1.0.1: {}
 
@@ -10251,8 +10106,6 @@ snapshots:
       ajv-formats: 2.1.1(ajv@8.17.1)
       ajv-keywords: 5.1.0(ajv@8.17.1)
 
-  seedrandom@3.0.5: {}
-
   semver-compare@1.0.0: {}
 
   semver-regex@3.1.4: {}
@@ -10671,8 +10524,6 @@ snapshots:
 
   tildify@2.0.0: {}
 
-  tiny-emitter@2.1.0: {}
-
   tiny-svg@2.2.4: {}
 
   tiny-svg@3.1.3: {}
@@ -10780,8 +10631,6 @@ snapshots:
       is-typed-array: 1.1.15
       possible-typed-array-names: 1.1.0
       reflect.getprototypeof: 1.0.10
-
-  typed-function@4.2.2: {}
 
   typed-rest-client@1.8.11:
     dependencies:

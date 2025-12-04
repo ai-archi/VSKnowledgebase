@@ -2,19 +2,28 @@ import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types';
 import { ArtifactApplicationService } from '../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../shared/application/VaultApplicationService';
-import { ArtifactLinkRepository } from '../shared/infrastructure/ArtifactLinkRepository';
 import { SqliteRuntimeIndex } from '../shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { Artifact } from '../shared/domain/entity/artifact';
-import { ArtifactLink } from '../shared/domain/entity/ArtifactLink';
 import { Logger } from '../../core/logger/Logger';
+import * as fs from 'fs';
 
 /**
  * MCP 工具接口
- * 实现标准知识库 map API
+ * 提供只读的知识库查询和搜索功能
+ * 
+ * 设计原则：
+ * - 只读操作：不提供写操作（创建、更新、删除）
+ * - 批量优先：优先支持批量查询，单个查询通过 search 实现
+ * - 聚焦核心：只保留 AI 真正需要的功能
  */
 export interface MCPTools {
   /**
    * 列出知识库条目
+   * @param params 查询参数
+   * @param params.vaultName 可选，指定 vault。如果不提供，返回所有 vault 的条目
+   * @param params.viewType 可选，类型过滤（document/design/development/test）
+   * @param params.category 可选，分类过滤
+   * @param params.limit 可选，结果数量限制（默认 20）
    */
   listEntries(params: {
     vaultName?: string;
@@ -24,74 +33,47 @@ export interface MCPTools {
   }): Promise<Artifact[]>;
 
   /**
-   * 获取知识库条目
-   */
-  getEntry(params: {
-    artifactId: string;
-  }): Promise<Artifact | null>;
-
-  /**
    * 搜索知识库
+   * @param params 搜索参数
+   * @param params.query 搜索关键词（必需）
+   * @param params.vaultName 可选，指定 vault。如果不提供，搜索所有 vault
+   * @param params.tags 可选，标签过滤（AND 关系，必须包含所有指定标签）
+   * @param params.limit 可选，结果数量限制（默认 50）
+   * @param params.includeContent 可选，是否返回完整内容（默认 true）
+   * @param params.maxContentSize 可选，最大内容大小（字节），超过则不返回内容（默认 1MB）
    */
   search(params: {
     query: string;
     vaultName?: string;
     tags?: string[];
     limit?: number;
+    includeContent?: boolean;
+    maxContentSize?: number;
   }): Promise<Artifact[]>;
 
   /**
-   * 创建知识库条目
+   * 根据代码路径获取关联的文档/设计图
+   * @param params 查询参数
+   * @param params.codePath 代码文件路径（相对于工作区根目录，必需）
+   * @param params.includeContent 可选，是否返回完整内容（默认 true）
+   * @param params.maxContentSize 可选，最大内容大小（字节），超过则不返回内容（默认 1MB）
    */
-  createEntry(params: {
-    vaultName: string;
-    viewType: string;
-    category?: string;
-    title: string;
-    content?: string;
-    tags?: string[];
-  }): Promise<Artifact>;
-
-  /**
-   * 更新知识库条目
-   */
-  updateEntry(params: {
-    artifactId: string;
-    title?: string;
-    content?: string;
-    tags?: string[];
-  }): Promise<Artifact>;
-
-  /**
-   * 删除知识库条目
-   */
-  deleteEntry(params: {
-    artifactId: string;
-  }): Promise<void>;
-
-  /**
-   * 列出条目链接
-   */
-  listLinks(params: {
-    artifactId: string;
-  }): Promise<ArtifactLink[]>;
-
-  /**
-   * 创建条目链接
-   */
-  createLink(params: {
-    sourceArtifactId: string;
-    targetType: string;
-    targetId?: string;
-    targetPath?: string;
-    targetUrl?: string;
-    linkType: string;
-    description?: string;
-    strength?: string;
-    codeLocation?: any;
-  }): Promise<ArtifactLink>;
+  getDocumentsForCode(params: {
+    codePath: string;
+    includeContent?: boolean;
+    maxContentSize?: number;
+  }): Promise<Artifact[]>;
 }
 
+/**
+ * MCP Tools 实现
+ * 提供只读的知识库查询和搜索功能
+ * 
+ * 已移除的写操作方法：
+ * - createEntry, updateEntry, deleteEntry (写操作，AI 不需要)
+ * - getEntry (单个查询，search 已覆盖)
+ * - listLinks, createLink (使用频率低，非核心功能)
+ */
 @injectable()
 export class MCPToolsImpl implements MCPTools {
   constructor(
@@ -99,8 +81,6 @@ export class MCPToolsImpl implements MCPTools {
     private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
-    @inject(TYPES.ArtifactLinkRepository)
-    private linkRepository: ArtifactLinkRepository,
     @inject(TYPES.SqliteRuntimeIndex)
     private sqliteIndex: SqliteRuntimeIndex,
     @inject(TYPES.Logger)
@@ -128,7 +108,7 @@ export class MCPToolsImpl implements MCPTools {
       const result = await this.artifactService.listArtifacts(
         vaultId,
         {
-          limit: params.limit || 100,
+          limit: params.limit || 20,
         }
       );
 
@@ -144,33 +124,13 @@ export class MCPToolsImpl implements MCPTools {
     }
   }
 
-  async getEntry(params: { artifactId: string }): Promise<Artifact | null> {
-    try {
-      // Get all vaults and search for artifact
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        return null;
-      }
-
-      for (const vault of vaultsResult.value) {
-        const result = await this.artifactService.getArtifact(vault.id, params.artifactId);
-        if (result.success) {
-          return result.value;
-        }
-      }
-
-      return null;
-    } catch (error: any) {
-      this.logger.error('Error getting entry', error);
-      return null;
-    }
-  }
-
   async search(params: {
     query: string;
     vaultName?: string;
     tags?: string[];
     limit?: number;
+    includeContent?: boolean;
+    maxContentSize?: number;
   }): Promise<Artifact[]> {
     try {
       let vaultId: string | undefined;
@@ -213,12 +173,32 @@ export class MCPToolsImpl implements MCPTools {
             return titleMatch || descMatch;
           });
 
-          // Filter by tags if provided
+          // Filter by tags if provided (AND 关系，必须包含所有指定标签)
           if (params.tags && params.tags.length > 0) {
             artifacts = artifacts.filter(a => {
               const artifactTags = a.tags || [];
-              return params.tags!.some(tag => artifactTags.includes(tag));
+              return params.tags!.every(tag => artifactTags.includes(tag));
             });
+          }
+
+          // 加载内容（如果需要）
+          const includeContent = params.includeContent !== false; // 默认 true
+          const maxSize = params.maxContentSize || 1024 * 1024; // 默认 1MB
+
+          for (const artifact of artifacts) {
+            if (includeContent && artifact.contentLocation) {
+              try {
+                const stats = fs.statSync(artifact.contentLocation);
+                if (stats.size <= maxSize) {
+                  const content = fs.readFileSync(artifact.contentLocation, 'utf-8');
+                  artifact.body = content;
+                } else {
+                  artifact.contentSize = stats.size;
+                }
+              } catch (error) {
+                this.logger.warn('Failed to load content', { artifactId: artifact.id, error });
+              }
+            }
           }
 
           return artifacts;
@@ -247,10 +227,10 @@ export class MCPToolsImpl implements MCPTools {
             if (artifactResult.success && artifactResult.value) {
               const artifact = artifactResult.value;
 
-              // Filter by tags if provided
+              // Filter by tags if provided (AND 关系，必须包含所有指定标签)
               if (params.tags && params.tags.length > 0) {
                 const artifactTags = artifact.tags || [];
-                if (!params.tags.some(tag => artifactTags.includes(tag))) {
+                if (!params.tags.every(tag => artifactTags.includes(tag))) {
                   continue;
                 }
               }
@@ -267,6 +247,28 @@ export class MCPToolsImpl implements MCPTools {
         }
       }
 
+      // 加载内容（如果需要）
+      const includeContent = params.includeContent !== false; // 默认 true
+      const maxSize = params.maxContentSize || 1024 * 1024; // 默认 1MB
+
+      for (const artifact of artifacts) {
+        if (includeContent && artifact.contentLocation) {
+          try {
+            const stats = fs.statSync(artifact.contentLocation);
+            if (stats.size <= maxSize) {
+              const content = fs.readFileSync(artifact.contentLocation, 'utf-8');
+              artifact.body = content;
+            } else {
+              artifact.contentSize = stats.size;
+              // body 字段不设置，表示内容未加载
+            }
+          } catch (error) {
+            this.logger.warn('Failed to load content', { artifactId: artifact.id, error });
+            // 继续处理其他结果
+          }
+        }
+      }
+
       return artifacts;
     } catch (error: any) {
       this.logger.error('Error searching entries', error);
@@ -274,254 +276,48 @@ export class MCPToolsImpl implements MCPTools {
     }
   }
 
-  async createEntry(params: {
-    vaultName: string;
-    viewType: string;
-    category?: string;
-    title: string;
-    content?: string;
-    tags?: string[];
-  }): Promise<Artifact> {
+  async getDocumentsForCode(params: {
+    codePath: string;
+    includeContent?: boolean;
+    maxContentSize?: number;
+  }): Promise<Artifact[]> {
     try {
-      // Get vault
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        throw new Error('Failed to list vaults');
-      }
-
-      const vault = vaultsResult.value.find(v => v.name === params.vaultName);
-      if (!vault) {
-        throw new Error(`Vault not found: ${params.vaultName}`);
-      }
-
-      if (vault.readOnly) {
-        throw new Error(`Cannot create entry in read-only vault: ${params.vaultName}`);
-      }
-
-      // Generate path from title
-      const path = this.generatePathFromTitle(params.title, params.viewType, params.category);
-
-      const result = await this.artifactService.createArtifact({
-        vault: { id: vault.id, name: vault.name },
-        viewType: params.viewType as any,
-        category: params.category,
-        path,
-        title: params.title,
-        content: params.content || '',
-        tags: params.tags,
-      });
-
+      const result = await this.artifactService.findArtifactsByCodePath(params.codePath);
       if (result.success) {
-        return result.value;
-      } else {
-        throw new Error(result.error.message);
-      }
-    } catch (error: any) {
-      this.logger.error('Error creating entry', error);
-      throw error;
-    }
-  }
+        const artifacts = result.value;
 
-  async updateEntry(params: {
-    artifactId: string;
-    title?: string;
-    content?: string;
-    tags?: string[];
-  }): Promise<Artifact> {
-    try {
-      const updates: any = {};
-      if (params.title !== undefined) {
-        updates.title = params.title;
-      }
-      if (params.content !== undefined) {
-        updates.content = params.content;
-      }
-      if (params.tags !== undefined) {
-        updates.tags = params.tags;
-      }
+        // 加载内容（如果需要）
+        const includeContent = params.includeContent !== false; // 默认 true
+        const maxSize = params.maxContentSize || 1024 * 1024; // 默认 1MB
 
-      // Get vault ID first
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        throw new Error('Failed to list vaults');
-      }
-
-      // Try to find artifact in any vault
-      let artifact: Artifact | null = null;
-      for (const vault of vaultsResult.value) {
-        const getResult = await this.artifactService.getArtifact(vault.id, params.artifactId);
-        if (getResult.success) {
-          artifact = getResult.value;
-          break;
-        }
-      }
-
-      if (!artifact) {
-        throw new Error(`Artifact not found: ${params.artifactId}`);
-      }
-
-      const result = await this.artifactService.updateArtifact(params.artifactId, updates);
-      if (result.success) {
-        return result.value;
-      } else {
-        throw new Error(result.error.message);
-      }
-    } catch (error: any) {
-      this.logger.error('Error updating entry', error);
-      throw error;
-    }
-  }
-
-  async deleteEntry(params: { artifactId: string }): Promise<void> {
-    try {
-      // Get vault ID first
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        throw new Error('Failed to list vaults');
-      }
-
-      // Try to find artifact in any vault
-      let found = false;
-      for (const vault of vaultsResult.value) {
-        const getResult = await this.artifactService.getArtifact(vault.id, params.artifactId);
-        if (getResult.success) {
-          const result = await this.artifactService.deleteArtifact(vault.id, params.artifactId);
-          if (!result.success) {
-            throw new Error(result.error.message);
+        for (const artifact of artifacts) {
+          if (includeContent && artifact.contentLocation) {
+            try {
+              const stats = fs.statSync(artifact.contentLocation);
+              if (stats.size <= maxSize) {
+                const content = fs.readFileSync(artifact.contentLocation, 'utf-8');
+                artifact.body = content;
+              } else {
+                artifact.contentSize = stats.size;
+                // body 字段不设置，表示内容未加载
+              }
+            } catch (error) {
+              this.logger.warn('Failed to load content', { artifactId: artifact.id, error });
+              // 继续处理其他结果
+            }
           }
-          found = true;
-          break;
         }
-      }
 
-      if (!found) {
-        throw new Error(`Artifact not found: ${params.artifactId}`);
-      }
-    } catch (error: any) {
-      this.logger.error('Error deleting entry', error);
-      throw error;
-    }
-  }
-
-  async listLinks(params: { artifactId: string }): Promise<ArtifactLink[]> {
-    try {
-      // Find the artifact to get vaultId
-      const artifact = await this.findArtifactById(params.artifactId);
-      if (!artifact) {
-        this.logger.warn(`Artifact not found: ${params.artifactId}`);
-        return [];
-      }
-
-      const vaultName = artifact.vault.name;
-      const result = await this.linkRepository.findBySourceArtifact(params.artifactId, vaultName);
-      
-      if (result.success) {
-        return result.value;
+        return artifacts;
       } else {
-        this.logger.error('Error querying links', result.error);
+        this.logger.error('Failed to find documents for code', result.error);
         return [];
       }
     } catch (error: any) {
-      this.logger.error('Error listing links', error);
+      this.logger.error('Error getting documents for code', error);
       return [];
     }
   }
 
-  async createLink(params: {
-    sourceArtifactId: string;
-    targetType: string;
-    targetId?: string;
-    targetPath?: string;
-    targetUrl?: string;
-    linkType: string;
-    description?: string;
-    strength?: string;
-    codeLocation?: any;
-  }): Promise<ArtifactLink> {
-    try {
-      // Find the source artifact to get vaultId
-      const sourceArtifact = await this.findArtifactById(params.sourceArtifactId);
-      if (!sourceArtifact) {
-        throw new Error(`Source artifact not found: ${params.sourceArtifactId}`);
-      }
-
-      const vaultId = sourceArtifact.vault.id;
-      const vaultName = sourceArtifact.vault.name;
-
-      const linkData = {
-        sourceArtifactId: params.sourceArtifactId,
-        targetType: params.targetType as any,
-        targetId: params.targetId,
-        targetPath: params.targetPath,
-        targetUrl: params.targetUrl,
-        linkType: params.linkType as any,
-        description: params.description,
-        strength: params.strength as any,
-        codeLocation: params.codeLocation,
-        vaultId,
-      };
-
-      const result = await this.linkRepository.create(linkData);
-      
-      if (result.success) {
-        return result.value;
-      } else {
-        throw new Error(`Failed to create link: ${result.error.message}`);
-      }
-    } catch (error: any) {
-      this.logger.error('Error creating link', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 辅助方法：通过 artifactId 查找 Artifact（遍历所有 Vault）
-   */
-  private async findArtifactById(artifactId: string): Promise<Artifact | null> {
-    try {
-      const vaultsResult = await this.vaultService.listVaults();
-      if (!vaultsResult.success) {
-        return null;
-      }
-
-      for (const vault of vaultsResult.value) {
-        const artifactResult = await this.artifactService.getArtifact(vault.id, artifactId);
-        if (artifactResult.success && artifactResult.value) {
-          return artifactResult.value;
-        }
-      }
-
-      return null;
-    } catch (error: any) {
-      this.logger.error('Error finding artifact by ID', error);
-      return null;
-    }
-  }
-
-  private generatePathFromTitle(title: string, viewType: string, category?: string): string {
-    // Convert title to path-friendly format
-    const sanitized = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-
-    const parts: string[] = [];
-    if (viewType === 'document') {
-      parts.push('documents');
-    } else if (viewType === 'design') {
-      parts.push('design');
-    } else if (viewType === 'development') {
-      parts.push('development');
-    } else if (viewType === 'test') {
-      parts.push('test');
-    }
-
-    if (category) {
-      parts.push(category);
-    }
-
-    parts.push(`${sanitized}.md`);
-    return parts.join('/');
-  }
 }
 

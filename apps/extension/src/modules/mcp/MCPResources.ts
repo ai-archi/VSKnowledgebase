@@ -8,6 +8,9 @@ import { Logger } from '../../core/logger/Logger';
 
 /**
  * MCP 资源接口
+ * 
+ * 注意：这是可选功能，提供资源 URI 访问方式
+ * 不在 MCP Server 中主动注册，可通过配置控制是否启用
  */
 export interface MCPResource {
   uri: string;

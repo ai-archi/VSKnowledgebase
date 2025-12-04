@@ -30,7 +30,7 @@
 - ✅ **批量优先**：优先支持批量查询，单个查询通过 `search` 实现
 - ✅ **聚焦核心**：只保留 AI 真正需要的功能
 
-**清理状态**：详见 [7.2 移除功能（不支持的功能清理）](#72-移除功能不支持的功能清理)
+**清理状态**：详见 [9.2 移除功能（不支持的功能清理）](#92-移除功能不支持的功能清理)
 
 ---
 
@@ -275,9 +275,652 @@ const vaults = [...new Set(entries.map(e => e.vault.name))];
 
 ---
 
-## 五、MCP Server 架构设计
+## 五、MCP 配置和使用指南
 
-### 5.1 当前架构（进程内实现）
+### 5.1 当前使用方式（进程内调用）
+
+**自动启动**：
+- MCP Server 在 VS Code 扩展激活时自动启动
+- 无需手动配置或启动命令
+- 所有功能在扩展进程内可用
+
+**在扩展代码中使用**：
+
+1. **通过依赖注入获取 MCPTools**：
+```typescript
+import { TYPES } from './infrastructure/di/types';
+import { MCPTools } from './modules/mcp/MCPTools';
+import { Container } from 'inversify';
+
+// 从容器中获取 MCPTools 实例
+const mcpTools = container.get<MCPTools>(TYPES.MCPTools);
+
+// 使用搜索功能
+const results = await mcpTools.search({
+  query: "用户登录",
+  limit: 10
+});
+```
+
+2. **通过 MCPServerStarter 获取**：
+```typescript
+import { MCPServerStarter } from './modules/mcp/MCPServerStarter';
+
+const mcpStarter = container.get<MCPServerStarter>(TYPES.MCPServerStarter);
+await mcpStarter.start();
+
+const tools = mcpStarter.getTools();
+if (tools) {
+  const results = await tools.search({ query: "架构设计" });
+}
+```
+
+**在 VS Code 命令中使用**：
+
+```typescript
+// 在 main.ts 中注册命令
+vscode.commands.registerCommand('archi.mcp.search', async () => {
+  const mcpTools = container.get<MCPTools>(TYPES.MCPTools);
+  const results = await mcpTools.search({ query: "登录" });
+  // 处理结果...
+});
+```
+
+**配置检查**：
+- ✅ MCP Server 在扩展激活时自动启动（见 `main.ts` 第 631-638 行）
+- ✅ 无需额外配置文件
+- ✅ 无需多进程管理
+- ✅ 所有功能在扩展进程内可用
+
+**验证 MCP 是否运行**：
+在扩展的开发者工具中检查日志：
+```
+[ArchiTool] MCP Server initialized successfully
+[ArchiTool] MCP Server started with X resources
+```
+
+### 5.2 未来配置方式（可选，计划中）
+
+如果需要与外部 MCP Client（如 Claude Desktop）集成，未来可考虑以下配置方式：
+
+**⚠️ 重要：这些配置方式会导致多进程**
+
+#### Claude Desktop 配置示例（未来）
+
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "node",
+      "args": [
+        "/path/to/architool/apps/extension/dist/mcp-server.js"
+      ],
+      "env": {
+        "WORKSPACE_ROOT": "/path/to/workspace"
+      }
+    }
+  }
+}
+```
+
+**进程架构**：
+```
+Claude Desktop 进程
+    └─ 启动独立的 MCP Server 进程（Node.js）
+        └─ 通过 stdio 与 Claude Desktop 通信
+```
+- ⚠️ **会创建新进程**：Claude Desktop 会启动一个独立的 Node.js 进程运行 MCP Server
+- ⚠️ **与 VS Code 扩展分离**：如果 VS Code 扩展也在运行，会有两个进程：
+  - VS Code 扩展进程（包含进程内 MCP 接口）
+  - 独立的 MCP Server 进程（通过 stdio 与 Claude Desktop 通信）
+- ⚠️ **状态不共享**：两个进程无法共享扩展的上下文和状态
+
+#### Cursor 配置示例（未来）
+
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "code",
+      "args": [
+        "--extensionDevelopmentPath=/path/to/architool",
+        "--executeCommand=architool.mcp.start"
+      ]
+    }
+  }
+}
+```
+
+**进程架构**：
+```
+Cursor 进程
+    └─ 可能启动新的 VS Code 实例或连接到现有实例
+        └─ VS Code 扩展进程（包含 MCP 接口）
+```
+- ⚠️ **可能创建新进程**：取决于 Cursor 的实现方式
+  - 如果连接到现有 VS Code 实例：共享进程
+  - 如果启动新 VS Code 实例：会有多个进程
+- ⚠️ **复杂度较高**：需要处理 VS Code 实例管理和命令执行
+
+#### 进程架构对比
+
+| 配置方式 | 进程数 | 进程关系 | 状态共享 | 复杂度 |
+|---------|--------|---------|---------|--------|
+| **当前（进程内）** | 1 | - | ✅ 完全共享 | ⭐ 低 |
+| **Claude Desktop** | 2+ | 独立进程 | ❌ 不共享 | ⭐⭐⭐ 高 |
+| **Cursor** | 1-2+ | 可能共享 | ⚠️ 可能共享 | ⭐⭐ 中 |
+
+#### 推荐方案：混合架构（支持 Cursor 和其他 AI Agent）
+
+**方案：VS Code 扩展启动 stdio MCP Server 子进程**
+
+这是支持 Cursor 或其他 AI Agent 调用 MCP 的最佳方案。
+
+**架构设计**：
+```
+VS Code 扩展进程（主进程）
+    ├─ VS Code 扩展功能
+    ├─ MCP 接口（进程内调用，供扩展内部使用）
+    └─ MCP Server 子进程（stdio）
+        ├─ 通过 IPC 调用主进程的 MCP 接口
+        └─ 通过 stdio 与外部 MCP Client（Cursor/Claude Desktop）通信
+```
+
+**实现步骤**：
+
+1. **创建独立的 MCP Server 入口文件**：
+   - 创建 `apps/extension/src/mcp-server.ts`（或 `dist/mcp-server.js`）
+   - 实现 stdio 传输层（使用 `@modelcontextprotocol/sdk`）
+   - 通过 IPC 与主进程通信
+
+2. **IPC 通信机制**：
+   - 子进程通过 Node.js IPC（`process.send`/`process.on`）与主进程通信
+   - 主进程监听 IPC 消息，调用 `MCPTools` 接口
+   - 返回结果通过 IPC 传回子进程
+
+3. **子进程启动方式**：
+   - VS Code 扩展在激活时可选启动 MCP Server 子进程
+   - 通过配置控制是否启动（默认关闭，按需开启）
+
+4. **Cursor 配置**：
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "node",
+      "args": [
+        "/path/to/architool/apps/extension/dist/mcp-server.js"
+      ],
+      "env": {
+        "WORKSPACE_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
+```
+
+**优势**：
+- ✅ **状态共享**：子进程通过 IPC 调用主进程接口，可以访问扩展的完整状态
+- ✅ **统一数据源**：所有 MCP 调用都通过主进程的 `MCPTools`，数据一致
+- ✅ **灵活配置**：可以同时支持进程内调用和外部 MCP Client
+- ✅ **标准协议**：使用标准 MCP 协议（stdio），兼容所有 MCP Client
+
+**进程架构**：
+- 主进程：VS Code 扩展进程（包含 MCP 接口和业务逻辑）
+- 子进程：MCP Server 进程（仅负责协议转换，通过 IPC 调用主进程）
+
+**实现示例**（伪代码）：
+
+```typescript
+// apps/extension/src/mcp-server.ts
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
+// 通过 IPC 与主进程通信
+process.on('message', async (msg) => {
+  if (msg.type === 'mcp-call') {
+    // 调用主进程的 MCP 接口
+    const result = await callMainProcessMCP(msg.method, msg.params);
+    process.send({ type: 'mcp-result', id: msg.id, result });
+  }
+});
+
+const server = new Server({
+  name: 'architool-mcp-server',
+  version: '1.0.0',
+}, {
+  capabilities: {
+    tools: {},
+  },
+});
+
+// 注册工具
+server.setRequestHandler('tools/call', async (request) => {
+  // 通过 IPC 调用主进程
+  return new Promise((resolve) => {
+    const id = Date.now();
+    process.send({
+      type: 'mcp-call',
+      id,
+      method: request.params.name,
+      params: request.params.arguments,
+    });
+    
+    process.once('message', (msg) => {
+      if (msg.id === id) {
+        resolve(msg.result);
+      }
+    });
+  });
+});
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+```typescript
+// apps/extension/src/modules/mcp/MCPServerStarter.ts
+// 在主进程中添加 IPC 监听
+if (process.send) {
+  process.on('message', async (msg) => {
+    if (msg.type === 'mcp-call') {
+      const tools = this.getTools();
+      if (tools) {
+        const result = await tools[msg.method](msg.params);
+        process.send({
+          type: 'mcp-result',
+          id: msg.id,
+          result,
+        });
+      }
+    }
+  });
+}
+```
+
+#### 其他方案对比
+
+1. **进程内实现（当前）**
+   - ✅ 单进程，简单高效
+   - ✅ 状态完全共享
+   - ❌ **限制**：Cursor 无法直接访问扩展内部的接口（除非 Cursor 支持 VS Code 扩展 API）
+
+2. **完全独立的 MCP Server 进程（不推荐）**
+   - ❌ 无法共享扩展的上下文和状态
+   - ❌ 需要独立管理数据访问和配置
+   - ❌ 数据可能不一致
+
+**注意**：
+- 当前版本使用进程内实现，无需外部配置
+- 上述配置方式仅在实现标准 MCP 协议（stdio）后可用
+- 实现标准协议会增加进程管理复杂度，仅在明确需要外部集成时考虑
+- **如果使用外部配置，确实会导致多个进程**
+
+---
+
+## 六、支持 Cursor 和其他 AI Agent 的方案
+
+### 6.1 需求分析
+
+**目标**：让 Cursor 或其他 AI Agent 能够调用 ArchiTool 的 MCP 功能。
+
+**挑战**：
+- Cursor 等 AI Agent 无法直接访问 VS Code 扩展内部的接口
+- 需要标准 MCP 协议（stdio）支持
+- 需要保持与扩展的状态共享和数据一致性
+
+### 6.2 推荐方案：混合架构
+
+**方案概述**：VS Code 扩展启动 stdio MCP Server 子进程，子进程通过 IPC 调用主进程的 MCP 接口。
+
+**架构图**：
+```
+┌─────────────────────────────────────┐
+│  VS Code 扩展进程（主进程）          │
+│  ┌───────────────────────────────┐  │
+│  │ VS Code 扩展功能              │  │
+│  │ MCP 接口（进程内调用）         │  │
+│  │   - MCPTools                  │  │
+│  │   - MCPResources              │  │
+│  └───────────────────────────────┘  │
+│           ↕ IPC 通信                 │
+│  ┌───────────────────────────────┐  │
+│  │ MCP Server 子进程（stdio）     │  │
+│  │   - 协议转换层                 │  │
+│  │   - stdio 传输                 │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+           ↕ stdio
+┌─────────────────────────────────────┐
+│  Cursor / Claude Desktop            │
+│  （外部 MCP Client）                │
+└─────────────────────────────────────┘
+```
+
+**实现步骤**：
+
+#### 步骤 1：创建 MCP Server 入口文件
+
+创建 `apps/extension/src/mcp-server.ts`：
+
+```typescript
+#!/usr/bin/env node
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+
+// 通过 IPC 与主进程通信
+async function callMainProcess(method: string, params: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    
+    // 发送请求到主进程（如果通过 spawn 启动，使用 IPC）
+    if (process.send) {
+      process.send({
+        type: 'mcp-call',
+        id,
+        method,
+        params,
+      });
+      
+      // 监听响应
+      const handler = (msg: any) => {
+        if (msg.type === 'mcp-result' && msg.id === id) {
+          process.removeListener('message', handler);
+          if (msg.error) {
+            reject(new Error(msg.error));
+          } else {
+            resolve(msg.result);
+          }
+        }
+      };
+      process.on('message', handler);
+    } else {
+      // 如果没有 IPC，直接调用（开发模式）
+      reject(new Error('IPC not available'));
+    }
+  });
+}
+
+const server = new Server({
+  name: 'architool-mcp-server',
+  version: '1.0.0',
+}, {
+  capabilities: {
+    tools: {
+      listChanged: true,
+    },
+  },
+});
+
+// 注册工具
+server.setRequestHandler('tools/list', async () => {
+  return {
+    tools: [
+      {
+        name: 'search_knowledge_base',
+        description: '全文搜索知识库条目',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索关键词' },
+            vaultName: { type: 'string', description: '可选，指定 vault' },
+            tags: { type: 'array', items: { type: 'string' } },
+            limit: { type: 'number', default: 50 },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'get_documents_for_code',
+        description: '根据代码路径获取关联的文档/设计图',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            codePath: { type: 'string', description: '代码文件路径' },
+          },
+          required: ['codePath'],
+        },
+      },
+      {
+        name: 'list_entries',
+        description: '列出知识库条目',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            vaultName: { type: 'string' },
+            viewType: { type: 'string' },
+            category: { type: 'string' },
+            limit: { type: 'number', default: 20 },
+          },
+        },
+      },
+    ],
+  };
+});
+
+server.setRequestHandler('tools/call', async (request) => {
+  const { name, arguments: args } = request.params;
+  
+  try {
+    const result = await callMainProcess(name, args);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error: ${error.message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+// 启动服务器
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error('ArchiTool MCP Server started');
+}
+
+main().catch(console.error);
+```
+
+#### 步骤 2：在主进程中添加 IPC 监听
+
+修改 `apps/extension/src/modules/mcp/MCPServerStarter.ts`：
+
+```typescript
+import { spawn, ChildProcess } from 'child_process';
+import * as path from 'path';
+
+export class MCPServerStarter {
+  private mcpServerProcess: ChildProcess | null = null;
+  
+  async start(): Promise<void> {
+    // ... 现有代码 ...
+    
+    // 可选：启动 stdio MCP Server 子进程（用于外部 MCP Client）
+    if (this.shouldStartStdioServer()) {
+      await this.startStdioServer();
+    }
+  }
+  
+  private async startStdioServer(): Promise<void> {
+    const serverPath = path.join(__dirname, '../mcp-server.js');
+    
+    this.mcpServerProcess = spawn('node', [serverPath], {
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'], // 启用 IPC
+      env: {
+        ...process.env,
+        WORKSPACE_ROOT: this.workspaceRoot,
+      },
+    });
+    
+    // 监听子进程的 IPC 消息
+    this.mcpServerProcess.on('message', async (msg: any) => {
+      if (msg.type === 'mcp-call') {
+        try {
+          const tools = this.getTools();
+          if (!tools) {
+            throw new Error('MCP Tools not available');
+          }
+          
+          // 调用对应的工具方法
+          let result: any;
+          switch (msg.method) {
+            case 'search_knowledge_base':
+              result = await tools.search(msg.params);
+              break;
+            case 'get_documents_for_code':
+              result = await tools.getDocumentsForCode(msg.params);
+              break;
+            case 'list_entries':
+              result = await tools.listEntries(msg.params);
+              break;
+            default:
+              throw new Error(`Unknown method: ${msg.method}`);
+          }
+          
+          // 返回结果
+          this.mcpServerProcess?.send({
+            type: 'mcp-result',
+            id: msg.id,
+            result,
+          });
+        } catch (error: any) {
+          this.mcpServerProcess?.send({
+            type: 'mcp-result',
+            id: msg.id,
+            error: error.message,
+          });
+        }
+      }
+    });
+    
+    this.mcpServerProcess.on('error', (error) => {
+      this.logger.error('MCP Server process error', error);
+    });
+    
+    this.mcpServerProcess.on('exit', (code) => {
+      this.logger.info(`MCP Server process exited with code ${code}`);
+      this.mcpServerProcess = null;
+    });
+  }
+  
+  private shouldStartStdioServer(): boolean {
+    // 可以通过配置控制是否启动
+    // 例如：读取 VS Code 配置或环境变量
+    return process.env.ENABLE_MCP_STDIO_SERVER === 'true';
+  }
+  
+  async stop(): Promise<void> {
+    // ... 现有代码 ...
+    
+    if (this.mcpServerProcess) {
+      this.mcpServerProcess.kill();
+      this.mcpServerProcess = null;
+    }
+  }
+}
+```
+
+#### 步骤 3：Cursor 配置
+
+在 Cursor 的 MCP 配置中添加：
+
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "node",
+      "args": [
+        "/path/to/architool/apps/extension/dist/mcp-server.js"
+      ],
+      "env": {
+        "WORKSPACE_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
+```
+
+**注意**：这种方式下，Cursor 会直接启动 MCP Server 进程，而不是通过 VS Code 扩展。如果需要共享状态，需要额外的机制（如共享数据库或文件系统）。
+
+#### 步骤 4：替代方案 - 通过 VS Code 命令桥接
+
+如果希望完全通过扩展进程，可以使用 VS Code 命令作为桥接：
+
+```typescript
+// 在扩展中注册命令
+vscode.commands.registerCommand('architool.mcp.search', async (params) => {
+  const mcpTools = container.get<MCPTools>(TYPES.MCPTools);
+  return await mcpTools.search(params);
+});
+
+// MCP Server 子进程通过执行 VS Code 命令调用
+// 但这需要额外的进程间通信机制
+```
+
+### 6.3 方案对比
+
+| 方案 | 进程数 | 状态共享 | 实现复杂度 | 适用场景 |
+|------|--------|---------|-----------|---------|
+| **混合架构（推荐）** | 2 | ✅ 通过 IPC | ⭐⭐ 中 | Cursor、Claude Desktop |
+| **独立进程** | 2+ | ❌ 不共享 | ⭐⭐ 中 | 简单场景，可接受状态分离 |
+| **VS Code 命令桥接** | 2+ | ⚠️ 部分共享 | ⭐⭐⭐ 高 | 需要完全通过扩展 |
+
+### 6.4 实施建议
+
+1. **第一阶段**：实现混合架构
+   - 创建 MCP Server 入口文件
+   - 实现 IPC 通信机制
+   - 在主进程中添加 IPC 监听
+
+2. **第二阶段**：优化和配置
+   - 添加配置选项控制是否启动子进程
+   - 优化 IPC 通信性能
+   - 添加错误处理和重连机制
+
+3. **第三阶段**：文档和测试
+   - 编写 Cursor 配置文档
+   - 添加集成测试
+   - 验证与多个 MCP Client 的兼容性
+
+### 6.5 注意事项
+
+1. **进程管理**：
+   - 需要正确管理子进程的生命周期
+   - 处理子进程崩溃和重启
+   - 清理资源
+
+2. **IPC 通信**：
+   - 确保 IPC 消息格式一致
+   - 处理异步调用的超时
+   - 错误处理和日志记录
+
+3. **性能考虑**：
+   - IPC 通信有开销，但通常可接受
+   - 考虑批量操作以减少 IPC 调用次数
+
+4. **安全性**：
+   - 验证 IPC 消息来源
+   - 限制可调用的方法
+   - 防止恶意调用
+
+---
+
+## 七、MCP Server 架构设计
+
+### 7.1 当前架构（进程内实现）
 
 **架构特点**：
 - 简化的进程内实现，作为 VS Code 扩展的一部分运行
@@ -304,31 +947,65 @@ MCPServerStarter (启动器)
 - 所有服务都是单例模式
 - 在 `container.ts` 中统一配置
 
-### 5.2 未来架构（标准 MCP 协议）
+### 7.2 未来架构（标准 MCP 协议）
 
-**架构特点**：
-- 实现标准 MCP 协议（Model Context Protocol）
-- **只实现 stdio 传输**（推荐，满足所有需求）
-- 可以与外部 MCP Client 集成（如 Claude Desktop、其他 AI 工具）
+**重要考虑：进程架构**
 
-**协议层设计**：
+由于 MCP 和 VS Code 扩展在同一个项目中且同时运行，需要仔细考虑进程架构：
+
+**方案 A：进程内实现（当前，推荐保持）**
 ```
-MCP Client (外部，如 Claude Desktop)
-    ↓
-MCP Transport Layer (stdio)
-    ↓
-MCP Protocol Handler (JSON-RPC 2.0)
-    ↓
-MCPServerStarter (协议适配)
-    ↓
-MCPTools / MCPResources (业务接口)
-    ↓
-Application Services (业务逻辑)
+VS Code 扩展进程
+    ├─ VS Code 扩展功能
+    └─ MCP 接口（进程内调用）
+        └─ MCPTools / MCPResources
 ```
+- ✅ **优势**：无需多进程，简单高效
+- ✅ **适用场景**：VS Code 内部 AI 助手（如 Cursor 内置 AI）
+- ❌ **限制**：无法直接与外部 MCP Client（如 Claude Desktop）集成
+
+**方案 B：混合架构（可选，未来考虑）**
+```
+VS Code 扩展进程（主进程）
+    ├─ VS Code 扩展功能
+    ├─ MCP 接口（进程内调用）
+    └─ MCP Server 子进程（stdio）
+        ├─ 通过 IPC 调用主进程的 MCP 接口
+        └─ 通过 stdio 与外部 MCP Client 通信
+```
+- ✅ **优势**：既支持内部调用，也支持外部 MCP Client
+- ⚠️ **复杂度**：需要管理子进程和 IPC 通信
+- ⚠️ **适用场景**：需要同时支持内部和外部 MCP Client
+
+**方案 C：外部启动（不适用于 VS Code 扩展）**
+```
+外部 MCP Client（如 Claude Desktop）
+    └─ 启动 MCP Server 子进程（stdio）
+        └─ 独立的 MCP Server 进程
+```
+- ❌ **不适用**：VS Code 扩展无法作为独立进程被外部启动
+- ⚠️ **适用场景**：独立的 MCP Server 应用
+
+**结论和建议**：
+
+1. **当前阶段（推荐）**：保持进程内实现
+   - ✅ 简单高效，无需多进程管理
+   - ✅ 适合 VS Code 扩展内嵌场景
+   - ✅ 与 Cursor 等内置 AI 助手集成更方便
+
+2. **未来扩展（可选）**：如果需要与外部 MCP Client 集成
+   - 考虑混合架构（方案 B）
+   - VS Code 扩展启动 stdio MCP Server 子进程
+   - 子进程通过 IPC 调用主进程的 MCP 接口
+   - 外部 MCP Client 通过 stdio 与子进程通信
+
+3. **不推荐**：完全独立的 MCP Server 进程
+   - VS Code 扩展不适合作为独立进程运行
+   - 无法共享扩展的上下文和状态
 
 **传输方式选择**：
 
-**✅ 推荐：只实现 stdio 传输**
+**✅ 推荐：只实现 stdio 传输**（如果未来需要外部集成）
 
 **理由**：
 1. **MCP 标准推荐**：stdio 是 MCP 协议的标准和推荐传输方式
@@ -345,9 +1022,7 @@ Application Services (业务逻辑)
 3. **维护成本高**：增加不必要的复杂性
 4. **生态支持弱**：主流 MCP Client 更偏向 stdio 方式
 
-**结论**：**只实现 stdio 传输即可，无需实现 HTTP 传输**
-
-**需要实现的内容**：
+**需要实现的内容**（如果未来需要外部集成）：
 1. **传输层（stdio）**：
    - 监听标准输入（stdin）
    - 输出到标准输出（stdout）
@@ -359,18 +1034,44 @@ Application Services (业务逻辑)
    - 资源 URI 处理机制
    - 错误处理和日志记录
 
-3. **工具注册**：
+3. **IPC 通信层**（混合架构需要）：
+   - 子进程与主进程的通信机制
+   - 调用主进程的 MCP 接口
+   - 结果返回和错误处理
+
+4. **工具注册**：
    - 自动注册所有 MCPTools 方法
    - 生成工具描述和参数 schema
    - 支持工具调用和结果返回
 
 **实施建议**：
-- 当前阶段：保持进程内实现，专注于功能完善
-- 未来阶段：当需要与外部 MCP Client 集成时，实现 stdio 传输层
-- 推荐使用 `@modelcontextprotocol/sdk` 标准库简化实现
+- **当前阶段**：保持进程内实现，专注于功能完善
+- **未来阶段**：只有当明确需要与外部 MCP Client（如 Claude Desktop）集成时，再考虑混合架构
+- **推荐使用**：`@modelcontextprotocol/sdk` 标准库简化实现（如果实现 stdio）
 - **只实现 stdio，不实现 HTTP**
 
-### 5.3 传输方式详细对比
+### 7.3 进程架构总结
+
+**关键问题**：MCP 和 VS Code 扩展在同一个项目中且同时运行，是否需要多进程？
+
+**答案**：
+- **当前（推荐）**：**不需要多进程**，保持进程内实现
+- **未来（可选）**：仅在需要外部 MCP Client 集成时，考虑混合架构（主进程 + stdio 子进程）
+
+**进程架构对比**：
+
+| 架构方案 | 进程数 | 复杂度 | 适用场景 | 推荐度 |
+|---------|--------|--------|---------|--------|
+| **进程内实现** | 1 | ⭐ 低 | VS Code 扩展内嵌，Cursor 等内置 AI | ✅✅✅ **强烈推荐** |
+| **混合架构** | 2 | ⭐⭐ 中 | 需要同时支持内部和外部 MCP Client | ⚠️ 可选 |
+| **独立进程** | 2+ | ⭐⭐⭐ 高 | 独立 MCP Server 应用 | ❌ 不适用 |
+
+**建议**：
+1. ✅ **保持进程内实现**：简单高效，满足大部分场景
+2. ⚠️ **仅在明确需要时**：考虑混合架构（如需要与 Claude Desktop 集成）
+3. ❌ **避免独立进程**：VS Code 扩展不适合作为独立进程运行
+
+### 7.4 传输方式详细对比
 
 **VS Code 扩展内嵌 MCP 的场景分析**：
 
@@ -439,7 +1140,7 @@ app.listen(3000); // 需要管理端口
 - **无需实现 HTTP 传输，避免不必要的复杂性**
 - **stdio 方式简单、高效、兼容性好，完全满足需求**
 
-### 5.4 工具注册机制
+### 7.5 工具注册机制
 
 **当前实现**：
 - 工具通过接口定义，手动管理
@@ -470,9 +1171,9 @@ app.listen(3000); // 需要管理端口
 
 ---
 
-## 六、当前实现状态分析
+## 八、当前实现状态分析
 
-### 6.1 MCP Server 架构现状
+### 8.1 MCP Server 架构现状
 
 **当前实现**：
 - `MCPServerStarter` 是一个简化的进程内实现，仅作为包装器
@@ -506,7 +1207,7 @@ app.listen(3000); // 需要管理端口
 - 当前阶段：保持进程内实现，专注于功能完善
 - 未来阶段：当需要与外部 MCP Client 集成时，再实现标准 MCP 协议层
 
-### 6.2 MCPTools 实现状态
+### 8.2 MCPTools 实现状态
 
 | 功能 | 接口定义 | 实现状态 | 方案状态 | 备注 |
 |------|---------|---------|---------|------|
@@ -526,7 +1227,7 @@ app.listen(3000); // 需要管理端口
 2. `listEntries` 已实现，但默认 limit 需要优化
 3. `getDocumentsForCode` 底层服务 `ArtifactApplicationService.findArtifactsByCodePath` 已完整实现，只需在 MCPTools 层包装
 
-### 6.3 MCPResources 实现状态
+### 8.3 MCPResources 实现状态
 
 **当前实现**：
 - ✅ 已实现 `listResources()` 和 `getResource(uri)`
@@ -547,7 +1248,7 @@ const resource = await mcpResources.getResource('archi://artifact/abc123');
 // 返回完整的 Artifact JSON
 ```
 
-### 6.4 底层服务支持情况
+### 8.4 底层服务支持情况
 
 **已支持的底层服务**：
 
@@ -567,9 +1268,9 @@ const resource = await mcpResources.getResource('archi://artifact/abc123');
 
 ---
 
-## 七、实施计划
+## 九、实施计划
 
-### 7.1 新增功能
+### 9.1 新增功能
 
 #### 1. 添加 `get_documents_for_code` 功能
 **优先级**：⭐⭐⭐⭐⭐（核心功能）
@@ -670,11 +1371,11 @@ async search(params: {
 limit: params.limit || 100,  // 改为 20
 ```
 
-### 7.2 移除功能（不支持的功能清理）
+### 9.2 移除功能（不支持的功能清理）
 
 **优先级**：⭐⭐⭐⭐（简化接口，降低维护成本）
 
-#### 7.2.1 不支持的功能列表
+#### 9.2.1 不支持的功能列表
 
 根据方案设计，以下功能**明确不支持**，需要从 MCP 接口中移除：
 
@@ -692,7 +1393,7 @@ limit: params.limit || 100,  // 改为 20
 - ✅ **批量操作优先**：`search` 和 `listEntries` 已覆盖单个查询需求
 - ✅ **聚焦核心**：只保留 AI 真正需要的功能
 
-#### 7.2.2 依赖检查清单
+#### 9.2.2 依赖检查清单
 
 在删除前，需要检查以下位置是否有引用：
 
@@ -717,7 +1418,7 @@ limit: params.limit || 100,  // 改为 20
 - ✅ 未发现外部引用：这些方法只在 `MCPTools.ts` 中定义和实现
 - ✅ 可以安全删除
 
-#### 7.2.3 详细删除步骤
+#### 9.2.3 详细删除步骤
 
 **步骤 1：删除接口定义**
 - [ ] 打开 `apps/extension/src/modules/mcp/MCPTools.ts`
@@ -762,7 +1463,7 @@ limit: params.limit || 100,  // 改为 20
 - [ ] 运行测试，确保没有测试失败
 - [ ] 检查 IDE 中是否有错误提示
 
-#### 7.2.4 删除后的验证
+#### 9.2.4 删除后的验证
 
 **编译验证**：
 ```bash
@@ -782,7 +1483,7 @@ npm test
 - [ ] 确认没有未使用的导入
 - [ ] 确认没有未使用的依赖注入
 
-#### 7.2.5 回退方案
+#### 9.2.5 回退方案
 
 如果发现这些方法被其他地方使用（虽然当前检查未发现）：
 - **选项 1**：保留实现但不暴露给 MCP
@@ -796,7 +1497,7 @@ npm test
 
 **当前建议**：直接删除，因为未发现外部引用
 
-### 7.3 MCPResources 处理
+### 9.3 MCPResources 处理
 
 **决策**：✅ **保留但不主动注册**
 
@@ -810,7 +1511,7 @@ npm test
 - [ ] 在 `MCPServerStarter` 中可选注册（通过配置控制）
 - [ ] 更新文档说明这是可选功能
 
-### 7.4 代码修改清单
+### 9.4 代码修改清单
 
 #### 需要修改的文件：
 
@@ -832,7 +1533,7 @@ npm test
 4. **`apps/extension/src/infrastructure/di/container.ts`**
    - ⚠️ 检查是否有需要更新的依赖注入配置
 
-### 7.5 测试计划
+### 9.5 测试计划
 
 **单元测试**：
 - [ ] `getDocumentsForCode` 方法测试
@@ -854,9 +1555,9 @@ npm test
 
 ---
 
-## 八、实施优先级和风险评估
+## 十、实施优先级和风险评估
 
-### 8.1 实施优先级
+### 10.1 实施优先级
 
 **P0 - 必须实现（核心功能）**：
 1. ⭐⭐⭐⭐⭐ 添加 `get_documents_for_code` 功能
@@ -881,7 +1582,7 @@ npm test
    - 难度：低（需要检查依赖）
    - 工作量：1-2 小时
 
-### 8.2 风险评估
+### 10.2 风险评估
 
 **低风险**：
 - ✅ 添加 `getDocumentsForCode`：底层服务已完整实现，只需包装
@@ -895,7 +1596,7 @@ npm test
 **无风险**：
 - ✅ MCPResources 保留：不影响现有功能
 
-### 8.3 依赖检查清单
+### 10.3 依赖检查清单
 
 在移除方法前，需要检查以下位置是否有引用：
 - [ ] `apps/extension/src/main.ts` - 扩展主入口
@@ -903,7 +1604,7 @@ npm test
 - [ ] 测试文件 `**/*.test.ts`, `**/*.spec.ts`
 - [ ] 配置文件和其他可能使用的地方
 
-### 8.4 实施时间估算
+### 10.4 实施时间估算
 
 | 任务 | 优先级 | 工作量 | 风险 |
 |------|--------|--------|------|
@@ -916,11 +1617,11 @@ npm test
 
 ---
 
-## 九、总结
+## 十一、总结
 
 本方案聚焦于 AI 助手最需要的核心功能，确保 MCP 服务简洁高效。
 
-### 9.1 保留的功能（3个）
+### 11.1 保留的功能（3个）
 
 **核心功能（2个）**：
 1. ✅ `search_knowledge_base` - 搜索知识库（90% 使用场景）
@@ -932,7 +1633,7 @@ npm test
 **可选资源（1个）**：
 4. ✅ `MCPResources` - 资源 URI 访问（可选，保留但不强制注册）
 
-### 9.2 方案优势
+### 11.2 方案优势
 
 - ✅ **聚焦核心**：只保留 AI 真正需要的功能
 - ✅ **简洁高效**：3 个核心功能覆盖 100% 使用场景
@@ -940,7 +1641,7 @@ npm test
 - ✅ **性能优化**：避免返回过大列表，提升响应速度
 - ✅ **底层支持完善**：核心功能底层服务已完整实现
 
-### 9.3 实施建议
+### 11.3 实施建议
 
 **第一阶段（立即实施）**：
 1. 添加 `getDocumentsForCode` 功能（P0）
@@ -951,7 +1652,7 @@ npm test
 2. 完善测试覆盖
 3. 更新文档
 
-### 9.4 未来扩展
+### 11.4 未来扩展
 
 **标准 MCP 协议支持**：
 - 当前是进程内实现，未来可以添加标准 MCP 协议层
@@ -970,6 +1671,6 @@ npm test
 
 **文档版本**：v1.1  
 **最后更新**：2024-12-19  
-**维护者**：ArchiTool Team  
+**维护者**：ArchiTool Team
 **状态**：方案完善，待实施
 

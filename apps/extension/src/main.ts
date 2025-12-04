@@ -28,7 +28,7 @@ import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { RemoteEndpoint } from './modules/shared/domain/value_object/RemoteEndpoint';
 import { GitVaultAdapter } from './modules/shared/infrastructure/storage/git/GitVaultAdapter';
-// import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
+import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
 import { PlantUMLEditorProvider } from './modules/editor/plantuml/PlantUMLEditorProvider';
 import * as path from 'path';
@@ -211,10 +211,9 @@ export async function activate(context: vscode.ExtensionContext) {
   aiCommands.registerCommands(context);
 
   // 12. 注册自定义编辑器
-  // Archimate 格式支持已移除
-  // const archimateEditorDisposable = ArchimateEditorProvider.register(context);
-  // context.subscriptions.push(archimateEditorDisposable);
-  // logger.info('ArchiMate editor provider registered');
+  const archimateEditorDisposable = ArchimateEditorProvider.register(context);
+  context.subscriptions.push(archimateEditorDisposable);
+  logger.info('ArchiMate editor provider registered');
 
   const mermaidEditorDisposable = MermaidEditorProvider.register(context);
   context.subscriptions.push(mermaidEditorDisposable);

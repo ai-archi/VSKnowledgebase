@@ -41,6 +41,16 @@
     },
     "customEditors": [
       {
+        "viewType": "architool.archimateEditor",
+        "displayName": "ArchiMate Diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.archimate"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "architool.mermaidEditor",
         "displayName": "Mermaid Diagram",
         "selector": [
@@ -70,6 +80,16 @@
         "aliases": [
           "Mermaid",
           "mermaid"
+        ]
+      },
+      {
+        "id": "archimate",
+        "extensions": [
+          ".archimate"
+        ],
+        "aliases": [
+          "ArchiMate",
+          "archimate"
         ]
       }
     ],

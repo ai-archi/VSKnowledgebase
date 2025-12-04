@@ -36,17 +36,22 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     webviewPanel: vscode.WebviewPanel,
     token: vscode.CancellationToken
   ): Promise<void> {
+    console.log('[ArchimateEditor] Resolving custom editor for:', document.uri.fsPath);
+    
     // 设置 Webview 内容
-    // 获取 archimate-js-v2 的路径（从 extension 目录读取打包后的路径）
+    // 获取 archimate-js 的路径（从 extension 目录读取打包后的路径）
     const extensionPath = this.context.extensionPath;
-    const archimateJsV2Path = path.join(extensionPath, 'dist', 'archimate-js-v2');
-    const archimateJsV2Uri = vscode.Uri.file(archimateJsV2Path);
+    const archimateJsPath = path.join(extensionPath, 'dist', 'archimate-js');
+    const archimateJsUri = vscode.Uri.file(archimateJsPath);
+    
+    console.log('[ArchimateEditor] Extension path:', extensionPath);
+    console.log('[ArchimateEditor] Archimate JS path:', archimateJsPath);
     
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'out'),
-        archimateJsV2Uri,
+        archimateJsUri,
       ],
     };
 
@@ -184,15 +189,15 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     document: vscode.TextDocument,
     extensionUri: vscode.Uri
   ): string {
-    // 获取 archimate-js-v2 的路径
+    // 获取 archimate-js 的路径
     const extensionPath = this.context.extensionPath;
-    const archimateJsV2Path = path.join(extensionPath, 'dist', 'archimate-js-v2');
-    const indexHtmlPath = path.join(archimateJsV2Path, 'index.html');
+    const archimateJsPath = path.join(extensionPath, 'dist', 'archimate-js');
+    const indexHtmlPath = path.join(archimateJsPath, 'index.html');
     
     // 检查构建产物是否存在
     if (!fs.existsSync(indexHtmlPath)) {
       throw new Error(
-        `ArchiMate editor build artifacts not found at ${indexHtmlPath}. Please run: pnpm build:archimate-js-v2`
+        `ArchiMate editor build artifacts not found at ${indexHtmlPath}. Please run: pnpm build:archimate-js`
       );
     }
     
@@ -201,7 +206,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     
     // 获取 webview URI 辅助函数（参考 plantuml-js 的实现）
     // 统一转换为 CDN 格式：https://file+.vscode-resource.vscode-cdn.net/...
-    const archimateJsV2Uri = vscode.Uri.file(archimateJsV2Path);
+    const archimateJsUri = vscode.Uri.file(archimateJsPath);
     const webviewUri = (relativePath: string) => {
       // 跳过已经是绝对路径的（但需要转换 vscode-webview:// 格式）
       if (relativePath.startsWith('http://') || 
@@ -227,7 +232,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
         normalizedPath = normalizedPath.substring(1);
       }
       
-      const uri = vscode.Uri.joinPath(archimateJsV2Uri, normalizedPath);
+      const uri = vscode.Uri.joinPath(archimateJsUri, normalizedPath);
       const webviewUriString = webview.asWebviewUri(uri).toString();
       
       // 统一转换为 CDN 格式
@@ -245,7 +250,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       if (match && match[1]) {
         const filePath = match[1];
         // 直接使用文件系统路径构建 CDN 格式 URL
-        return 'https://file+.vscode-resource.vscode-cdn.net' + archimateJsV2Path + '/' + filePath;
+        return 'https://file+.vscode-resource.vscode-cdn.net' + archimateJsPath + '/' + filePath;
       }
       
       return url;
@@ -326,7 +331,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     // 注入 basePath 到全局变量，供运行时脚本使用（统一使用 CDN 格式）
     // 直接使用文件系统路径构建 CDN 格式 URL，确保可访问
     // 格式：https://file+.vscode-resource.vscode-cdn.net/绝对路径
-    const cdnBasePath = 'https://file+.vscode-resource.vscode-cdn.net' + archimateJsV2Path + '/';
+    const cdnBasePath = 'https://file+.vscode-resource.vscode-cdn.net' + archimateJsPath + '/';
     
     // 注入 basePath 到页面，供运行时脚本使用
     const basePathScript = `

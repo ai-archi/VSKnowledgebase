@@ -1,8 +1,8 @@
 import 'bootstrap';
 import * as bootstrap from 'bootstrap';
 
-import 'archimate-js/assets/archimate-js.css';
-import Modeler from 'archimate-js/lib/Modeler';
+import 'jointjs/dist/joint.css';
+import { ArchimateEditorAdapter } from '../src/adapter/ArchimateEditorAdapter.js';
 
 // 检测是否在 VSCode webview 环境中
 // eslint-disable-next-line no-undef
@@ -17,8 +17,8 @@ var dropdownList = dropdownElementList.map(function (dropdownToggleEl) {
   return new bootstrap.Dropdown(dropdownToggleEl)
 })
 
-// modeler instance
-var modeler = new Modeler({
+// modeler instance (使用新的适配器)
+var modeler = new ArchimateEditorAdapter({
   container: '#canvas',
   keyboard: {
     bindTo: window,
@@ -343,6 +343,9 @@ function openModel(xml) {
           }
           console.error('could not open archimate view', err);
         }
+      }).then(() => {
+        // 视图打开后，确保渲染完成
+        console.log('View opened successfully');
       });
     })
     .catch(function(err) {
