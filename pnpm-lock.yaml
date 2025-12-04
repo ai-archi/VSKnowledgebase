@@ -217,9 +217,9 @@ importers:
 
   packages/archimate-js-v2:
     dependencies:
-      archimate-js:
-        specifier: file:../../vendors/archimate-js
-        version: file:vendors/archimate-js
+      '@vsknowledgebase/archimate-js':
+        specifier: file:../../vendors/archimate.js
+        version: file:vendors/archimate.js
     devDependencies:
       copy-webpack-plugin:
         specifier: ^8.1.1
@@ -1308,6 +1308,9 @@ packages:
 
   '@volar/typescript@1.11.1':
     resolution: {integrity: sha512-iU+t2mas/4lYierSnoFOeRFQUhAEMgsFuQxoxvwn5EdQopw43j+J27a4lt9LMInx1gLJBC6qL14WYGlgymaSMQ==}
+
+  '@vsknowledgebase/archimate-js@file:vendors/archimate.js':
+    resolution: {directory: vendors/archimate.js, type: directory}
 
   '@vue/compiler-core@3.5.24':
     resolution: {integrity: sha512-eDl5H57AOpNakGNAkFDH+y7kTqrQpJkZFXhWZQGyx/5Wh7B1uQYvcWkvZi11BDhscPgj8N7XV3oRwiPnx1Vrig==}
@@ -6448,6 +6451,23 @@ snapshots:
     dependencies:
       '@volar/language-core': 1.11.1
       path-browserify: 1.0.1
+
+  '@vsknowledgebase/archimate-js@file:vendors/archimate.js':
+    dependencies:
+      css.escape: 1.5.1
+      diagram-js: 12.8.1
+      diagram-js-direct-editing: 2.1.2(diagram-js@12.8.1)
+      hex-and-rgba: 2.0.0
+      ids: 1.0.5
+      inherits: 2.0.4
+      inherits-browser: 0.1.0
+      mathjs: 13.2.3
+      min-dash: 3.8.1
+      min-dom: 3.2.1
+      moddle: 5.0.4
+      moddle-xml: 9.0.6
+      object-refs: 0.3.0
+      tiny-svg: 2.2.4
 
   '@vue/compiler-core@3.5.24':
     dependencies:

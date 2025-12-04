@@ -6,6 +6,7 @@
       "dependsOrder": "sequence",
       "dependsOn": [
         "Build Archimate JS",
+        "Build Archimate JS V2",
         "Build Mermaid Editor",
         "Build PlantUML JS",
         "Compile Extension",
@@ -30,6 +31,23 @@
         "cwd": "${workspaceFolder}/packages/archimate-js",
         "env": {
           "OUTPUT_PATH": "../../apps/extension/dist/archimate-js"
+        }
+      },
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build Archimate JS V2",
+      "type": "shell",
+      "command": "rm -rf ${workspaceFolder}/apps/extension/dist/archimate-js-v2 && mkdir -p ${workspaceFolder}/apps/extension/dist/archimate-js-v2 && pnpm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/packages/archimate-js-v2",
+        "env": {
+          "OUTPUT_PATH": "../../apps/extension/dist/archimate-js-v2"
         }
       },
       "problemMatcher": [],

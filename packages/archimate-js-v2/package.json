@@ -24,7 +24,7 @@
     "webpack-cli": "^4.7.0"
   },
   "dependencies": {
-    "archimate-js": "file:../../vendors/archimate-js"
+    "@vsknowledgebase/archimate-js": "file:../../vendors/archimate.js"
   }
 }
 

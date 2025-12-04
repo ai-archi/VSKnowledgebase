@@ -55,62 +55,73 @@ if (isVSCodeWebview) {
     }
     
     // 处理 load 消息（ArchimateEditorProvider 发送）
-    if (data.type === 'load' && data.content) {
-      window.pendingContent = data.content;
+    if (data.type === 'load' && data.content !== undefined) {
+      console.log('[vscodeApi] Received load message, content length:', data.content ? data.content.length : 0);
+      if (typeof window !== 'undefined') {
+        window.pendingContent = data.content;
+      }
+      if (window.onArchimateLoad) {
+        window.onArchimateLoad(data.content);
+      }
     }
   });
 }
 
-// API 函数
+/**
+ * 获取 Archimate XML 内容
+ */
 export async function fetchDiagram() {
   if (!isVSCodeWebview) {
     // 开发模式：返回空内容
     return '';
   }
   
-  // ArchimateEditorProvider 通过 postMessage 发送 'load' 消息
-  // 这里返回一个 Promise，但实际内容通过消息传递
-  return new Promise((resolve) => {
-    // 如果已经有待处理的内容，直接返回
-    if (window.pendingContent) {
-      const content = window.pendingContent;
-      window.pendingContent = null;
-      resolve(content);
-      return;
-    }
+  return new Promise((resolve, reject) => {
+    const messageId = generateMessageId();
+    pendingMessages.set(messageId, { resolve, reject });
     
-    // 否则等待消息
-    const handler = (event) => {
-      const data = event.data;
-      if (data.type === 'load' && data.content) {
-        window.removeEventListener('message', handler);
-        resolve(data.content);
-      }
-    };
-    window.addEventListener('message', handler);
+    vscode.postMessage({
+      type: 'api-fetchArchimate',
+      messageId,
+    });
     
-    // 超时处理
     setTimeout(() => {
-      window.removeEventListener('message', handler);
-      resolve('');
-    }, 5000);
+      if (pendingMessages.has(messageId)) {
+        pendingMessages.delete(messageId);
+        reject(new Error('Request timeout'));
+      }
+    }, 30000);
   });
 }
 
+/**
+ * 保存 Archimate XML 内容
+ */
 export async function saveDiagram(content) {
   if (!isVSCodeWebview) {
     // 开发模式：只打印日志
     console.log('Save (dev mode):', content.substring(0, 100) + '...');
-    return;
+    return Promise.resolve();
   }
   
-  // ArchimateEditorProvider 期望 'save' 消息
-  vscode.postMessage({
-    type: 'save',
-    content: content,
+  return new Promise((resolve, reject) => {
+    const messageId = generateMessageId();
+    pendingMessages.set(messageId, { resolve, reject });
+    
+    vscode.postMessage({
+      type: 'api-saveArchimate',
+      messageId,
+      payload: { xml: content },
+    });
+    
+    setTimeout(() => {
+      if (pendingMessages.has(messageId)) {
+        pendingMessages.delete(messageId);
+        reject(new Error('Request timeout'));
+      }
+    }, 30000);
   });
 }
 
 // 导出 VSCode API 状态
 export { vscode, isVSCodeWebview };
-

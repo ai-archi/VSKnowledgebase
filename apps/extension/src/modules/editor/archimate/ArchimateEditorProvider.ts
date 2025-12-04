@@ -37,16 +37,16 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     token: vscode.CancellationToken
   ): Promise<void> {
     // 设置 Webview 内容
-    // 获取 archimate-js 的路径（从 extension 目录读取打包后的路径）
+    // 获取 archimate-js-v2 的路径（从 extension 目录读取打包后的路径）
     const extensionPath = this.context.extensionPath;
-    const archimateJsPath = path.join(extensionPath, 'dist', 'archimate-js');
-    const archimateJsUri = vscode.Uri.file(archimateJsPath);
+    const archimateJsV2Path = path.join(extensionPath, 'dist', 'archimate-js-v2');
+    const archimateJsV2Uri = vscode.Uri.file(archimateJsV2Path);
     
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'out'),
-        archimateJsUri,
+        archimateJsV2Uri,
       ],
     };
 
@@ -56,12 +56,69 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       this.context.extensionUri
     );
 
-    // 处理来自 Webview 的消息：仅处理保存
+    // 处理来自 Webview 的消息
     const changeDocumentSubscription = webviewPanel.webview.onDidReceiveMessage(
       async (e: any) => {
+        // 处理 API 请求（带 messageId 的请求-响应消息）
+        if (e.type && e.type.startsWith('api-') && e.messageId) {
+          const apiType = e.type.substring(4); // 去掉 'api-' 前缀
+          const messageId = e.messageId;
+          const payload = e.payload;
+
+          try {
+            let result: unknown = undefined;
+
+            switch (apiType) {
+              case 'fetchArchimate': {
+                // 返回当前文档的 XML 内容
+                result = document.getText();
+                break;
+              }
+
+              case 'saveArchimate': {
+                // 保存 Archimate XML
+                if (payload && typeof payload === 'object' && 'xml' in payload) {
+                  const xml = payload.xml as string;
+                  const edit = new vscode.WorkspaceEdit();
+                  edit.replace(
+                    document.uri,
+                    new vscode.Range(0, 0, document.lineCount, 0),
+                    xml
+                  );
+                  await vscode.workspace.applyEdit(edit);
+                  await document.save();
+                  result = { success: true };
+                }
+                break;
+              }
+
+              default:
+                console.warn(`[ArchimateEditor] Unknown API type: ${apiType}`);
+            }
+
+            // 发送响应
+            webviewPanel.webview.postMessage({
+              type: `api-${apiType}-response`,
+              messageId,
+              result,
+            });
+          } catch (error: any) {
+            // 发送错误响应
+            webviewPanel.webview.postMessage({
+              type: `api-${apiType}-response`,
+              messageId,
+              error: error.message || 'Unknown error',
+              status: 500,
+              statusText: 'Internal Server Error',
+            });
+          }
+          return;
+        }
+
+        // 处理其他消息类型
         switch (e.type) {
           case 'save':
-            // 保存文档内容
+            // 保存文档内容（兼容旧版本）
             const edit = new vscode.WorkspaceEdit();
             edit.replace(
               document.uri,
@@ -72,7 +129,6 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
             if (!success) {
               vscode.window.showErrorMessage('Failed to save document');
             } else {
-              // 保存成功后，标记文档为已保存
               await document.save();
             }
             break;
@@ -108,76 +164,179 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
 
     // 等待 webview 加载完成后发送初始内容（加载功能）
     // 使用 setTimeout 确保 webview 已完全加载并准备好接收消息
+    // 增加延迟以确保消息监听器已设置
     setTimeout(() => {
+      const content = document.getText();
       webviewPanel.webview.postMessage({
         type: 'load',
-        content: document.getText(),
+        content: content,
       });
-    }, 100);
+      console.log(`[ArchimateEditor] Sent initial content, length: ${content.length}`);
+    }, 300);
   }
 
   /**
    * 获取 Webview HTML 内容
-   * 简化版本：只处理必要的路径替换和初始内容注入
+   * 参考 mermaid-editor 和 plantuml-js 的简单实现方式
    */
   private getWebviewContent(
     webview: vscode.Webview,
     document: vscode.TextDocument,
     extensionUri: vscode.Uri
   ): string {
-    // 获取 archimate-js 的路径
+    // 获取 archimate-js-v2 的路径
     const extensionPath = this.context.extensionPath;
-    const archimateJsPath = path.join(extensionPath, 'dist', 'archimate-js');
-    const indexHtmlPath = path.join(archimateJsPath, 'index.html');
+    const archimateJsV2Path = path.join(extensionPath, 'dist', 'archimate-js-v2');
+    const indexHtmlPath = path.join(archimateJsV2Path, 'index.html');
     
     // 检查构建产物是否存在
     if (!fs.existsSync(indexHtmlPath)) {
       throw new Error(
-        `ArchiMate editor build artifacts not found. Please run: pnpm build`
+        `ArchiMate editor build artifacts not found at ${indexHtmlPath}. Please run: pnpm build:archimate-js-v2`
       );
     }
     
     // 读取静态 HTML 文件
     let htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8');
     
-    // 获取 webview URI 辅助函数
-    const archimateJsUri = vscode.Uri.file(archimateJsPath);
+    // 获取 webview URI 辅助函数（参考 plantuml-js 的实现）
+    // 统一转换为 CDN 格式：https://file+.vscode-resource.vscode-cdn.net/...
+    const archimateJsV2Uri = vscode.Uri.file(archimateJsV2Path);
     const webviewUri = (relativePath: string) => {
-      const uri = vscode.Uri.joinPath(archimateJsUri, relativePath);
-      return webview.asWebviewUri(uri).toString();
+      // 跳过已经是绝对路径的（但需要转换 vscode-webview:// 格式）
+      if (relativePath.startsWith('http://') || 
+          relativePath.startsWith('https://') ||
+          relativePath.startsWith('data:') ||
+          relativePath.startsWith('blob:')) {
+        // 如果是 CDN 格式，直接返回
+        if (relativePath.includes('vscode-resource.vscode-cdn.net')) {
+          return relativePath;
+        }
+        // 如果是 vscode-webview:// 格式，转换为 CDN 格式
+        if (relativePath.includes('vscode-webview://')) {
+          return convertToCdnFormat(relativePath);
+        }
+        return relativePath;
+      }
+      
+      // 规范化路径（去掉开头的 ./ 或 /）
+      let normalizedPath = relativePath;
+      if (normalizedPath.startsWith('./')) {
+        normalizedPath = normalizedPath.substring(2);
+      } else if (normalizedPath.startsWith('/')) {
+        normalizedPath = normalizedPath.substring(1);
+      }
+      
+      const uri = vscode.Uri.joinPath(archimateJsV2Uri, normalizedPath);
+      const webviewUriString = webview.asWebviewUri(uri).toString();
+      
+      // 统一转换为 CDN 格式
+      return convertToCdnFormat(webviewUriString);
     };
     
-    // 替换所有 JS 和 CSS 文件的相对路径为 webview URI（必须，因为相对路径在 webview 中无法工作）
-    // 1. 替换 CSS 文件路径
+    // 将 vscode-webview:// 格式转换为 CDN 格式的辅助函数
+    const convertToCdnFormat = (url: string): string => {
+      if (!url || !url.includes('vscode-webview://')) {
+        return url;
+      }
+      
+      // 提取路径部分：vscode-webview://xxx/path/to/file
+      const match = url.match(/vscode-webview:\/\/[^/]+\/(.+)$/);
+      if (match && match[1]) {
+        const filePath = match[1];
+        // 直接使用文件系统路径构建 CDN 格式 URL
+        return 'https://file+.vscode-resource.vscode-cdn.net' + archimateJsV2Path + '/' + filePath;
+      }
+      
+      return url;
+    };
+    
+    // 1. 替换 CSS 文件路径（参考 mermaid-editor 的实现）
+    // 注意：CSS 中的 url() 路径由运行时脚本修复（在 ArchimateEditorApp.js 中）
     htmlContent = htmlContent.replace(
-      /<link[^>]*href=["']([^"']+\.css)["'][^>]*>/gi,
-      (match: string, cssPath: string) => {
-        // 跳过已经是绝对路径的（如 CDN）
-        if (cssPath.startsWith('http://') || cssPath.startsWith('https://')) {
+      /<link[^>]*href=["']([^"']+)["'][^>]*>/gi,
+      (match, href) => {
+        // 如果是 vscode-webview:// 格式，转换为 CDN 格式
+        if (href.includes('vscode-webview://')) {
+          return match.replace(href, convertToCdnFormat(href));
+        }
+        // 如果已经是 CDN 格式或其他绝对路径，保持不变
+        if (href.startsWith('http://') || 
+            href.startsWith('https://') || 
+            href.startsWith('data:') ||
+            href.startsWith('blob:') ||
+            href.includes('vscode-resource.vscode-cdn.net')) {
           return match;
         }
-        return match.replace(cssPath, webviewUri(cssPath));
+        // 相对路径，使用 webviewUri 转换
+        return match.replace(href, webviewUri(href));
       }
     );
     
-    // 2. 替换所有 script 标签中的 JS 文件路径
+    // 2. 替换所有 script 标签中的 JS 文件路径（参考 mermaid-editor 的实现）
     htmlContent = htmlContent.replace(
-      /<script[^>]*src=["']([^"']+\.js)["'][^>]*><\/script>/gi,
-      (match: string, jsPath: string) => {
-        // 跳过已经是绝对路径的（如 CDN）
-        if (jsPath.startsWith('http://') || jsPath.startsWith('https://')) {
+      /<script[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi,
+      (match, src) => {
+        // 如果是 vscode-webview:// 格式，转换为 CDN 格式
+        if (src.includes('vscode-webview://')) {
+          return match.replace(src, convertToCdnFormat(src));
+        }
+        // 如果已经是 CDN 格式或其他绝对路径，保持不变
+        if (src.startsWith('http://') || 
+            src.startsWith('https://') || 
+            src.startsWith('data:') ||
+            src.startsWith('blob:') ||
+            src.includes('vscode-resource.vscode-cdn.net')) {
           return match;
         }
-        // 对于 app.js，保持 type="module"
-        if (jsPath === 'app.js') {
-          return `<script type="module" src="${webviewUri(jsPath)}"></script>`;
-        }
-        return match.replace(jsPath, webviewUri(jsPath));
+        // 相对路径，使用 webviewUri 转换
+        return match.replace(src, webviewUri(src));
       }
     );
     
-    // 3. 不再使用 window.initialContent，改为仅通过 postMessage 传递内容
-    // 这样可以避免 JSON.stringify 导致的编码问题和重复加载
+    // 3. 替换其他资源文件（如图片、字体等，参考 mermaid-editor 的实现）
+    htmlContent = htmlContent.replace(
+      /(src|href)=["']([^"']+\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico))["']/gi,
+      (match, attr, resourcePath) => {
+        // 如果是 vscode-webview:// 格式，转换为 CDN 格式
+        if (resourcePath.includes('vscode-webview://')) {
+          return `${attr}="${convertToCdnFormat(resourcePath)}"`;
+        }
+        // 如果已经是 CDN 格式或其他绝对路径，保持不变
+        if (resourcePath.startsWith('http://') || 
+            resourcePath.startsWith('https://') || 
+            resourcePath.startsWith('data:') ||
+            resourcePath.startsWith('blob:') ||
+            resourcePath.includes('vscode-resource.vscode-cdn.net')) {
+          return match;
+        }
+        // 相对路径，使用 webviewUri 转换
+        return `${attr}="${webviewUri(resourcePath)}"`;
+      }
+    );
+    
+    // 4. 替换所有剩余的 vscode-webview:// 格式（包括非标准资源）
+    htmlContent = htmlContent.replace(
+      /vscode-webview:\/\/[^"'\s]+/g,
+      (match) => {
+        return convertToCdnFormat(match);
+      }
+    );
+    
+    // 注入 basePath 到全局变量，供运行时脚本使用（统一使用 CDN 格式）
+    // 直接使用文件系统路径构建 CDN 格式 URL，确保可访问
+    // 格式：https://file+.vscode-resource.vscode-cdn.net/绝对路径
+    const cdnBasePath = 'https://file+.vscode-resource.vscode-cdn.net' + archimateJsV2Path + '/';
+    
+    // 注入 basePath 到页面，供运行时脚本使用
+    const basePathScript = `
+    <script>
+      // 设置全局 basePath（使用 CDN 格式，确保可访问）
+      window.__ARCHIMATE_EDITOR_BASE_PATH__ = '${cdnBasePath}';
+      console.log('[ArchimateEditor] Base path (CDN format):', window.__ARCHIMATE_EDITOR_BASE_PATH__);
+    </script>
+    `;
+    htmlContent = htmlContent.replace('</head>', basePathScript + '</head>');
     
     return htmlContent;
   }
