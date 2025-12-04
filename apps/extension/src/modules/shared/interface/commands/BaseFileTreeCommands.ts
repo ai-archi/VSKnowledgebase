@@ -448,9 +448,10 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
       let viewType: string | undefined;
       
       switch (ext) {
-        case '.archimate':
-          viewType = 'architool.archimateEditor';
-          break;
+        // Archimate 格式支持已移除
+        // case '.archimate':
+        //   viewType = 'architool.archimateEditor';
+        //   break;
         case '.mmd':
           viewType = 'architool.mermaidEditor';
           break;

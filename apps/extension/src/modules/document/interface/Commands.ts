@@ -227,12 +227,13 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
           }
         },
       },
-      {
-        command: 'archi.document.addArchimateDesign',
-        callback: async (item?: DocumentTreeItem) => {
-          await this.showCreateDesignDialog(item, 'archimate');
-        },
-      },
+      // Archimate 格式支持已移除
+      // {
+      //   command: 'archi.document.addArchimateDesign',
+      //   callback: async (item?: DocumentTreeItem) => {
+      //     await this.showCreateDesignDialog(item, 'archimate');
+      //   },
+      // },
       {
         command: 'archi.document.addPlantUMLDesign',
         callback: async (item?: DocumentTreeItem) => {

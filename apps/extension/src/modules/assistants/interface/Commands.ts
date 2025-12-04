@@ -281,12 +281,13 @@ export class AssistantsCommands extends BaseFileTreeCommands<AssistantsTreeItem>
           await this.showCreateTemplateFolderDialog(item);
         },
       },
-      {
-        command: 'archi.template.addArchimateDesign',
-        callback: async (item?: AssistantsTreeItem) => {
-          await this.showCreateTemplateDesignDialog(item, 'archimate');
-        },
-      },
+      // Archimate 格式支持已移除
+      // {
+      //   command: 'archi.template.addArchimateDesign',
+      //   callback: async (item?: AssistantsTreeItem) => {
+      //     await this.showCreateTemplateDesignDialog(item, 'archimate');
+      //   },
+      // },
       {
         command: 'archi.template.addPlantUMLDesign',
         callback: async (item?: AssistantsTreeItem) => {
@@ -521,8 +522,9 @@ export class AssistantsCommands extends BaseFileTreeCommands<AssistantsTreeItem>
       }
 
       // 确定文件扩展名
-      const extension = designType === 'archimate' ? 'archimate' : designType === 'puml' ? 'puml' : 'mmd';
-      const fileExtension = designType === 'archimate' ? '.archimate' : designType === 'puml' ? '.puml' : '.mmd';
+      // Archimate 格式支持已移除
+      const extension = designType === 'puml' ? 'puml' : 'mmd';
+      const fileExtension = designType === 'puml' ? '.puml' : '.mmd';
 
       // 计算目标路径（在 templates/content 目录下）
       const { targetPath, targetFolderPath } = this.fileTreeDomainService.calculateTargetPath(

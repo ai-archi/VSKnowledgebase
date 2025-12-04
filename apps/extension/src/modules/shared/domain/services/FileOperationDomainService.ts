@@ -168,9 +168,10 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
     if (ext === 'puml' || lowerPath.includes('plantuml')) {
       return { viewType: 'design', format: 'puml' };
     }
-    if (ext === 'archimate' || lowerPath.includes('archimate')) {
-      return { viewType: 'design', format: 'archimate' };
-    }
+    // Archimate 格式支持已移除
+    // if (ext === 'archimate' || lowerPath.includes('archimate')) {
+    //   return { viewType: 'design', format: 'archimate' };
+    // }
     if (lowerPath.includes('diagram')) {
       return { viewType: 'design', format: ext || 'md' };
     }
@@ -200,8 +201,9 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
         return this.generateDefaultMermaidContent(fileName);
       case 'puml':
         return this.generateDefaultPlantUMLContent(fileName);
-      case 'archimate':
-        return this.generateDefaultArchimateContent(fileName);
+      // Archimate 格式支持已移除
+      // case 'archimate':
+      //   return this.generateDefaultArchimateContent(fileName);
       default:
         return this.generateDefaultMarkdownContent(fileName);
     }

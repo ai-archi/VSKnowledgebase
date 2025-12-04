@@ -41,16 +41,6 @@
     },
     "customEditors": [
       {
-        "viewType": "architool.archimateEditor",
-        "displayName": "ArchiMate Diagram",
-        "selector": [
-          {
-            "filenamePattern": "*.archimate"
-          }
-        ],
-        "priority": "default"
-      },
-      {
         "viewType": "architool.mermaidEditor",
         "displayName": "Mermaid Diagram",
         "selector": [
@@ -72,17 +62,6 @@
       }
     ],
     "languages": [
-      {
-        "id": "archimate",
-        "extensions": [
-          ".archimate"
-        ],
-        "aliases": [
-          "ArchiMate",
-          "archimate"
-        ],
-        "configuration": "./language-configuration.json"
-      },
       {
         "id": "mermaid",
         "extensions": [
@@ -166,11 +145,6 @@
         "icon": "$(folder-create)"
       },
       {
-        "command": "archi.document.addArchimateDesign",
-        "title": "Add Diagram:Archimate",
-        "icon": "$(graph-line)"
-      },
-      {
         "command": "archi.document.addPlantUMLDesign",
         "title": "Add Diagram:PlantUML",
         "icon": "$(graph-line)"
@@ -243,11 +217,6 @@
         "command": "archi.template.addFolder",
         "title": "Add Folder Template",
         "icon": "$(folder-create)"
-      },
-      {
-        "command": "archi.template.addArchimateDesign",
-        "title": "Add Archimate Template",
-        "icon": "$(graph-line)"
       },
       {
         "command": "archi.template.addPlantUMLDesign",
@@ -325,11 +294,6 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addArchimateDesign",
-          "when": "view == architool.documentView && viewItem == vault",
-          "group": "1_actions"
-        },
-        {
           "command": "archi.document.addMermaidDesign",
           "when": "view == architool.documentView && viewItem == vault",
           "group": "1_actions"
@@ -360,11 +324,6 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.document.addArchimateDesign",
-          "when": "view == architool.documentView && viewItem == document",
-          "group": "1_actions"
-        },
-        {
           "command": "archi.document.addMermaidDesign",
           "when": "view == architool.documentView && viewItem == document",
           "group": "1_actions"
@@ -391,11 +350,6 @@
         },
         {
           "command": "archi.document.addPlantUMLDesign",
-          "when": "view == architool.documentView && viewItem == folder",
-          "group": "1_actions"
-        },
-        {
-          "command": "archi.document.addArchimateDesign",
           "when": "view == architool.documentView && viewItem == folder",
           "group": "1_actions"
         },
@@ -421,11 +375,6 @@
         },
         {
           "command": "archi.template.addFolder",
-          "when": "view == architool.templateView && viewItem == vault",
-          "group": "1_actions"
-        },
-        {
-          "command": "archi.template.addArchimateDesign",
           "when": "view == architool.templateView && viewItem == vault",
           "group": "1_actions"
         },
@@ -490,11 +439,6 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.template.addArchimateDesign",
-          "when": "view == architool.templateView && viewItem == template.file",
-          "group": "1_actions"
-        },
-        {
           "command": "archi.template.addPlantUMLDesign",
           "when": "view == architool.templateView && viewItem == template.file",
           "group": "1_actions"
@@ -520,11 +464,6 @@
           "group": "1_actions"
         },
         {
-          "command": "archi.template.addArchimateDesign",
-          "when": "view == architool.templateView && viewItem == template.directory",
-          "group": "1_actions"
-        },
-        {
           "command": "archi.template.addPlantUMLDesign",
           "when": "view == architool.templateView && viewItem == template.directory",
           "group": "1_actions"
@@ -544,7 +483,7 @@
   },
   "scripts": {
     "compile": "tsc -p tsconfig.json && npm run copy:resources",
-    "copy:resources": "mkdir -p dist/extension/resources/templates && cp src/resources/templates/*.archimate src/resources/templates/*.mmd src/resources/templates/*.puml dist/extension/resources/templates/ 2>/dev/null || true",
+    "copy:resources": "mkdir -p dist/extension/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml dist/extension/resources/templates/ 2>/dev/null || true",
     "watch": "tsc -p tsconfig.json --watch",
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",
@@ -552,7 +491,6 @@
     "postinstall": "echo 'Note: better-sqlite3 will be compiled for development Node.js version. For Electron runtime, run: pnpm run rebuild:electron'"
   },
   "dependencies": {
-    "archimate-js": "0.0.4",
     "better-sqlite3": "^12.0.0",
     "diagram-js": "^15.4.0",
     "fast-glob": "^3.3.2",

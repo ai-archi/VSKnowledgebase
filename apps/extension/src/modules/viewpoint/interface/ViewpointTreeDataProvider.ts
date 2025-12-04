@@ -86,8 +86,9 @@ export class ViewpointTreeItem extends vscode.TreeItem {
       return new vscode.ThemeIcon('file-code');
     } else if (ext === '.mmd') {
       return new vscode.ThemeIcon('file-code');
-    } else if (ext === '.archimate') {
-      return new vscode.ThemeIcon('file-code');
+    // Archimate 格式支持已移除
+    // } else if (ext === '.archimate') {
+    //   return new vscode.ThemeIcon('file-code');
     } else {
       return new vscode.ThemeIcon('file');
     }

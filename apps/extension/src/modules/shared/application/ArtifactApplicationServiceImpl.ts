@@ -104,24 +104,25 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     
     // 如果没有模板ID或模板获取失败，且没有提供content，使用内置默认模板
     if (!fileContent) {
+      // Archimate 格式支持已移除
       // 对于 archimate 设计图，如果有特定的视图类型，尝试加载对应的模板
-      if (opts.viewType === 'design' && opts.format === 'archimate' && opts.templateViewType) {
-        const architoolRoot = this.fileAdapter.getArtifactRoot();
-        const templateContent = this.fileOperationService.getDesignTemplateContent(
-          opts.viewType,
-          opts.format,
-          opts.templateViewType,
-          opts.title,
-          architoolRoot
-        );
-        if (templateContent) {
-          fileContent = templateContent;
-          this.logger.info('[ArtifactApplicationService] Using design template for view type', {
-            viewType: opts.templateViewType,
-            format: opts.format
-          });
-        }
-      }
+      // if (opts.viewType === 'design' && opts.format === 'archimate' && opts.templateViewType) {
+      //   const architoolRoot = this.fileAdapter.getArtifactRoot();
+      //   const templateContent = this.fileOperationService.getDesignTemplateContent(
+      //     opts.viewType,
+      //     opts.format,
+      //     opts.templateViewType,
+      //     opts.title,
+      //     architoolRoot
+      //   );
+      //   if (templateContent) {
+      //     fileContent = templateContent;
+      //     this.logger.info('[ArtifactApplicationService] Using design template for view type', {
+      //       viewType: opts.templateViewType,
+      //       format: opts.format
+      //     });
+      //   }
+      // }
       
       // 如果没有特定模板，使用内置的默认模板（从内置模板文件加载）
       if (!fileContent) {
