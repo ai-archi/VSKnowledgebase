@@ -182,7 +182,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
 
   /**
    * 获取 Webview HTML 内容
-   * 参考 mermaid-editor 和 plantuml-js 的简单实现方式
+   * 参考 plantuml-js 的简单实现方式
    */
   private getWebviewContent(
     webview: vscode.Webview,
@@ -256,7 +256,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       return url;
     };
     
-    // 1. 替换 CSS 文件路径（参考 mermaid-editor 的实现）
+    // 1. 替换 CSS 文件路径
     // 注意：CSS 中的 url() 路径由运行时脚本修复（在 ArchimateEditorApp.js 中）
     htmlContent = htmlContent.replace(
       /<link[^>]*href=["']([^"']+)["'][^>]*>/gi,
@@ -278,7 +278,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       }
     );
     
-    // 2. 替换所有 script 标签中的 JS 文件路径（参考 mermaid-editor 的实现）
+    // 2. 替换所有 script 标签中的 JS 文件路径
     htmlContent = htmlContent.replace(
       /<script[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi,
       (match, src) => {
@@ -299,7 +299,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
       }
     );
     
-    // 3. 替换其他资源文件（如图片、字体等，参考 mermaid-editor 的实现）
+    // 3. 替换其他资源文件（如图片、字体等）
     htmlContent = htmlContent.replace(
       /(src|href)=["']([^"']+\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico))["']/gi,
       (match, attr, resourcePath) => {

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { mermaidToDiagramData, diagramDataToMermaid, DiagramData, Point } from './mermaidConverter';
 
-// API 消息类型定义（与 packages/mermaid-editor/lib/types.ts 保持一致）
+// API 消息类型定义
 interface LayoutUpdate {
   nodes?: Record<string, Point | null>;
   edges?: Record<string, { points?: Point[] | null }>;
