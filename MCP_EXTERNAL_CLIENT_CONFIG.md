@@ -233,13 +233,13 @@
 **1. 扩展实例发现机制**
 
 - **IPC 端点命名**：每个扩展实例创建独立的 IPC 端点
-  - **Unix/Linux/macOS**：使用 Unix Socket，路径为 `~/.architool/mcp-servers/{workspace-hash}.sock`
+  - **Unix/Linux/macOS**：使用 Unix Socket，路径为 `~/.architool/mcp-server/{workspace-hash}.sock`
   - **Windows**：使用命名管道，名称为 `\\.\pipe\architool-{workspace-hash}`
 - **注册表机制**：所有活动的扩展实例在注册表中记录
-  - 注册表位置：`~/.architool/mcp-servers/registry.json`
+  - 注册表位置：`~/.architool/mcp-server/registry.json`
   - 记录每个实例的工作区路径、IPC 端点、最后激活时间
 - **MCP Server 发现流程**：
-  1. 读取注册表 `~/.architool/mcp-servers/registry.json`（Windows: `%USERPROFILE%\.architool\mcp-servers\registry.json`）
+  1. 读取注册表 `~/.architool/mcp-server/registry.json`（Windows: `%USERPROFILE%\.architool\mcp-server\registry.json`）
   2. 验证 IPC 端点是否仍然活动
      - **Unix/Linux/macOS**：检查 socket 文件是否存在
      - **Windows**：尝试连接命名管道（无法通过文件系统检查）
@@ -261,17 +261,19 @@
    **Unix/Linux/macOS**：
    ```
    ~/.architool/
-   ├── mcp-servers/
-   │   ├── {workspace-hash-1}.sock  # 窗口 1 的 Unix Socket
-   │   ├── {workspace-hash-2}.sock  # 窗口 2 的 Unix Socket
-   │   └── registry.json             # 注册表，记录所有活动的扩展实例
+   ├── mcp-server/
+   │   ├── mcp-server.js             # MCP Server 脚本
+   │   ├── {workspace-hash-1}.sock   # 窗口 1 的 Unix Socket
+   │   ├── {workspace-hash-2}.sock   # 窗口 2 的 Unix Socket
+   │   └── registry.json              # 注册表，记录所有活动的扩展实例
    ```
    
    **Windows**：
    ```
    %USERPROFILE%\.architool\
-   ├── mcp-servers\
-   │   └── registry.json             # 注册表，记录所有活动的扩展实例
+   ├── mcp-server\
+   │   ├── mcp-server.js              # MCP Server 脚本
+   │   └── registry.json               # 注册表，记录所有活动的扩展实例
    ```
    命名管道：`\\.\pipe\architool-{workspace-hash}`（不在文件系统中，由系统管理）
 
@@ -282,13 +284,13 @@
        {
          "workspaceHash": "abc123",
          "workspacePath": "/path/to/workspace1",
-         "ipcEndpoint": "~/.architool/mcp-servers/abc123.sock",
+         "ipcEndpoint": "~/.architool/mcp-server/abc123.sock",
          "lastActive": "2024-01-01T12:00:00Z"
        },
        {
          "workspaceHash": "def456",
          "workspacePath": "/path/to/workspace2",
-         "ipcEndpoint": "~/.architool/mcp-servers/def456.sock",
+         "ipcEndpoint": "~/.architool/mcp-server/def456.sock",
          "lastActive": "2024-01-01T12:05:00Z"
        }
      ]
@@ -296,7 +298,7 @@
    ```
 
 3. **MCP Server 启动流程**：
-   - 读取注册表 `~/.architool/mcp-servers/registry.json`
+   - 读取注册表 `~/.architool/mcp-server/registry.json`
    - 验证 IPC 端点是否仍然活动（检查文件是否存在）
    - 选择最近激活的扩展实例（通过 `lastActive` 时间戳）
    - 建立一对一 IPC 连接

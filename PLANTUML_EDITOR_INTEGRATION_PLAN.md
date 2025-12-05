@@ -325,9 +325,10 @@
 
 - 接收 ExtensionService 格式的消息（`method` + `params` + `id`）
 - 处理完成后通过 `postMessage` 推送事件（格式：`{ method, params }`）
-- **重要**：必须使用 `method` 字段推送事件，不能使用 `type` 字段（ExtensionService 通过 `message.method` 匹配事件处理器）
+- **必须使用 `method` 字段**：ExtensionService 通过 `message.method` 匹配事件处理器
+- **事件数据放在 `params` 中**：例如 `{ method: 'load', params: { source: '...' } }`
 - 不使用 `result` 字段，因为这是事件推送而非请求响应
-- 事件数据放在 `params` 对象中，例如：`{ method: 'load', params: { source: '...' } }`
+- **无需兼容旧格式**：本项目为早期版本，直接使用新格式实现
 
 ## 四、文件结构
 
@@ -457,7 +458,7 @@ vendor/
 ### 缓解措施
 1. 充分测试消息通信
 2. 添加详细的错误日志
-3. 保留原有实现作为回退方案
-4. 分阶段实施，每阶段充分测试
-5. 确保 Java 运行时可用性检查
-6. 添加 JAR 文件存在性检查
+3. 分阶段实施，每阶段充分测试
+4. 确保 Java 运行时可用性检查
+5. 添加 JAR 文件存在性检查
+6. **简化实现**：由于是早期版本，直接使用新格式，无需保留旧实现作为回退

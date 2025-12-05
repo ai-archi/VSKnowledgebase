@@ -31,10 +31,10 @@ export class ArchitoolDirectoryManager {
       fs.mkdirSync(cacheDir, { recursive: true });
     }
 
-    // 创建 mcp-servers 目录（用于 IPC 端点）
-    const mcpServersDir = path.join(os.homedir(), '.architool', 'mcp-servers');
-    if (!fs.existsSync(mcpServersDir)) {
-      fs.mkdirSync(mcpServersDir, { recursive: true });
+    // 创建 mcp-server 目录（用于 IPC 端点、注册表和 MCP Server 脚本）
+    const mcpServerDir = path.join(os.homedir(), '.architool', 'mcp-server');
+    if (!fs.existsSync(mcpServerDir)) {
+      fs.mkdirSync(mcpServerDir, { recursive: true });
     }
   }
 

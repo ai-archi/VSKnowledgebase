@@ -29,8 +29,8 @@ export class MCPRegistry {
   private logger?: Logger;
 
   constructor(architoolRoot: string, logger?: Logger) {
-    const mcpServersDir = path.join(architoolRoot, 'mcp-servers');
-    this.registryPath = path.join(mcpServersDir, 'registry.json');
+    const mcpServerDir = path.join(architoolRoot, 'mcp-server');
+    this.registryPath = path.join(mcpServerDir, 'registry.json');
     this.logger = logger;
   }
 

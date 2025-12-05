@@ -56,7 +56,7 @@ export class MCPIPCServer {
    * Windows: 使用命名管道 (\\.\pipe\)
    * Unix/Linux/macOS: 使用 Unix Socket (文件路径)
    * 
-   * 注意：IPC 端点统一使用用户主目录下的 .architool/mcp-servers 目录
+   * 注意：IPC 端点统一使用用户主目录下的 .architool/mcp-server 目录
    * 而不是工作区目录下的 .architool，以便多个工作区共享注册表
    */
   private getIPCEndpointPath(architoolRoot: string, workspaceHash: string): string {
@@ -66,10 +66,10 @@ export class MCPIPCServer {
       return `\\\\.\\pipe\\architool-${workspaceHash}`;
     } else {
       // Unix/Linux/macOS: 使用 Unix Socket
-      // 使用用户主目录下的 .architool/mcp-servers 目录
+      // 使用用户主目录下的 .architool/mcp-server 目录
       const homeArchitoolRoot = path.join(os.homedir(), '.architool');
-      const mcpServersDir = path.join(homeArchitoolRoot, 'mcp-servers');
-      return path.join(mcpServersDir, `${workspaceHash}.sock`);
+      const mcpServerDir = path.join(homeArchitoolRoot, 'mcp-server');
+      return path.join(mcpServerDir, `${workspaceHash}.sock`);
     }
   }
 

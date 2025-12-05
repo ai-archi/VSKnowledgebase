@@ -56,11 +56,8 @@ interface MCPRegistryData {
  */
 function getRegistryPath(): string {
   const homeDir = os.homedir();
-  if (process.platform === 'win32') {
-    return path.join(homeDir, '.architool', 'mcp-servers', 'registry.json');
-  } else {
-    return path.join(homeDir, '.architool', 'mcp-servers', 'registry.json');
-  }
+  // 统一使用 mcp-server 目录
+  return path.join(homeDir, '.architool', 'mcp-server', 'registry.json');
 }
 
 /**
