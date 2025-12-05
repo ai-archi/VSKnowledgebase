@@ -51,6 +51,7 @@ export class SqliteRuntimeIndex {
       category: metadata.category || null,
       tags: JSON.stringify(metadata.tags || []),
       links: JSON.stringify(metadata.links || []),
+      relationships: JSON.stringify(metadata.relationships || []), // 新增：完整的关联关系
       related_artifacts: JSON.stringify(metadata.relatedArtifacts || []),
       related_code_paths: JSON.stringify(metadata.relatedCodePaths || []),
       related_components: JSON.stringify(metadata.relatedComponents || []),
@@ -61,8 +62,8 @@ export class SqliteRuntimeIndex {
       created_at: metadata.createdAt,
       updated_at: metadata.updatedAt,
       metadata_file_path: metadataFilePath,
-      title: title || null, // 新增字段
-      description: description || null, // 新增字段
+      title: title || null,
+      description: description || null,
     }).onConflict('id').merge();
 
     // FTS5 索引通过触发器自动同步，无需手动更新

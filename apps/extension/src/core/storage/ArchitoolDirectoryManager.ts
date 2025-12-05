@@ -144,7 +144,6 @@ export class ArchitoolDirectoryManager {
     const subDirs = [
       'artifacts',
       'metadata',
-      'links',
       'templates',
       'tasks',
       'viewpoints',

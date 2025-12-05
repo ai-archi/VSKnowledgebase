@@ -1,4 +1,5 @@
 import { ArtifactLinkInfo } from './value_object/ArtifactLinkInfo';
+import { ArtifactRelationship } from './value_object/ArtifactRelationship';
 
 /**
  * ArtifactMetadata 值对象
@@ -22,8 +23,9 @@ export interface ArtifactMetadata {
   links?: ArtifactLinkInfo[]; // 文档内的链接：wikilinks, refs, external
   
   // 显式关联关系
-  relatedArtifacts?: string[]; // 关联的 Artifact ID 列表
-  relatedCodePaths?: string[]; // 关联的代码路径
+  relationships?: ArtifactRelationship[]; // 完整的关联关系列表（新增，替代独立的 ArtifactLink）
+  relatedArtifacts?: string[]; // 关联的 Artifact ID 列表（保留，向后兼容）
+  relatedCodePaths?: string[]; // 关联的代码路径（保留，向后兼容）
   relatedComponents?: string[]; // 架构组件 ID 列表
   
   // 作者与权限

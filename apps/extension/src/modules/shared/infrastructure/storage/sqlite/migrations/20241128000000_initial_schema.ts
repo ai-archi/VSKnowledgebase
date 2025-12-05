@@ -16,9 +16,10 @@ export async function up(knex: Knex): Promise<void> {
       table.string('type');
       table.string('category');
       table.text('tags'); // SQLite 使用 TEXT 存储 JSON
-      table.text('links');
-      table.text('related_artifacts');
-      table.text('related_code_paths');
+      table.text('links'); // 文档内链接（wikilinks, refs, external）
+      table.text('relationships'); // 完整的关联关系列表（替代独立的 artifact_links 表）
+      table.text('related_artifacts'); // 向后兼容：简化的关联 Artifact ID 列表
+      table.text('related_code_paths'); // 向后兼容：简化的代码路径列表
       table.text('related_components');
       table.string('author');
       table.string('owner');

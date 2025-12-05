@@ -17,7 +17,9 @@ import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/shared/infra
 
 // Repositories
 import { ArtifactRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactRepositoryImpl';
+import { MetadataRepository } from '../../modules/shared/infrastructure/MetadataRepository';
 import { MetadataRepositoryImpl } from '../../modules/shared/infrastructure/MetadataRepositoryImpl';
+import { VaultRepository } from '../../modules/shared/infrastructure/VaultRepository';
 import { VaultRepositoryImpl } from '../../modules/shared/infrastructure/VaultRepositoryImpl';
 import { ChangeRepository, ChangeRepositoryImpl } from '../../modules/shared/infrastructure/ChangeRepository';
 import { ChangeDetector, ChangeDetectorImpl } from '../../modules/shared/infrastructure/ChangeDetector';
@@ -101,7 +103,9 @@ export function createContainer(
   container.bind<ArtifactLinkRepository>(TYPES.ArtifactLinkRepository)
     .toDynamicValue((context) => {
       const vaultAdapter = context.container.get<VaultFileSystemAdapter>(TYPES.VaultFileSystemAdapter);
-      return new ArtifactLinkRepositoryImpl(vaultAdapter);
+      const metadataRepo = context.container.get<MetadataRepository>(TYPES.MetadataRepository);
+      const vaultRepo = context.container.get<VaultRepository>(TYPES.VaultRepository);
+      return new ArtifactLinkRepositoryImpl(vaultAdapter, metadataRepo, vaultRepo);
     })
     .inSingletonScope();
   container.bind<AICommandRepository>(TYPES.AICommandRepository)

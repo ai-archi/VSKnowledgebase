@@ -27,7 +27,6 @@ export class VaultFileSystemAdapter {
     const subDirs = [
       'artifacts',
       'metadata',
-      'links',
       'templates',
       'ai-enhancements',
       'hooks',
