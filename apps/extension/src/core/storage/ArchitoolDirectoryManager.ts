@@ -147,7 +147,6 @@ export class ArchitoolDirectoryManager {
       'templates',
       'tasks',
       'viewpoints',
-      'changes',
     ];
 
     for (const dir of subDirs) {

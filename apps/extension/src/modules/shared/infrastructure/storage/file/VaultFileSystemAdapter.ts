@@ -32,7 +32,6 @@ export class VaultFileSystemAdapter {
       'hooks',
       'tasks',
       'viewpoints',
-      'changes',
     ];
 
     for (const dir of subDirs) {
