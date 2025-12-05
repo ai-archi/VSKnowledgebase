@@ -51,7 +51,9 @@
     "stash:pop": "git stash && git stash pop stash@{1} && git read-tree stash && git stash drop",
     "test": "cross-env LOG_LEVEL=error pnpm jest",
     "test:cli": "cross-env LOG_LEVEL=error pnpm jest --forceExit",
-    "test:update-snapshots": "pnpm test:cli -u"
+    "test:update-snapshots": "pnpm test:cli -u",
+    "package": "pnpm run build && cd apps/extension && pnpm run package",
+    "package:quick": "cd apps/extension && pnpm run package"
   },
   "husky": {
     "hooks": {

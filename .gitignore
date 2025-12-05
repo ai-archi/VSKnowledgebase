@@ -56,3 +56,4 @@ tmp/
 .architool/cache/
 vendors/vscode-extension-samples
 yarn.lock
+**/*.vsix

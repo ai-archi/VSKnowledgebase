@@ -1,5 +1,5 @@
 {
-  "name": "@architool/extension",
+  "name": "architool",
   "displayName": "ArchiTool",
   "description": "Architecture Management Tool for VSCode",
   "version": "0.1.0",
@@ -521,7 +521,9 @@
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",
     "install:electron": "pnpm install && pnpm run rebuild:electron",
-    "postinstall": "echo 'Note: better-sqlite3 will be compiled for development Node.js version. For Electron runtime, run: pnpm run rebuild:electron'"
+    "postinstall": "echo 'Note: better-sqlite3 will be compiled for development Node.js version. For Electron runtime, run: pnpm run rebuild:electron'",
+    "package": "pnpm run rebuild:electron && vsce package --no-dependencies",
+    "package:no-rebuild": "vsce package --no-dependencies"
   },
   "dependencies": {
     "better-sqlite3": "^12.0.0",
