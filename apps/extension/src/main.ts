@@ -31,6 +31,9 @@ import { GitVaultAdapter } from './modules/shared/infrastructure/storage/git/Git
 import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
 import { PlantUMLEditorProvider } from './modules/editor/plantuml/PlantUMLEditorProvider';
+import { MCPIPCServer } from './modules/mcp/MCPIPCServer';
+import { MCPWindowActivationMonitor } from './modules/mcp/MCPWindowActivationMonitor';
+import { calculateWorkspaceHash } from './modules/mcp/utils';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -80,6 +83,17 @@ export async function activate(context: vscode.ExtensionContext) {
   } catch (error: any) {
     // 如果复制失败，记录错误但不阻止激活
     logger.error('Failed to initialize demo-vault:', error);
+  }
+
+  // 2.2. 复制 MCP Server 到固定位置
+  // 获取 MCP Server 源路径（从扩展安装目录）
+  const mcpServerSourcePath = path.join(extensionPath, 'dist', 'mcp-server', 'mcp-server.js');
+  try {
+    await architoolManager.copyMCPServer(mcpServerSourcePath);
+    logger.info('MCP Server copied to fixed location');
+  } catch (error: any) {
+    // 如果复制失败，记录错误但不阻止激活
+    logger.warn('Failed to copy MCP Server:', error);
   }
 
   // 3. 初始化 SQLite
@@ -614,6 +628,46 @@ export async function activate(context: vscode.ExtensionContext) {
     logger.info('MCP Server started');
   } catch (error: any) {
     logger.warn('Failed to start MCP Server', error);
+  }
+
+  // 16. 初始化 MCP IPC Server（用于外部 MCP Client 连接）
+  let mcpIPCServer: MCPIPCServer | null = null;
+  let mcpWindowMonitor: MCPWindowActivationMonitor | null = null;
+  
+  try {
+    const mcpTools = container.get<import('./modules/mcp/MCPTools').MCPTools>(TYPES.MCPTools);
+    const workspaceHash = calculateWorkspaceHash(workspaceRoot);
+    
+    // 创建并启动 IPC Server
+    mcpIPCServer = new MCPIPCServer(
+      workspaceHash,
+      workspaceRoot,
+      architoolRoot,
+      mcpTools,
+      logger
+    );
+    
+    await mcpIPCServer.start();
+    logger.info(`MCP IPC Server started for workspace: ${workspaceRoot}`);
+    
+    // 创建并启动窗口激活监控
+    mcpWindowMonitor = new MCPWindowActivationMonitor(mcpIPCServer, logger);
+    mcpWindowMonitor.start();
+    logger.info('MCP Window Activation Monitor started');
+    
+    // 在扩展停用时清理资源
+    context.subscriptions.push({
+      dispose: async () => {
+        if (mcpWindowMonitor) {
+          mcpWindowMonitor.stop();
+        }
+        if (mcpIPCServer) {
+          await mcpIPCServer.stop();
+        }
+      }
+    });
+  } catch (error: any) {
+    logger.warn('Failed to start MCP IPC Server', error);
   }
 
   logger.info('ArchiTool extension initialized');

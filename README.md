@@ -162,18 +162,57 @@ AI 助手搜索"登录"相关的文档，返回结果包含完整内容，可直
 
 列出所有设计图或特定分类的文档，用于浏览和筛选。
 
-### 外部 MCP Client 配置
+### Cursor 配置
 
-**当前状态**：❌ **不支持**
+在 Cursor 的 MCP 配置文件中添加 ArchiTool 服务器配置。
 
-当前版本尚未实现标准 MCP 协议的 stdio 传输层，因此**无法**在外部 MCP Client（如 Claude Desktop、Cursor）中配置使用。
+**配置文件位置**：
+- macOS: `~/Library/Application Support/Cursor/User/globalStorage/mcp.json`
+- Windows: `%APPDATA%\Cursor\User\globalStorage\mcp.json`
+- Linux: `~/.config/Cursor/User/globalStorage/mcp.json`
 
-**当前实现**：
-- MCP Server 仅在 VS Code 扩展进程内运行
-- 通过依赖注入在扩展代码中使用
-- 不支持通过 stdio 或 HTTP 与外部客户端通信
+**MCP Server 脚本路径**：
 
-**如需在外部 MCP Client 中使用**，请参考 [外部 MCP Client 配置方案](./MCP_EXTERNAL_CLIENT_CONFIG.md) 文档，了解实现方案和配置方式。
+扩展激活时会自动将 MCP Server 复制到固定位置，无需查找扩展安装目录。
+
+**固定路径**：
+- macOS/Linux: `~/.architool/mcp-server/mcp-server.js`
+- Windows: `%USERPROFILE%\.architool\mcp-server\mcp-server.js`
+
+**配置示例**：
+
+**macOS/Linux**：
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "node",
+      "args": [
+        "~/.architool/mcp-server/mcp-server.js"
+      ]
+    }
+  }
+}
+```
+
+**Windows**：
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "node",
+      "args": [
+        "%USERPROFILE%\\.architool\\mcp-server\\mcp-server.js"
+      ]
+    }
+  }
+}
+```
+
+**注意**：
+- 路径使用 `~` 或 `%USERPROFILE%` 会自动展开为用户主目录
+- 扩展激活时会自动复制 MCP Server 到该位置
+- 如果扩展更新，MCP Server 会自动更新（通过文件时间戳比较）
 
 
 ## 📁 项目结构

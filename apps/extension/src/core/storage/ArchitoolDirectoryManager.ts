@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { Logger } from '../logger/Logger';
 
 /**
@@ -28,6 +29,12 @@ export class ArchitoolDirectoryManager {
     const cacheDir = path.join(this.rootPath, 'cache');
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    // 创建 mcp-servers 目录（用于 IPC 端点）
+    const mcpServersDir = path.join(os.homedir(), '.architool', 'mcp-servers');
+    if (!fs.existsSync(mcpServersDir)) {
+      fs.mkdirSync(mcpServersDir, { recursive: true });
     }
   }
 
@@ -176,6 +183,57 @@ export class ArchitoolDirectoryManager {
    */
   getMetadataPath(vaultName: string): string {
     return path.join(this.rootPath, vaultName, 'metadata');
+  }
+
+  /**
+   * 复制 MCP Server 到固定位置
+   * @param mcpServerSourcePath MCP Server 源路径（扩展安装目录中的路径）
+   */
+  async copyMCPServer(mcpServerSourcePath: string): Promise<void> {
+    const mcpServerTargetDir = path.join(os.homedir(), '.architool', 'mcp-server');
+    const mcpServerTargetPath = path.join(mcpServerTargetDir, 'mcp-server.js');
+
+    // 如果目标文件已存在且是最新的，跳过复制
+    if (fs.existsSync(mcpServerTargetPath) && fs.existsSync(mcpServerSourcePath)) {
+      const sourceStat = fs.statSync(mcpServerSourcePath);
+      const targetStat = fs.statSync(mcpServerTargetPath);
+      
+      // 如果目标文件更新或相同，跳过复制
+      if (targetStat.mtime >= sourceStat.mtime) {
+        this.logger?.info('MCP Server is up to date, skipping copy');
+        return;
+      }
+    }
+
+    // 确保目标目录存在
+    if (!fs.existsSync(mcpServerTargetDir)) {
+      fs.mkdirSync(mcpServerTargetDir, { recursive: true });
+    }
+
+    // 复制文件
+    if (fs.existsSync(mcpServerSourcePath)) {
+      fs.copyFileSync(mcpServerSourcePath, mcpServerTargetPath);
+      
+      // 确保文件可执行（Unix/Linux/macOS）
+      if (process.platform !== 'win32') {
+        try {
+          fs.chmodSync(mcpServerTargetPath, 0o755);
+        } catch (error: any) {
+          this.logger?.warn('Failed to set executable permission', error);
+        }
+      }
+      
+      this.logger?.info(`MCP Server copied to ${mcpServerTargetPath}`);
+    } else {
+      this.logger?.warn(`MCP Server source not found: ${mcpServerSourcePath}`);
+    }
+  }
+
+  /**
+   * 获取 MCP Server 目标路径（固定位置）
+   */
+  getMCPServerPath(): string {
+    return path.join(os.homedir(), '.architool', 'mcp-server', 'mcp-server.js');
   }
 }
 

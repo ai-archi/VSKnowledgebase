@@ -4,9 +4,9 @@
 
 本文档说明如何在外部 MCP Client（如 Cursor）中配置 ArchiTool MCP Server，使 AI 助手能够访问知识库。
 
-**当前状态**：❌ **未实现**
+**当前状态**：✅ **已实现**
 
-当前版本尚未实现标准 MCP 协议的 stdio 传输层，因此无法在外部 MCP Client 中配置使用。本文档提供实现方案和配置方式。
+当前版本已实现标准 MCP 协议的 stdio 传输层，可以在外部 MCP Client 中配置使用。本文档说明配置方式和实现细节。
 
 ## 实现方案
 
@@ -99,13 +99,28 @@
 
 **配置示例**：
 
+**macOS/Linux**：
 ```json
 {
   "mcpServers": {
     "architool": {
       "command": "node",
       "args": [
-        "/path/to/architool-mcp-server.js"
+        "~/.architool/mcp-server/mcp-server.js"
+      ]
+    }
+  }
+}
+```
+
+**Windows**：
+```json
+{
+  "mcpServers": {
+    "architool": {
+      "command": "node",
+      "args": [
+        "%USERPROFILE%\\.architool\\mcp-server\\mcp-server.js"
       ]
     }
   }
@@ -113,7 +128,9 @@
 ```
 
 **配置说明**：
-- 工作区路径由主进程（VS Code 扩展）自动确定，子进程通过 IPC 获取
+- MCP Server 脚本路径：扩展激活时会自动将 MCP Server 复制到固定位置 `~/.architool/mcp-server/mcp-server.js`
+- 工作区路径由主进程（VS Code 扩展）自动确定，MCP Server 通过注册表发现并连接到活动的扩展实例
+- 如果扩展更新，MCP Server 会自动更新（通过文件时间戳比较）
 
 ### 其他 MCP Client 配置
 
@@ -216,13 +233,16 @@
 **1. 扩展实例发现机制**
 
 - **IPC 端点命名**：每个扩展实例创建独立的 IPC 端点
-  - 使用工作区路径的哈希值作为标识：`~/.architool/mcp-servers/{workspace-hash}.sock`
+  - **Unix/Linux/macOS**：使用 Unix Socket，路径为 `~/.architool/mcp-servers/{workspace-hash}.sock`
+  - **Windows**：使用命名管道，名称为 `\\.\pipe\architool-{workspace-hash}`
 - **注册表机制**：所有活动的扩展实例在注册表中记录
   - 注册表位置：`~/.architool/mcp-servers/registry.json`
   - 记录每个实例的工作区路径、IPC 端点、最后激活时间
 - **MCP Server 发现流程**：
-  1. 读取注册表 `~/.architool/mcp-servers/registry.json`
-  2. 验证 IPC 端点是否仍然活动（检查文件是否存在）
+  1. 读取注册表 `~/.architool/mcp-servers/registry.json`（Windows: `%USERPROFILE%\.architool\mcp-servers\registry.json`）
+  2. 验证 IPC 端点是否仍然活动
+     - **Unix/Linux/macOS**：检查 socket 文件是否存在
+     - **Windows**：尝试连接命名管道（无法通过文件系统检查）
   3. 选择最近激活的扩展实例进行连接
   4. 建立一对一 IPC 连接
 
@@ -238,13 +258,22 @@
 **实现机制**：
 
 1. **扩展实例 IPC 端点管理**：
+   **Unix/Linux/macOS**：
    ```
    ~/.architool/
    ├── mcp-servers/
-   │   ├── {workspace-hash-1}.sock  # 窗口 1 的 IPC 端点
-   │   ├── {workspace-hash-2}.sock  # 窗口 2 的 IPC 端点
+   │   ├── {workspace-hash-1}.sock  # 窗口 1 的 Unix Socket
+   │   ├── {workspace-hash-2}.sock  # 窗口 2 的 Unix Socket
    │   └── registry.json             # 注册表，记录所有活动的扩展实例
    ```
+   
+   **Windows**：
+   ```
+   %USERPROFILE%\.architool\
+   ├── mcp-servers\
+   │   └── registry.json             # 注册表，记录所有活动的扩展实例
+   ```
+   命名管道：`\\.\pipe\architool-{workspace-hash}`（不在文件系统中，由系统管理）
 
 2. **注册表格式**（`registry.json`）：
    ```json

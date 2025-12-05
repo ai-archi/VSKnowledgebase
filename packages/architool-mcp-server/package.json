@@ -1,0 +1,16 @@
+{
+  "name": "architool-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server bridge process for ArchiTool",
+  "main": "mcp-server.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
+
