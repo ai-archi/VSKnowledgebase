@@ -146,6 +146,9 @@ importers:
       element-plus:
         specifier: ^2.11.8
         version: 2.11.8(vue@3.5.24(typescript@5.9.3))
+      jointjs:
+        specifier: ^3.4.2
+        version: 3.7.7
       pinia:
         specifier: ^2.1.7
         version: 2.3.1(typescript@5.9.3)(vue@3.5.24(typescript@5.9.3))
@@ -168,12 +171,15 @@ importers:
 
   packages/archimate-js:
     dependencies:
-      archimate-js:
-        specifier: ^0.0.4
-        version: 0.0.4
+      '@arktect-co/archimate-diagram-engine':
+        specifier: ^1.0.1
+        version: 1.0.1
       bootstrap:
         specifier: ^5.2.0-beta1
         version: 5.3.8(@popperjs/core@2.11.8)
+      jointjs:
+        specifier: ^3.4.2
+        version: 3.7.7
     devDependencies:
       '@sentry/webpack-plugin':
         specifier: ^1.15.1
@@ -302,6 +308,10 @@ packages:
 
   '@antfu/utils@9.3.0':
     resolution: {integrity: sha512-9hFT4RauhcUzqOE4f1+frMKLZrgNog5b06I7VmZQV1BkvwvqrbC8EBZf3L1eEL2AKb6rNKjER0sEvJiSP1FXEA==}
+
+  '@arktect-co/archimate-diagram-engine@1.0.1':
+    resolution: {integrity: sha512-lG2wtIj1UWZY3tPNGWa5L/WL2ysR/Cx4SvUg9oub9oMEE1YOmpxiUTxOgULE1nqW9MLv+SPJzNyJ4moG4Q6Vxg==}
+    engines: {node: '>= 12'}
 
   '@babel/code-frame@7.12.11':
     resolution: {integrity: sha512-Zt1yodBx1UcyiePMSkWnU4hPqhwq7hGi2nFL1LeA3EUl+q2LQx16MISgJ0+z7dnmgvP9QtIleuETGOiOH1RcIw==}
@@ -1502,12 +1512,6 @@ packages:
   arch@2.2.0:
     resolution: {integrity: sha512-Of/R0wqp83cgHozfIYLbBMnej79U/SVGOOyuB3VVFv1NRM/PSFMK12x9KVtiYzJqmnU5WR2qp0Z5rHb7sWGnFQ==}
 
-  archimate-font@0.0.2:
-    resolution: {integrity: sha512-AKm4TRk6lX3JIQddhkzCL7FKIT2rfSaxNSGuXM9CriTP3rbF2yaAfOomn/kcuFNGna/P2P4X6vNqzFpjz5JubA==}
-
-  archimate-js@0.0.4:
-    resolution: {integrity: sha512-PzYAt4Hh+DD43+zrBTTmTaGMva+XYxQRbZWWQlzQMs8VOcu7Skd10JazOjQap/ckcJyW/dQoHHf2u7x4WKhdAA==}
-
   arg@2.0.0:
     resolution: {integrity: sha512-XxNTUzKnz1ctK3ZIcI2XUPlD96wbHP2nGqkPKpvk/HNRlPveYrXIVSTk9m3LcqOgDPg3B1nMvdV/K8wZd7PG4w==}
 
@@ -1603,6 +1607,9 @@ packages:
     peerDependencies:
       '@babel/core': ^7.0.0
 
+  backbone@1.4.1:
+    resolution: {integrity: sha512-ADy1ztN074YkWbHi8ojJVFe3vAanO/lrzMGZWUClIP7oDD/Pjy2vrASraUP+2EVCfIiTtCW4FChVow01XneivA==}
+
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -1637,9 +1644,6 @@ packages:
   boxen@1.3.0:
     resolution: {integrity: sha512-TNPjfTr432qx7yOjQyaXm3dSR0MH9vXp7eT1BFSl/C51g+EFnOR9hTg1IreahGBmDNCehscshe45f+C1TBZbLw==}
     engines: {node: '>=4'}
-
-  bpmn-font@0.10.0:
-    resolution: {integrity: sha512-y5UhxANjxWFH3hgA/4ATpgiXEJVfn1V6j72ui+iiqf6qQDRS4ScWTdKvpHHRqQ/HR/3Jc8sFSxRcTHHb4E488A==}
 
   brace-expansion@1.1.12:
     resolution: {integrity: sha512-9T9UjW3r0UW5c1Q7GTwllptXwhvYmEzFhzMfZ9H7FQWt+uZePjZPjBP/W1ZEyZ1twGWom5/56TF4lPcqjnDHcg==}
@@ -1873,9 +1877,6 @@ packages:
   compare-versions@3.6.0:
     resolution: {integrity: sha512-W6Af2Iw1z4CB7q4uU4hv646dW9GQuBM+YpC0UvUCWSD8w90SJjp+ujJuXaEMtAXBtSqGfMPuFOVn4/+FlaqfBA==}
 
-  component-event@0.1.4:
-    resolution: {integrity: sha512-GMwOG8MnUHP1l8DZx1ztFO0SJTFnIzZnBDkXAj8RM2ntV2A6ALlDxgbMY1Fvxlg6WPQ+5IM/a6vg4PEYbjg/Rw==}
-
   component-event@0.2.1:
     resolution: {integrity: sha512-wGA++isMqiDq1jPYeyv2as/Bt/u+3iLW0rEa+8NQ82jAv3TgqMiCM+B2SaBdn2DfLilLjjq736YcezihRYhfxw==}
 
@@ -1955,9 +1956,6 @@ packages:
   css-what@6.2.2:
     resolution: {integrity: sha512-u/O3vwbptzhMs3L1fQE82ZSLHQQfto5gyZzwteVIEyeaY5Fc7R4dapF/BvRoSYFeqfBk4m0V1Vafq5Pjv25wvA==}
     engines: {node: '>= 6'}
-
-  css.escape@1.5.1:
-    resolution: {integrity: sha512-YUifsXXuknHlUsmlgyY0PKzgPOr7/FjCePfHNt0jxm83wHZi44VDMQ7/fGNkjY3/jV1MC+1CmZbaHzugyeRtpg==}
 
   cssesc@3.0.0:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
@@ -2123,6 +2121,9 @@ packages:
   dagre-d3-es@7.0.13:
     resolution: {integrity: sha512-efEhnxpSuwpYOKRm/L5KbqoZmNNukHa/Flty4Wp62JRvgH2ojwVgPgdYyr4twpieZnyRDdIH7PY2mopX26+j2Q==}
 
+  dagre@0.8.5:
+    resolution: {integrity: sha512-/aTqmnRta7x7MCCpExk7HQL2O4owCT2h8NT//9I1OQ9vt29Pa0BzSAkR5lwFUcQ7491yVi/3CXU9jQ5o0Mn2Sw==}
+
   data-view-buffer@1.0.2:
     resolution: {integrity: sha512-EmKO5V3OLXh1rtK2wgXRansaK1/mtVdTUEiEI0W8RkvgT05kfxaH29PliLnpLP73yYO6142Q72QNa8Wx/A5CqQ==}
     engines: {node: '>= 0.4'}
@@ -2224,23 +2225,12 @@ packages:
     resolution: {integrity: sha512-TLz+x/vEXm/Y7P7wn1EJFNLxYpUD4TgMosxY6fAVJUnJMbupHBOncxyWUG9OpTaH9EBD7uFI5LfEgmMOc54DsA==}
     engines: {node: '>=8'}
 
-  diagram-js-direct-editing@2.1.2:
-    resolution: {integrity: sha512-VpccLAnLqLF1cp3fk363QUbRVTd/qTcj2oOb+IqgcmOiWszJp7J9Ta6y5GjUvw48hDZpzCatlmWwA4CJ3MaYGQ==}
-    peerDependencies:
-      diagram-js: '*'
-
-  diagram-js@12.8.1:
-    resolution: {integrity: sha512-LF9BiwjbOPpZd0ez5VSlYRbdbEA59YQX43bWvNDp1rLMv0xwZ5yIg4oaYDK82nIQ0kH1tjvoQRpNevMTCgQVyw==}
-
   diagram-js@15.4.0:
     resolution: {integrity: sha512-rpwDLA/w55wPfiZgp/z2T6cFdCXU3bARGdjhUpEOoh673K18OJ4ruEu3+/94ALRIIyEvJ0XHUk9sgZrzzE79ng==}
 
   didi@10.2.2:
     resolution: {integrity: sha512-l8NYkYFXV1izHI65EyT8EXOjUZtKmQkHLTT89cSP7HU5J/G7AOj0dXKtLc04EXYlga99PBY18IPjOeZ+c3DI4w==}
     engines: {node: '>= 16'}
-
-  didi@9.0.2:
-    resolution: {integrity: sha512-q2+aj+lnJcUweV7A9pdUrwFr4LHVmRPwTmQLtHPFz4aT7IBoryN6Iy+jmFku+oIzr5ebBkvtBCOb87+dJhb7bg==}
 
   diff-sequences@29.6.3:
     resolution: {integrity: sha512-EjePK1srD3P08o2j4f0ExnylqRs5B9tJjcp9t1krH2qRi8CCdsYfwe9JgSLurFBWwq4uOlipzfk5fHNvwFKr8Q==}
@@ -2817,12 +2807,11 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
+  graphlib@2.1.8:
+    resolution: {integrity: sha512-jcLLfkpoVGmH7/InMC/1hIvOPSUh38oJtGhvrOFGzioE1DZ+0YW16RgmOJhHiuWTvGiJQ9Z1Ik43JvkRPRvE+A==}
+
   hachure-fill@0.5.2:
     resolution: {integrity: sha512-3GKBOn+m2LX9iq+JC1064cSFprJY4jL1jCXTcpnfER5HYE2l/4EfWSGzkPa/ZDBmYI0ZOEj5VHV/eKnPGkHuOg==}
-
-  hammerjs@2.0.8:
-    resolution: {integrity: sha512-tSQXBXS/MWQOn/RKckawJ61vvsDpCom87JgxiYdGwHdOa0ht0vzUWDlfioofFCRU0L+6NGDt6XzbgoJvZkMeRQ==}
-    engines: {node: '>=0.8.0'}
 
   handlebars@4.7.8:
     resolution: {integrity: sha512-vafaFqs8MZkRrSX7sFVUdo3ap/eNiLnb4IakshzvP56X5Nr1iGKAIqdX6tMlm6HcNRIkr6AxO5jFEoJzzpT8aQ==}
@@ -2862,11 +2851,6 @@ packages:
 
   he@1.2.0:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
-    hasBin: true
-
-  hex-and-rgba@2.0.0:
-    resolution: {integrity: sha512-XAbB3QGCRnhMFF/T88km/eer7FrKje6YPvyHTManJrD8YpMBO1yT8OQmPvQINTZjMHCKUPvce6FQEiZzRuz6Mg==}
-    engines: {deno: '>= 1.0', node: '>= 7.6'}
     hasBin: true
 
   hosted-git-info@2.8.9:
@@ -2923,9 +2907,6 @@ packages:
     peerDependencies:
       postcss: ^8.1.0
 
-  ids@1.0.5:
-    resolution: {integrity: sha512-XQ0yom/4KWTL29sLG+tyuycy7UmeaM/79GRtSJq6IG9cJGIPeBz5kwDCguie3TwxaMNIc3WtPi0cTa1XYHicpw==}
-
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
@@ -2949,9 +2930,6 @@ packages:
   imurmurhash@0.1.4:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
     engines: {node: '>=0.8.19'}
-
-  indexof@0.0.1:
-    resolution: {integrity: sha512-i0G7hLJ1z0DE8dsqJa2rycj9dBmNKgXBvotXtZYXakU9oivfB9Uj2ZBC27qqef2U58/ZLwalxa1X/RDCdkHtVg==}
 
   inflight@1.0.6:
     resolution: {integrity: sha512-k92I/b08q4wvFscXCLvqfsHCrjrF7yiXsQuIVvVE7N82W3+aqpzuUdBbfhWcy/FZR3/4IgflMgKLOsvPDrGCJA==}
@@ -3311,6 +3289,30 @@ packages:
       node-notifier:
         optional: true
 
+  jointjs@3.4.2:
+    resolution: {integrity: sha512-iw/mOu+y2AD3lhCAQ5RloaRJH/oIWD6rtfGJ1BvhnaF6fn2Wfec/so64LTl5rwCP1IL9cQEMIuh3eth43UwwIw==}
+    deprecated: |-
+      This package has been deprecated in favor of '@joint/core'. The repository name has changed to improve organization and naming conventions. Please update your dependencies to use the new package name:
+
+      npm install @joint/core
+
+      For more information, visit the JointJS repository at: https://github.com/clientio/joint
+
+  jointjs@3.7.7:
+    resolution: {integrity: sha512-gwjyLfXIxovVCIHrg57WG0cyPt6dsJjgnGEGOt8gh2F2kp/T1x6z7kBf62eQqSnM7qn1XiheZV4Iopzd2doHlw==}
+    deprecated: |-
+      This package has been deprecated in favor of '@joint/core'. The repository name has changed to improve organization and naming conventions. Please update your dependencies to use the new package name:
+
+      npm install @joint/core
+
+      For more information, visit the JointJS repository at: https://github.com/clientio/joint
+
+  jquery@3.6.4:
+    resolution: {integrity: sha512-v28EW9DWDFpzcD9O5iyJXg3R3+q+mET5JhnjJzQUZMHOv67bpSIHq81GEYpPNZHG+XXHsfSme3nxp/hndKEcsQ==}
+
+  jquery@3.7.1:
+    resolution: {integrity: sha512-m4avr8yL8kmFN8psrbFFFmB/If14iN5o9nw/NgnnM+kybDJpRsAynV2BsfpTYrTRysYUdADVD7CkUUizgkpLfg==}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -3624,9 +3626,6 @@ packages:
     engines: {node: '>= 20'}
     hasBin: true
 
-  matches-selector@1.2.0:
-    resolution: {integrity: sha512-c4vLwYWyl+Ji+U43eU/G5FwxWd4ZH0ePUsFs5y0uwD9HUEFBXUQ1zUUan+78IpRD+y4pUfG0nAzNM292K7ItvA==}
-
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -3696,14 +3695,8 @@ packages:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
     engines: {node: '>=10'}
 
-  min-dash@3.8.1:
-    resolution: {integrity: sha512-evumdlmIlg9mbRVPbC4F5FuRhNmcMS5pvuBUbqb1G9v09Ro0ImPEgz5n3khir83lFok1inKqVDjnKEg3GpDxQg==}
-
   min-dash@4.2.3:
     resolution: {integrity: sha512-VLMYQI5+FcD9Ad24VcB08uA83B07OhueAlZ88jBK6PyupTvEJwllTMUqMy0wPGYs7pZUEtEEMWdHB63m3LtEcg==}
-
-  min-dom@3.2.1:
-    resolution: {integrity: sha512-v6YCmnDzxk4rRJntWTUiwggLupPw/8ZSRqUq0PDaBwVZEO/wYzCH4SKVBV+KkEvf3u0XaWHly5JEosPtqRATZA==}
 
   min-dom@4.2.1:
     resolution: {integrity: sha512-TMoL8SEEIhUWYgkj7XMSgxmwSyGI+4fP2KFFGnN3FbHfbGHVdsLYSz8LoIsgPhz4dWRmLvxWWSMgzZMJW5sZuA==}
@@ -3779,12 +3772,6 @@ packages:
 
   mlly@1.8.0:
     resolution: {integrity: sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g==}
-
-  moddle-xml@9.0.6:
-    resolution: {integrity: sha512-tl0reHpsY/aKlLGhXeFlQWlYAQHFxTkFqC8tq8jXRYpQSnLVw13T6swMaourLd7EXqHdWsc+5ggsB+fEep6xZQ==}
-
-  moddle@5.0.4:
-    resolution: {integrity: sha512-Kjb+hjuzO+YlojNGxEUXvdhLYTHTtAABDlDcJTtTcn5MbJF9Zkv4I1Fyvp3Ypmfgg1EfHDZ3PsCQTuML9JD6wg==}
 
   ms@2.0.0:
     resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
@@ -3914,9 +3901,6 @@ packages:
     resolution: {integrity: sha512-NuAESUOUMrlIXOfHKzD6bpPu3tYt3xvjNdRIQ+FeT0lNb4K8WR70CaDxhuNguS2XG+GjkyMwOzsN5ZktImfhLA==}
     engines: {node: '>= 0.4'}
 
-  object-refs@0.3.0:
-    resolution: {integrity: sha512-eP0ywuoWOaDoiake/6kTJlPJhs+k0qNm4nYRzXLNHj6vh+5M3i9R1epJTdxIPGlhWc4fNRQ7a6XJNCX+/L4FOQ==}
-
   object-refs@0.4.0:
     resolution: {integrity: sha512-6kJqKWryKZmtte6QYvouas0/EIJKPI1/MMIuRsiBlNuhIMfqYTggzX2F1AJ2+cDs288xyi9GL7FyasHINR98BQ==}
 
@@ -4042,9 +4026,6 @@ packages:
   path-exists@4.0.0:
     resolution: {integrity: sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==}
     engines: {node: '>=8'}
-
-  path-intersection@2.2.1:
-    resolution: {integrity: sha512-9u8xvMcSfuOiStv9bPdnRJQhGQXLKurew94n4GPQCdH1nj9QKC9ObbNoIpiRq8skiOBxKkt277PgOoFgAt3/rA==}
 
   path-intersection@3.1.0:
     resolution: {integrity: sha512-3xS3lvv/vuwm5aH2BVvNRvnvwR2Drde7jQClKpCXTYXIMMjcw/EnMhzCgeHwqbCpzi760PEfAkU53vSIlrNr9A==}
@@ -4445,9 +4426,6 @@ packages:
   sax@1.4.3:
     resolution: {integrity: sha512-yqYn1JhPczigF94DMS+shiDMjDowYO6y9+wB/4WgO0Y19jWYk0lQ4tuG5KI7kj4FTp1wxPj5IFfcrz/s1c3jjQ==}
 
-  saxen@8.1.2:
-    resolution: {integrity: sha512-xUOiiFbc3Ow7p8KMxwsGICPx46ZQvy3+qfNVhrkwfz3Vvq45eGt98Ft5IQaA1R/7Tb5B5MKh9fUR9x3c3nDTxw==}
-
   schema-utils@3.3.0:
     resolution: {integrity: sha512-pN/yOAvcC+5rQ5nERGuwrjLlYvLTbCibnZ1I7B1LaiAz9BRBlE9GMgE/eqV30P7aJQUf7Ddimy/RsbYO/GrVGg==}
     engines: {node: '>= 10.13.0'}
@@ -4809,9 +4787,6 @@ packages:
   tildify@2.0.0:
     resolution: {integrity: sha512-Cc+OraorugtXNfs50hU9KS369rFXCfgGLpfCfvlc+Ud5u6VWmUQsOAa9HbTvheQdYnrdJqqv1e5oIqXppMYnSw==}
     engines: {node: '>=8'}
-
-  tiny-svg@2.2.4:
-    resolution: {integrity: sha512-NOi39lBknf4UdDEahNkbEAJnzhu1ZcN2j75IS2vLRmIhsfxdZpTChfLKBcN1ShplVmPIXJAIafk6YY5/Aa80lQ==}
 
   tiny-svg@3.1.3:
     resolution: {integrity: sha512-9mwnPqXInRsBmH/DO6NMxBE++9LsqpVXQSSTZGc5bomoKKvL5OX/Hlotw7XVXP6XLRcHWIzZpxfovGqWKgCypQ==}
@@ -5279,6 +5254,10 @@ snapshots:
       tinyexec: 1.0.2
 
   '@antfu/utils@9.3.0': {}
+
+  '@arktect-co/archimate-diagram-engine@1.0.1':
+    dependencies:
+      jointjs: 3.4.2
 
   '@babel/code-frame@7.12.11':
     dependencies:
@@ -6652,26 +6631,6 @@ snapshots:
 
   arch@2.2.0: {}
 
-  archimate-font@0.0.2: {}
-
-  archimate-js@0.0.4:
-    dependencies:
-      archimate-font: 0.0.2
-      bpmn-font: 0.10.0
-      css.escape: 1.5.1
-      diagram-js: 12.8.1
-      diagram-js-direct-editing: 2.1.2(diagram-js@12.8.1)
-      hex-and-rgba: 2.0.0
-      ids: 1.0.5
-      inherits: 2.0.4
-      inherits-browser: 0.1.0
-      min-dash: 3.8.1
-      min-dom: 3.2.1
-      moddle: 5.0.4
-      moddle-xml: 9.0.6
-      object-refs: 0.3.0
-      tiny-svg: 2.2.4
-
   arg@2.0.0: {}
 
   argparse@1.0.10:
@@ -6831,6 +6790,10 @@ snapshots:
       babel-plugin-jest-hoist: 29.6.3
       babel-preset-current-node-syntax: 1.2.0(@babel/core@7.28.5)
 
+  backbone@1.4.1:
+    dependencies:
+      underscore: 1.13.7
+
   balanced-match@1.0.2: {}
 
   base64-js@1.5.1: {}
@@ -6869,8 +6832,6 @@ snapshots:
       string-width: 2.1.1
       term-size: 1.2.0
       widest-line: 2.0.1
-
-  bpmn-font@0.10.0: {}
 
   brace-expansion@1.1.12:
     dependencies:
@@ -7114,8 +7075,6 @@ snapshots:
 
   compare-versions@3.6.0: {}
 
-  component-event@0.1.4: {}
-
   component-event@0.2.1: {}
 
   compressible@2.0.18:
@@ -7235,8 +7194,6 @@ snapshots:
       nth-check: 2.1.1
 
   css-what@6.2.2: {}
-
-  css.escape@1.5.1: {}
 
   cssesc@3.0.0: {}
 
@@ -7426,6 +7383,11 @@ snapshots:
       d3: 7.9.0
       lodash-es: 4.17.21
 
+  dagre@0.8.5:
+    dependencies:
+      graphlib: 2.1.8
+      lodash: 4.17.21
+
   data-view-buffer@1.0.2:
     dependencies:
       call-bound: 1.0.4
@@ -7502,25 +7464,6 @@ snapshots:
 
   detect-newline@3.1.0: {}
 
-  diagram-js-direct-editing@2.1.2(diagram-js@12.8.1):
-    dependencies:
-      diagram-js: 12.8.1
-      min-dash: 4.2.3
-      min-dom: 4.2.1
-
-  diagram-js@12.8.1:
-    dependencies:
-      '@bpmn-io/diagram-js-ui': 0.2.3
-      clsx: 2.1.1
-      didi: 9.0.2
-      hammerjs: 2.0.8
-      inherits-browser: 0.1.0
-      min-dash: 4.2.3
-      min-dom: 4.2.1
-      object-refs: 0.3.0
-      path-intersection: 2.2.1
-      tiny-svg: 3.1.3
-
   diagram-js@15.4.0:
     dependencies:
       '@bpmn-io/diagram-js-ui': 0.2.3
@@ -7534,8 +7477,6 @@ snapshots:
       tiny-svg: 3.1.3
 
   didi@10.2.2: {}
-
-  didi@9.0.2: {}
 
   diff-sequences@29.6.3: {}
 
@@ -8272,9 +8213,11 @@ snapshots:
 
   graphemer@1.4.0: {}
 
-  hachure-fill@0.5.2: {}
+  graphlib@2.1.8:
+    dependencies:
+      lodash: 4.17.21
 
-  hammerjs@2.0.8: {}
+  hachure-fill@0.5.2: {}
 
   handlebars@4.7.8:
     dependencies:
@@ -8310,8 +8253,6 @@ snapshots:
       function-bind: 1.1.2
 
   he@1.2.0: {}
-
-  hex-and-rgba@2.0.0: {}
 
   hosted-git-info@2.8.9: {}
 
@@ -8381,8 +8322,6 @@ snapshots:
     dependencies:
       postcss: 8.5.6
 
-  ids@1.0.5: {}
-
   ieee754@1.2.1: {}
 
   ignore@4.0.6: {}
@@ -8400,8 +8339,6 @@ snapshots:
       resolve-cwd: 3.0.0
 
   imurmurhash@0.1.4: {}
-
-  indexof@0.0.1: {}
 
   inflight@1.0.6:
     dependencies:
@@ -8950,6 +8887,26 @@ snapshots:
       - supports-color
       - ts-node
 
+  jointjs@3.4.2:
+    dependencies:
+      backbone: 1.4.1
+      dagre: 0.8.5
+      graphlib: 2.1.8
+      jquery: 3.6.4
+      lodash: 4.17.21
+
+  jointjs@3.7.7:
+    dependencies:
+      backbone: 1.4.1
+      dagre: 0.8.5
+      graphlib: 2.1.8
+      jquery: 3.7.1
+      lodash: 4.17.21
+
+  jquery@3.6.4: {}
+
+  jquery@3.7.1: {}
+
   js-tokens@4.0.0: {}
 
   js-yaml@3.14.2:
@@ -9247,8 +9204,6 @@ snapshots:
 
   marked@16.4.2: {}
 
-  matches-selector@1.2.0: {}
-
   math-intrinsics@1.1.0: {}
 
   mdurl@1.0.1: {}
@@ -9315,17 +9270,7 @@ snapshots:
 
   mimic-response@3.1.0: {}
 
-  min-dash@3.8.1: {}
-
   min-dash@4.2.3: {}
-
-  min-dom@3.2.1:
-    dependencies:
-      component-event: 0.1.4
-      domify: 1.4.2
-      indexof: 0.0.1
-      matches-selector: 1.2.0
-      min-dash: 3.8.1
 
   min-dom@4.2.1:
     dependencies:
@@ -9406,16 +9351,6 @@ snapshots:
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.1
-
-  moddle-xml@9.0.6:
-    dependencies:
-      min-dash: 3.8.1
-      moddle: 5.0.4
-      saxen: 8.1.2
-
-  moddle@5.0.4:
-    dependencies:
-      min-dash: 3.8.1
 
   ms@2.0.0: {}
 
@@ -9530,8 +9465,6 @@ snapshots:
   object-inspect@1.13.4: {}
 
   object-keys@1.1.1: {}
-
-  object-refs@0.3.0: {}
 
   object-refs@0.4.0: {}
 
@@ -9680,8 +9613,6 @@ snapshots:
   path-data-parser@0.1.0: {}
 
   path-exists@4.0.0: {}
-
-  path-intersection@2.2.1: {}
 
   path-intersection@3.1.0: {}
 
@@ -10090,8 +10021,6 @@ snapshots:
   safer-buffer@2.1.2: {}
 
   sax@1.4.3: {}
-
-  saxen@8.1.2: {}
 
   schema-utils@3.3.0:
     dependencies:
@@ -10523,8 +10452,6 @@ snapshots:
   text-table@0.2.0: {}
 
   tildify@2.0.0: {}
-
-  tiny-svg@2.2.4: {}
 
   tiny-svg@3.1.3: {}
 

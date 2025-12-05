@@ -11,10 +11,20 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:architool.viewpointView"
   ],
   "main": "./dist/extension/main.js",
   "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "architool",
+          "title": "ArchiTool",
+          "icon": "$(list-unordered)"
+        }
+      ]
+    },
     "views": {
       "explorer": [
         {
@@ -23,18 +33,16 @@
           "when": "true"
         },
         {
-          "id": "architool.taskView",
-          "name": "Tasks",
+          "id": "architool.assistantsView",
+          "name": "Assistants",
           "when": "true"
-        },
+        }
+      ],
+      "architool": [
         {
           "id": "architool.viewpointView",
           "name": "Viewpoints",
-          "when": "true"
-        },
-        {
-          "id": "architool.assistantsView",
-          "name": "Assistants",
+          "type": "webview",
           "when": "true"
         }
       ]
@@ -131,6 +139,11 @@
       {
         "command": "archi.viewpoint.create",
         "title": "Create Viewpoint"
+      },
+      {
+        "command": "archi.viewpoint.openPanel",
+        "title": "Open Viewpoints Panel",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "archi.template.createFromTemplate",

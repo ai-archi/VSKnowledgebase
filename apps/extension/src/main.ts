@@ -159,33 +159,17 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   documentCommands.register(commandAdapter);
 
-  // 8. 初始化任务视图
-  const taskTreeDataProvider = new TaskTreeDataProvider(vaultService, artifactService, logger);
-  const taskTreeView = vscode.window.createTreeView('architool.taskView', { treeDataProvider: taskTreeDataProvider });
-  const taskCommands = new TaskCommands(
-    taskService,
-    artifactService,
+  // 8. 初始化视点视图（使用 WebviewView，直接在 panel 中显示）
+  const viewpointCommands = new ViewpointCommands(
+    viewpointService,
     vaultService,
-    fileTreeDomainService,
-    fileOperationDomainService,
+    artifactService,
+    taskService,
+    aiService,
     logger,
     context,
-    taskTreeDataProvider,
-    taskTreeView,
     webviewRPC.getAdapter()
   );
-  taskCommands.register(commandAdapter);
-
-  // 9. 初始化视点视图
-  const viewpointTreeDataProvider = new ViewpointTreeDataProvider(
-    viewpointService,
-    artifactService,
-    vaultService,
-    configManager,
-    logger
-  );
-  vscode.window.createTreeView('architool.viewpointView', { treeDataProvider: viewpointTreeDataProvider });
-  const viewpointCommands = new ViewpointCommands(viewpointService, vaultService, logger);
   viewpointCommands.registerCommands(context);
 
   // 10. 初始化助手视图（包含templates和ai-enhancements）
@@ -322,8 +306,6 @@ export async function activate(context: vscode.ExtensionContext) {
           vscode.window.showInformationMessage(`Vault '${vaultName}' added at ${vaultPath}`);
           // 刷新所有视图
           documentTreeViewProvider.refresh();
-          taskTreeDataProvider.refresh();
-          viewpointTreeDataProvider.refresh();
           assistantsTreeDataProvider.refresh();
         } else {
           vscode.window.showErrorMessage(`Failed to add vault: ${result.error.message}`);
@@ -434,8 +416,6 @@ export async function activate(context: vscode.ExtensionContext) {
           vscode.window.showInformationMessage(`Vault '${vaultName}' cloned from Git to ${vaultPath}`);
           // 刷新所有视图
           documentTreeViewProvider.refresh();
-          taskTreeDataProvider.refresh();
-          viewpointTreeDataProvider.refresh();
           assistantsTreeDataProvider.refresh();
         } else {
           vscode.window.showErrorMessage(`Failed to clone vault from Git: ${result.error.message}`);

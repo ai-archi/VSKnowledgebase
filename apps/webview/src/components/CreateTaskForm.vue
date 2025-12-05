@@ -1,0 +1,753 @@
+<template>
+  <div class="create-task-form">
+    <!-- 头部：操作按钮和创建按钮 -->
+    <div class="header-section">
+      <div class="action-buttons-section">
+        <el-button-group>
+          <el-button
+            v-for="cmd in commands"
+            :key="cmd.id"
+            @click="executeCommand(cmd.id)"
+            :disabled="!canCreate"
+          >
+            {{ cmd.name }}
+          </el-button>
+        </el-button-group>
+      </div>
+      <div class="create-button-section">
+        <el-button
+          type="primary"
+          @click="handleCreate"
+          :loading="creating"
+          :disabled="!canCreate"
+        >
+          创建任务
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 中间：输入和选择区域 -->
+    <div class="middle-section">
+      <el-form :model="formData" label-width="120px" label-position="left">
+        <el-form-item label="任务标题" required>
+          <el-input
+            v-model="formData.title"
+            placeholder="输入任务标题（支持模糊搜索关联文件）"
+            clearable
+          />
+        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="Vault" required>
+              <el-select
+                v-model="formData.vaultId"
+                placeholder="选择 Vault"
+                clearable
+                style="width: 100%"
+                @change="handleVaultChange"
+              >
+                <el-option
+                  v-for="vault in vaults"
+                  :key="vault.id"
+                  :label="vault.name"
+                  :value="vault.id"
+                  :disabled="vault.readOnly"
+                >
+                  <div>
+                    <span>{{ vault.name }}</span>
+                    <el-tag v-if="vault.readOnly" size="small" type="info" style="margin-left: 8px">
+                      只读
+                    </el-tag>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="流程模板">
+              <el-select
+                v-model="formData.workflowTemplate"
+                placeholder="选择流程模板（可选）"
+                clearable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="template in workflowTemplates"
+                  :key="template.id"
+                  :label="template.name"
+                  :value="template.id"
+                >
+                  <div>
+                    <span>{{ template.name }}</span>
+                    <span v-if="template.description" class="template-description">
+                      {{ template.description }}
+                    </span>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="优先级">
+          <el-radio-group v-model="formData.priority">
+            <el-radio label="low">低</el-radio>
+            <el-radio label="medium">中</el-radio>
+            <el-radio label="high">高</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <!-- 下方：已选择和检索结果（上下结构） -->
+    <div class="bottom-section">
+      <!-- 已选择 -->
+      <div class="file-panel selected-panel">
+        <div class="panel-header">
+          <h4>
+            <el-icon><FolderChecked /></el-icon>
+            已选择 ({{ selectedFiles.length }})
+          </h4>
+          <el-button
+            v-if="selectedFiles.length > 0"
+            type="danger"
+            size="small"
+            @click="clearSelectedFiles"
+          >
+            <el-icon><Delete /></el-icon>
+            清空
+          </el-button>
+        </div>
+        <div class="panel-content">
+          <el-empty v-if="selectedFiles.length === 0" description="暂无已选择" :image-size="80" />
+          <div v-else class="file-list">
+            <div
+              v-for="file in selectedFiles"
+              :key="file.id || file.path"
+              class="file-item selected"
+            >
+              <el-icon class="file-icon">
+                <Document v-if="file.type === 'document'" />
+                <Picture v-else-if="file.type === 'design'" />
+                <Document v-else />
+              </el-icon>
+              <div class="file-info">
+                <div class="file-path">
+                  <span v-if="file.vault" class="vault-name">{{ file.vault.name }}(vault): </span>{{ file.path }}
+                </div>
+              </div>
+              <el-button
+                type="danger"
+                size="small"
+                circle
+                @click="removeFile(file)"
+              >
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 检索结果 -->
+      <div class="file-panel search-panel">
+        <div class="panel-header">
+          <h4>
+            <el-icon><Files /></el-icon>
+            检索结果 ({{ filteredFiles.length }})
+          </h4>
+        </div>
+        <div class="panel-content">
+          <div v-if="loadingFiles" class="loading-state">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <span>加载中...</span>
+          </div>
+          <el-empty
+            v-else-if="filteredFiles.length === 0"
+            description="没有找到匹配的结果"
+            :image-size="80"
+          />
+          <div v-else class="file-list">
+            <div
+              v-for="file in filteredFiles"
+              :key="file.id || file.path"
+              class="file-item"
+              :class="{ 'is-selected': isFileSelected(file) }"
+              @click="toggleFile(file)"
+            >
+              <el-icon class="file-icon">
+                <Document v-if="file.type === 'document'" />
+                <Picture v-else-if="file.type === 'design'" />
+                <Document v-else />
+              </el-icon>
+              <div class="file-info">
+                <div class="file-path">
+                  <span v-if="file.vault" class="vault-name">{{ file.vault.name }}(vault): </span>{{ file.path }}
+                </div>
+              </div>
+              <el-icon v-if="isFileSelected(file)" class="check-icon"><Check /></el-icon>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+// @ts-ignore - window is available in webview context
+declare const window: any;
+
+import { ref, computed, onMounted, watch } from 'vue';
+// 图标已在 create-task-dialog-main.ts 中全局注册，无需导入
+
+interface Vault {
+  id: string;
+  name: string;
+  description?: string;
+  readOnly?: boolean;
+}
+
+interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface FileItem {
+  id?: string;
+  path: string;
+  name: string;
+  type?: 'document' | 'design';
+  vault?: {
+    id: string;
+    name: string;
+  };
+}
+
+interface FormData {
+  title: string;
+  vaultId: string;
+  workflowTemplate: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+interface Emits {
+  (e: 'created', task: any): void;
+  (e: 'close'): void;
+}
+
+const emit = defineEmits<Emits>();
+
+const formData = ref<FormData>({
+  title: '',
+  vaultId: '',
+  workflowTemplate: '',
+  priority: 'medium',
+});
+
+const vaults = ref<Vault[]>([]);
+const workflowTemplates = ref<WorkflowTemplate[]>([
+  { id: 'default', name: '默认流程', description: '起草提案 → 审查对齐 → 实现任务 → 归档更新' },
+  { id: 'simple', name: '简化流程', description: '实现任务 → 归档更新' },
+  { id: 'detailed', name: '详细流程', description: '起草提案 → 审查对齐 → 实现任务 → 测试验证 → 归档更新' },
+]);
+const commands = ref<Array<{ id: string; name: string; description?: string }>>([]);
+const selectedFiles = ref<FileItem[]>([]);
+const allFiles = ref<FileItem[]>([]);
+const loadingFiles = ref(false);
+const creating = ref(false);
+const searchDebounceTimer = ref<number | null>(null);
+
+const filteredFiles = computed(() => {
+  if (!formData.value.title.trim()) {
+    return allFiles.value;
+  }
+  const query = formData.value.title.toLowerCase();
+  return allFiles.value.filter(
+    (file) =>
+      file.name.toLowerCase().includes(query) ||
+      file.path.toLowerCase().includes(query)
+  );
+});
+
+const canCreate = computed(() => {
+  return (
+    formData.value.title.trim() !== '' &&
+    formData.value.vaultId !== ''
+  );
+});
+
+// 监听任务标题变化，自动搜索
+watch(
+  () => formData.value.title,
+  () => {
+    if (formData.value.title.trim()) {
+      triggerAutoSearch();
+    }
+  },
+  { deep: true }
+);
+
+onMounted(() => {
+  // 从 window.initialData 获取初始数据
+  if ((window as any).initialData) {
+    const initialData = (window as any).initialData;
+    if (initialData.vaultId) {
+      formData.value.vaultId = initialData.vaultId;
+    }
+  }
+  loadVaults();
+  // 加载所有文件（不传查询条件）
+  loadFiles();
+  loadCommands();
+});
+
+const loadVaults = async () => {
+  try {
+    const vscode = (window as any).acquireVsCodeApi?.();
+    if (!vscode) {
+      vaults.value = [];
+      return;
+    }
+
+    const requestId = Date.now();
+    const result = await new Promise<Vault[]>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Request timeout'));
+      }, 10000);
+
+      const messageHandler = (event: MessageEvent) => {
+        const message = event.data;
+        if (message.id === requestId && message.method === 'vault.list') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', messageHandler);
+          if (message.error) {
+            reject(new Error(message.error.message));
+          } else {
+            resolve(message.result || []);
+          }
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
+      vscode.postMessage({
+        method: 'vault.list',
+        id: requestId,
+      });
+    });
+
+    vaults.value = result || [];
+  } catch (err: any) {
+    console.error('Failed to load vaults', err);
+    vaults.value = [];
+  }
+};
+
+const handleVaultChange = () => {
+  // Vault 变更时可以重新加载相关数据
+};
+
+const loadFiles = async (query?: string) => {
+  try {
+    loadingFiles.value = true;
+    const allResults: FileItem[] = [];
+    const vscode = (window as any).acquireVsCodeApi?.();
+    if (!vscode) {
+      allFiles.value = [];
+      return;
+    }
+
+    // 加载所有 vault 的文件（使用 document.list，支持查询）
+    if (vaults.value.length > 0) {
+      for (const vault of vaults.value) {
+        try {
+          const requestId = Date.now();
+          const result = await new Promise<FileItem[]>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Request timeout'));
+            }, 10000);
+
+            const messageHandler = (event: MessageEvent) => {
+              const message = event.data;
+              if (message.id === requestId && message.method === 'document.list') {
+                clearTimeout(timeout);
+                window.removeEventListener('message', messageHandler);
+                if (message.error) {
+                  reject(new Error(message.error.message));
+                } else {
+                  resolve(message.result || []);
+                }
+              }
+            };
+
+            window.addEventListener('message', messageHandler);
+            vscode.postMessage({
+              method: 'document.list',
+              id: requestId,
+              params: {
+                vaultId: vault.id,
+                query: query,
+              },
+            });
+          });
+
+          if (result) {
+            allResults.push(...result);
+          }
+        } catch (err: any) {
+          console.error(`Failed to load files from vault ${vault.name}`, err);
+        }
+      }
+    }
+
+    // 同时加载 workspace 的文件（支持查询）
+    try {
+      const requestId = Date.now();
+      const workspaceResult = await new Promise<FileItem[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Request timeout'));
+        }, 10000);
+
+        const messageHandler = (event: MessageEvent) => {
+          const message = event.data;
+          if (message.id === requestId && message.method === 'workspace.listFiles') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', messageHandler);
+            if (message.error) {
+              reject(new Error(message.error.message));
+            } else {
+              resolve(message.result || []);
+            }
+          }
+        };
+
+        window.addEventListener('message', messageHandler);
+        vscode.postMessage({
+          method: 'workspace.listFiles',
+          id: requestId,
+          params: {
+            query: query,
+          },
+        });
+      });
+
+      if (workspaceResult) {
+        allResults.push(...workspaceResult);
+      }
+    } catch (err: any) {
+      console.error('Failed to load workspace files', err);
+    }
+
+    allFiles.value = allResults;
+  } catch (err: any) {
+    console.error('Failed to load files', err);
+    allFiles.value = [];
+  } finally {
+    loadingFiles.value = false;
+  }
+};
+
+const triggerAutoSearch = () => {
+  // 清除之前的定时器
+  if (searchDebounceTimer.value !== null) {
+    clearTimeout(searchDebounceTimer.value);
+  }
+  // 设置新的定时器，300ms 后执行搜索
+  searchDebounceTimer.value = window.setTimeout(() => {
+    const query = formData.value.title.trim();
+    if (query) {
+      // 使用后端 API 实时搜索，传入查询条件
+      loadFiles(query);
+    } else {
+      // 如果没有查询条件，加载所有文件
+      loadFiles();
+    }
+  }, 300);
+};
+
+const loadCommands = async () => {
+  try {
+    // 暂时不加载命令，如果需要可以后续添加
+    commands.value = [];
+  } catch (err: any) {
+    console.error('Failed to load commands', err);
+    commands.value = [];
+  }
+};
+
+const isFileSelected = (file: FileItem): boolean => {
+  const fileKey = file.id || file.path;
+  return selectedFiles.value.some(f => (f.id || f.path) === fileKey);
+};
+
+const toggleFile = (file: FileItem) => {
+  if (isFileSelected(file)) {
+    removeFile(file);
+  } else {
+    selectedFiles.value.push(file);
+  }
+};
+
+const removeFile = (file: FileItem) => {
+  const fileKey = file.id || file.path;
+  selectedFiles.value = selectedFiles.value.filter(f => (f.id || f.path) !== fileKey);
+};
+
+const clearSelectedFiles = () => {
+  selectedFiles.value = [];
+};
+
+const executeCommand = async (commandId: string) => {
+  try {
+    // TODO: 实现命令执行
+    console.log('Execute command:', commandId);
+  } catch (err: any) {
+    console.error('Failed to execute command', err);
+  }
+};
+
+const handleCreate = async () => {
+  if (!canCreate.value) {
+    return;
+  }
+
+  creating.value = true;
+  try {
+    // 在弹窗中，需要通过 RPC 调用创建任务
+    const vscode = (window as any).acquireVsCodeApi?.();
+    if (!vscode) {
+      throw new Error('VSCode API not available');
+    }
+
+    // 发送请求并等待响应
+    const requestId = Date.now();
+    const task = await new Promise<any>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Request timeout'));
+      }, 30000);
+
+      const messageHandler = (event: MessageEvent) => {
+        const message = event.data;
+        if (message.id === requestId && message.method === 'createTask') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', messageHandler);
+          if (message.error) {
+            reject(new Error(message.error.message));
+          } else {
+            resolve(message.result);
+          }
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
+      vscode.postMessage({
+        method: 'createTask',
+        id: requestId,
+        params: {
+          title: formData.value.title,
+          vaultId: formData.value.vaultId,
+          priority: formData.value.priority,
+          relatedFiles: selectedFiles.value.map(f => f.id || f.path),
+          workflowTemplate: formData.value.workflowTemplate || 'default',
+        },
+      });
+    });
+
+    if (task) {
+      // 发送任务创建成功消息
+      vscode.postMessage({
+        method: 'taskCreated',
+        params: { task },
+      });
+      emit('created', task);
+    }
+  } catch (err: any) {
+    console.error('Failed to create task', err);
+    // 显示错误消息（在 webview 中无法使用 alert，通过消息通知后端）
+    const vscode = (window as any).acquireVsCodeApi?.();
+    if (vscode) {
+      vscode.postMessage({
+        method: 'showErrorMessage',
+        params: { message: `创建任务失败: ${err.message}` },
+      });
+    }
+    console.error('创建任务失败:', err);
+  } finally {
+    creating.value = false;
+  }
+};
+</script>
+
+<style scoped>
+.create-task-form {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-editor-background, #1e1e1e);
+  color: var(--vscode-editor-foreground, #cccccc);
+  overflow: hidden;
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+  flex-shrink: 0;
+}
+
+.action-buttons-section {
+  flex: 1;
+}
+
+.create-button-section {
+  margin-left: 16px;
+}
+
+.middle-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.bottom-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.file-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--vscode-panel-border, #3e3e3e);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--vscode-editor-background, #1e1e1e);
+}
+
+.selected-panel {
+  flex: 0 0 300px; /* 已选择面板固定高度 */
+  min-height: 300px;
+}
+
+.search-panel {
+  flex: 0 1 auto; /* 检索结果面板占据剩余空间，但允许缩小 */
+  min-height: 0;
+  max-height: calc(100vh - 500px); /* 限制最大高度 */
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--vscode-panel-background, #1e1e1e);
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+}
+
+.panel-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: var(--vscode-descriptionForeground, #999999);
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: var(--vscode-editor-background, #1e1e1e);
+  min-height: 32px;
+  line-height: 1.4;
+}
+
+.file-item:hover {
+  background: var(--vscode-list-hoverBackground, #2a2d2e);
+}
+
+.file-item.is-selected {
+  background: var(--vscode-list-activeSelectionBackground, #094771);
+}
+
+.file-item.selected {
+  background: var(--vscode-list-activeSelectionBackground, #094771);
+}
+
+.file-icon {
+  font-size: 14px;
+  color: var(--vscode-textLink-foreground, #4ec9b0);
+  flex-shrink: 0;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.file-path {
+  font-size: 13px;
+  color: var(--vscode-editor-foreground, #cccccc);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.vault-name {
+  color: var(--vscode-textLink-foreground, #4ec9b0);
+  font-weight: 500;
+}
+
+.check-icon {
+  font-size: 16px;
+  color: var(--vscode-textLink-foreground, #4ec9b0);
+  flex-shrink: 0;
+}
+
+.template-description {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin-left: 8px;
+}
+</style>
+

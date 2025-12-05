@@ -25,7 +25,11 @@
     {
       "label": "Build Archimate JS",
       "type": "shell",
-      "command": "rm -rf ${workspaceFolder}/apps/extension/dist/archimate-js && mkdir -p ${workspaceFolder}/apps/extension/dist/archimate-js && npm run build",
+      "command": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
       "options": {
         "cwd": "${workspaceFolder}/packages/archimate-js",
         "env": {
@@ -37,7 +41,8 @@
       "presentation": {
         "reveal": "always",
         "panel": "shared"
-      }
+      },
+      "preLaunchTask": null
     },
     {
       "label": "Build Mermaid Editor",

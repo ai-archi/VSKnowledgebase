@@ -20,6 +20,8 @@ export default defineConfig({
         'create-folder-dialog': resolve(__dirname, 'create-folder-dialog.html'),
         'create-design-dialog': resolve(__dirname, 'create-design-dialog.html'),
         'edit-relations-dialog': resolve(__dirname, 'edit-relations-dialog.html'),
+        'create-task-dialog': resolve(__dirname, 'create-task-dialog.html'),
+        'viewpoint-panel': resolve(__dirname, 'viewpoint-panel.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
