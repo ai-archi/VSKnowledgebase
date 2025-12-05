@@ -10,10 +10,16 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  optimizeDeps: {
+    include: ['mermaid', 'codemirror'],
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     assetsInlineLimit: 0, // 不内联资源，确保所有资源文件都被复制
+    commonjsOptions: {
+      include: [/mermaid/, /codemirror/, /node_modules/],
+    },
     rollupOptions: {
       input: {
         'create-file-dialog': resolve(__dirname, 'create-file-dialog.html'),
@@ -22,6 +28,7 @@ export default defineConfig({
         'edit-relations-dialog': resolve(__dirname, 'edit-relations-dialog.html'),
         'create-task-dialog': resolve(__dirname, 'create-task-dialog.html'),
         'viewpoint-panel': resolve(__dirname, 'viewpoint-panel.html'),
+        'mermaid-editor': resolve(__dirname, 'mermaid-editor.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

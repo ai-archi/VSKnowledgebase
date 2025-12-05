@@ -14,6 +14,8 @@ out/
 lib/
 # Allow packages/*/lib/ directories (source code, not build output)
 !packages/*/lib/
+# Allow apps/webview/src/lib/ directories (source code, not build output)
+!apps/webview/src/lib/
 .next/
 **/.next/
 *.tsbuildinfo
@@ -26,6 +28,8 @@ apps/webview/src/**/*.js
 apps/webview/src/**/*.js.map
 apps/webview/src/**/*.d.ts
 !apps/webview/src/vite-env.d.ts
+# Allow source .js files in lib directories (migrated from packages)
+!apps/webview/src/lib/**/*.js
 
 # Extension build artifacts (should not be in src directory)
 apps/extension/src/**/*.js

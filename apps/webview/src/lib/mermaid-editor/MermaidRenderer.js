@@ -1,0 +1,617 @@
+// Mermaid.js 渲染器和增强层
+// 负责使用 mermaid.js 渲染图表，并添加交互功能
+
+import mermaid from 'mermaid';
+
+export class MermaidRenderer {
+  constructor(container) {
+    this.container = container;
+    this.currentSVG = null;
+    this.currentSource = '';
+    this.nodeMap = new Map();
+    this.edgeMap = new Map();
+    
+    // 缩放相关
+    this.scale = 1.0;
+    this.minScale = 0.1;
+    this.maxScale = 5.0;
+    this.scaleStep = 0.1;
+    
+    // 平移相关
+    this.translateX = 0;
+    this.translateY = 0;
+    this.isDragging = false;
+    this.isPanning = false; // 是否正在平移（用于区分拖动和点击）
+    this.dragStartX = 0;
+    this.dragStartY = 0;
+    this.dragStartTranslateX = 0;
+    this.dragStartTranslateY = 0;
+    this.dragThreshold = 5; // 拖动阈值（像素）
+    
+    this.init();
+  }
+  
+  async init() {
+    // 初始化 mermaid
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose', // 允许交互
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis'
+      }
+    });
+  }
+  
+  /**
+   * 渲染 mermaid 图表
+   */
+  async render(source) {
+    try {
+      this.currentSource = source;
+      
+      // 渲染前清理 body 中可能存在的错误 div
+      this.cleanupMermaidErrorDivs();
+      
+      // 清空容器
+      this.container.innerHTML = '';
+      
+      // 使用 mermaid 渲染
+      const id = `mermaid-${Date.now()}`;
+      const { svg } = await mermaid.render(id, source);
+      
+      // 渲染后立即清理 body 中可能被追加的错误 div（Mermaid 可能在渲染过程中追加）
+      this.cleanupMermaidErrorDivs();
+      
+      // 检查 SVG 是否包含错误信息
+      if (this.isErrorSVG(svg)) {
+        // 如果是错误 SVG，清空容器并抛出错误
+        this.container.innerHTML = '';
+        // 再次清理，确保 body 中没有残留的错误 div
+        this.cleanupMermaidErrorDivs();
+        throw new Error('Mermaid syntax error detected');
+      }
+      
+      // 注入 SVG（Mermaid 11.x 可能会返回包含 div 包装器的 HTML）
+      this.container.innerHTML = svg;
+      
+      // 移除容器内 Mermaid 自动添加的 div 包装器（id="dmermaid-xxxx"）
+      const dmermaidDiv = this.container.querySelector('div[id^="dmermaid-"]');
+      if (dmermaidDiv) {
+        // 提取内部的 SVG 元素
+        const svgElement = dmermaidDiv.querySelector('svg');
+        if (svgElement) {
+          // 移除 div 包装器，直接使用 SVG
+          dmermaidDiv.parentNode?.removeChild(dmermaidDiv);
+          this.container.appendChild(svgElement);
+        }
+      }
+      
+      // 再次清理 body（防止异步追加）
+      this.cleanupMermaidErrorDivs();
+      
+      this.currentSVG = this.container.querySelector('svg');
+      
+      if (!this.currentSVG) {
+        throw new Error('Failed to render mermaid diagram');
+      }    
+      
+      // 后处理增强
+      this.enhanceSVG(this.currentSVG);
+      
+      // 应用当前缩放和平移
+      this.applyZoom();
+      
+      // 设置鼠标滚轮缩放
+      this.setupWheelZoom();
+      
+      // 设置画布拖动
+      this.setupPan();
+      
+      return this.currentSVG;
+    } catch (error) {
+      console.error('Mermaid render error:', error);
+      // 错误时清理 body 中的错误 div
+      this.cleanupMermaidErrorDivs();
+      // 清空容器
+      this.container.innerHTML = '';
+      throw error;
+    }
+  }
+  
+  /**
+   * 清理 body 中 Mermaid 自动添加的错误 div
+   * Mermaid 在渲染错误时会在 body 下追加 div#dmermaid-xxxx
+   * 这是 Mermaid 的默认错误处理行为，我们需要主动清理
+   */
+  cleanupMermaidErrorDivs() {
+    if (typeof document === 'undefined' || !document.body) {
+      return;
+    }
+    
+    // 查找所有 id 以 "dmermaid-" 开头的 div
+    const errorDivs = document.body.querySelectorAll('div[id^="dmermaid-"]');
+    errorDivs.forEach(div => {
+      // 检查是否是错误 div（包含错误 SVG 或错误文本）
+      const hasErrorSVG = div.querySelector('svg[aria-roledescription="error"]');
+      const hasErrorIcon = div.querySelector('.error-icon');
+      const hasErrorText = div.querySelector('.error-text');
+      const textContent = div.textContent || '';
+      const isErrorDiv = hasErrorSVG || hasErrorIcon || hasErrorText || 
+                         textContent.includes('Syntax error') || 
+                         textContent.includes('mermaid version');
+      
+      if (isErrorDiv) {
+        div.remove();
+      }
+    });
+  }
+  
+  /**
+   * 检查 SVG 是否包含错误信息
+   */
+  isErrorSVG(svgString) {
+    if (!svgString || typeof svgString !== 'string') {
+      return false;
+    }
+    
+    // 检查是否包含错误相关的标识
+    const errorIndicators = [
+      'aria-roledescription="error"',
+      'class="error-icon"',
+      'class="error-text"',
+      'Syntax error in text',
+      'mermaid version'
+    ];
+    
+    // 如果包含任何错误标识，认为是错误 SVG
+    return errorIndicators.some(indicator => svgString.includes(indicator));
+  }
+
+  /**
+   * 增强 SVG，添加交互功能
+   */
+  enhanceSVG(svg) {
+    // 1. 添加数据属性
+    this.addDataAttributes(svg);
+    
+    // 2. 添加交互层
+    this.addInteractionLayer(svg);
+    
+    // 3. 添加选择框
+    this.addSelectionBox(svg);
+    
+    // 4. 提取节点和边映射
+    this.extractNodeEdgeMap(svg);
+  }
+  
+  /**
+   * 添加数据属性，便于识别元素
+   */
+  addDataAttributes(svg) {
+    // 为节点添加 data-node-id
+    svg.querySelectorAll('.node').forEach((nodeGroup, index) => {
+      const nodeId = this.extractNodeId(nodeGroup, index);
+      nodeGroup.setAttribute('data-node-id', nodeId);
+      nodeGroup.setAttribute('data-mermaid-type', 'node');
+    });
+    
+    // 为边添加 data-edge-index
+    svg.querySelectorAll('.edgePath').forEach((path, index) => {
+      path.setAttribute('data-edge-index', index);
+      path.setAttribute('data-mermaid-type', 'edge');
+    });
+    
+    // 为子图添加标识
+    svg.querySelectorAll('.cluster').forEach((cluster, index) => {
+      cluster.setAttribute('data-subgraph-index', index);
+      cluster.setAttribute('data-mermaid-type', 'subgraph');
+    });
+  }
+  
+  /**
+   * 提取节点 ID
+   */
+  extractNodeId(nodeGroup, fallbackIndex) {
+    // 方法1: 从文本内容推断（如果文本就是 ID）
+    const textEl = nodeGroup.querySelector('text');
+    if (textEl) {
+      const text = textEl.textContent.trim();
+      // 如果文本看起来像 ID（短且无空格），使用它
+      if (text.length < 20 && !text.includes(' ')) {
+        return text;
+      }
+    }
+    
+    // 方法2: 从 class 名称提取
+    const classes = Array.from(nodeGroup.classList);
+    const idClass = classes.find(c => c.startsWith('node-') || c.match(/^[A-Z]\d+$/));
+    if (idClass) {
+      return idClass.replace('node-', '');
+    }
+    
+    // 方法3: 使用索引生成
+    return `node-${fallbackIndex}`;
+  }
+  
+  /**
+   * 添加交互层
+   */
+  addInteractionLayer(svg) {
+    // 为节点添加交互样式
+    svg.querySelectorAll('.node').forEach(node => {
+      node.style.cursor = 'pointer';
+      node.setAttribute('data-interactive', 'true');
+    });
+    
+    // 为边添加交互样式
+    svg.querySelectorAll('.edgePath').forEach(edge => {
+      edge.style.cursor = 'pointer';
+      edge.setAttribute('data-interactive', 'true');
+      
+      // 增加边的点击区域（通过 stroke-width）
+      const path = edge.querySelector('path');
+      if (path) {
+        const currentWidth = path.getAttribute('stroke-width') || '2';
+        path.setAttribute('stroke-width', Math.max(parseFloat(currentWidth), 4));
+        path.setAttribute('data-original-stroke-width', currentWidth);
+      }
+    });
+    
+    // 为子图添加交互样式
+    svg.querySelectorAll('.cluster').forEach(cluster => {
+      cluster.style.cursor = 'pointer';
+      cluster.setAttribute('data-interactive', 'true');
+    });
+  }
+  
+  /**
+   * 添加选择框元素
+   */
+  addSelectionBox(svg) {
+    // 创建选择框
+    const selectionBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    selectionBox.setAttribute('class', 'mermaid-selection-box');
+    selectionBox.setAttribute('fill', 'none');
+    selectionBox.setAttribute('stroke', '#007bff');
+    selectionBox.setAttribute('stroke-width', '2');
+    selectionBox.setAttribute('stroke-dasharray', '5,5');
+    selectionBox.style.display = 'none';
+    selectionBox.style.pointerEvents = 'none';
+    
+    svg.appendChild(selectionBox);
+    svg._selectionBox = selectionBox;
+  }
+  
+  /**
+   * 提取节点和边的映射关系
+   */
+  extractNodeEdgeMap(svg) {
+    this.nodeMap.clear();
+    this.edgeMap.clear();
+    
+    // 提取节点映射
+    svg.querySelectorAll('.node').forEach(nodeGroup => {
+      const nodeId = nodeGroup.getAttribute('data-node-id');
+      if (nodeId) {
+        const bbox = nodeGroup.getBBox();
+        const textEl = nodeGroup.querySelector('text');
+        
+        this.nodeMap.set(nodeId, {
+          id: nodeId,
+          element: nodeGroup,
+          bbox: bbox,
+          label: textEl ? textEl.textContent.trim() : '',
+          x: bbox.x + bbox.width / 2,
+          y: bbox.y + bbox.height / 2,
+          width: bbox.width,
+          height: bbox.height
+        });
+      }
+    });
+    
+    // 提取边映射
+    svg.querySelectorAll('.edgePath').forEach((edgePath, index) => {
+      const path = edgePath.querySelector('path');
+      if (path) {
+        const pathData = path.getAttribute('d');
+        const labelEl = edgePath.parentElement?.querySelector('.edgeLabel');
+        
+        this.edgeMap.set(index, {
+          index: index,
+          element: edgePath,
+          path: path,
+          pathData: pathData,
+          label: labelEl ? labelEl.textContent.trim() : ''
+        });
+      }
+    });
+  }
+  
+  /**
+   * 获取节点信息
+   */
+  getNode(nodeId) {
+    return this.nodeMap.get(nodeId);
+  }
+  
+  /**
+   * 获取所有节点
+   */
+  getAllNodes() {
+    return Array.from(this.nodeMap.values());
+  }
+  
+  /**
+   * 获取边信息
+   */
+  getEdge(index) {
+    return this.edgeMap.get(index);
+  }
+  
+  /**
+   * 获取所有边
+   */
+  getAllEdges() {
+    return Array.from(this.edgeMap.values());
+  }
+  
+  /**
+   * 高亮元素
+   */
+  highlightElement(element, type) {
+    this.clearHighlight();
+    
+    if (type === 'node') {
+      element.classList.add('mermaid-selected-node');
+    } else if (type === 'edge') {
+      element.classList.add('mermaid-selected-edge');
+    }
+  }
+  
+  /**
+   * 清除高亮
+   */
+  clearHighlight() {
+    if (this.currentSVG) {
+      this.currentSVG.querySelectorAll('.mermaid-selected-node, .mermaid-selected-edge').forEach(el => {
+        el.classList.remove('mermaid-selected-node', 'mermaid-selected-edge');
+      });
+    }
+  }
+  
+  /**
+   * 显示选择框
+   */
+  showSelectionBox(element) {
+    if (!this.currentSVG || !this.currentSVG._selectionBox) return;
+    
+    const bbox = element.getBBox();
+    const selectionBox = this.currentSVG._selectionBox;
+    
+    selectionBox.setAttribute('x', bbox.x - 4);
+    selectionBox.setAttribute('y', bbox.y - 4);
+    selectionBox.setAttribute('width', bbox.width + 8);
+    selectionBox.setAttribute('height', bbox.height + 8);
+    selectionBox.style.display = 'block';
+  }
+  
+  /**
+   * 隐藏选择框
+   */
+  hideSelectionBox() {
+    if (this.currentSVG && this.currentSVG._selectionBox) {
+      this.currentSVG._selectionBox.style.display = 'none';
+    }
+  }
+  
+  /**
+   * 获取当前源代码
+   */
+  getCurrentSource() {
+    return this.currentSource;
+  }
+  
+  /**
+   * 获取当前 SVG
+   */
+  getCurrentSVG() {
+    return this.currentSVG;
+  }
+  
+  /**
+   * 设置鼠标滚轮缩放
+   */
+  setupWheelZoom() {
+    if (!this.container) return;
+    
+    // 移除旧的监听器（如果存在）
+    if (this.wheelHandler) {
+      this.container.removeEventListener('wheel', this.wheelHandler);
+    }
+    
+    // 添加新的滚轮监听器
+    this.wheelHandler = (e) => {
+      // 如果按住 Ctrl 或 Cmd 键，进行缩放
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -this.scaleStep : this.scaleStep;
+        this.setZoom(this.scale + delta);
+      }
+    };
+    
+    this.container.addEventListener('wheel', this.wheelHandler, { passive: false });
+  }
+  
+  /**
+   * 应用缩放和平移
+   */
+  applyZoom() {
+    if (!this.currentSVG) return;
+    
+    // 获取原始尺寸
+    const originalWidth = this.currentSVG.getAttribute('width') || this.currentSVG.viewBox?.baseVal?.width || this.currentSVG.clientWidth;
+    const originalHeight = this.currentSVG.getAttribute('height') || this.currentSVG.viewBox?.baseVal?.height || this.currentSVG.clientHeight;
+    
+    // 应用缩放和平移变换
+    this.currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+    
+    // 更新 SVG 尺寸以触发正确的滚动
+    if (originalWidth && originalHeight) {
+      this.currentSVG.style.width = `${originalWidth * this.scale}px`;
+      this.currentSVG.style.height = `${originalHeight * this.scale}px`;
+    }
+  }
+  
+  /**
+   * 设置缩放级别
+   */
+  setZoom(newScale) {
+    this.scale = Math.max(this.minScale, Math.min(this.maxScale, newScale));
+    this.applyZoom();
+    return this.scale;
+  }
+  
+  /**
+   * 放大
+   */
+  zoomIn() {
+    return this.setZoom(this.scale + this.scaleStep);
+  }
+  
+  /**
+   * 缩小
+   */
+  zoomOut() {
+    return this.setZoom(this.scale - this.scaleStep);
+  }
+  
+  /**
+   * 重置缩放
+   */
+  zoomReset() {
+    return this.setZoom(1.0);
+  }
+  
+  /**
+   * 获取当前缩放级别
+   */
+  getZoom() {
+    return this.scale;
+  }
+  
+  /**
+   * 设置画布拖动功能
+   */
+  setupPan() {
+    if (!this.container) return;
+    
+    // 移除旧的监听器（如果存在）
+    if (this.panMouseDownHandler) {
+      this.container.removeEventListener('mousedown', this.panMouseDownHandler);
+    }
+    if (this.panMouseMoveHandler) {
+      document.removeEventListener('mousemove', this.panMouseMoveHandler);
+    }
+    if (this.panMouseUpHandler) {
+      document.removeEventListener('mouseup', this.panMouseUpHandler);
+    }
+    
+    // 鼠标按下事件
+    this.panMouseDownHandler = (e) => {
+      // 如果点击的是交互元素（节点、边等），不处理拖动
+      const target = e.target;
+      if (target.closest('.node[data-mermaid-type="node"]') ||
+          target.closest('.edgePath[data-mermaid-type="edge"]') ||
+          target.closest('.cluster[data-mermaid-type="subgraph"]') ||
+          target.closest('.mermaid-selection-box') ||
+          target.closest('.mermaid-label-editor')) {
+        return;
+      }
+      
+      // 如果点击的是 SVG 背景或容器，开始拖动
+      if (target === this.currentSVG || 
+          target === this.container || 
+          target.tagName === 'svg' ||
+          (target.tagName === 'g' && !target.closest('.node, .edgePath, .cluster'))) {
+        // 检查是否按下了鼠标左键
+        if (e.button === 0) {
+          this.isDragging = true;
+          this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
+          this.dragStartTranslateX = this.translateX;
+          this.dragStartTranslateY = this.translateY;
+          
+          // 添加拖动样式
+          this.container.style.cursor = 'grabbing';
+          if (this.currentSVG) {
+            this.currentSVG.style.cursor = 'grabbing';
+          }
+          
+          e.preventDefault();
+        }
+      }
+    };
+    
+    // 鼠标移动事件
+    this.panMouseMoveHandler = (e) => {
+      if (!this.isDragging) return;
+      
+      const deltaX = e.clientX - this.dragStartX;
+      const deltaY = e.clientY - this.dragStartY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // 如果移动距离超过阈值，认为是拖动
+      if (distance > this.dragThreshold) {
+        this.isPanning = true;
+      }
+      
+      if (this.isPanning) {
+        this.translateX = this.dragStartTranslateX + deltaX;
+        this.translateY = this.dragStartTranslateY + deltaY;
+        
+        this.applyZoom();
+        
+        e.preventDefault();
+      }
+    };
+    
+    // 鼠标释放事件
+    this.panMouseUpHandler = (e) => {
+      if (this.isDragging) {
+        const wasPanning = this.isPanning;
+        this.isDragging = false;
+        this.isPanning = false;
+        
+        // 恢复光标样式
+        this.container.style.cursor = 'grab';
+        if (this.currentSVG) {
+          this.currentSVG.style.cursor = 'default';
+        }
+        
+        // 如果进行了拖动，阻止后续的点击事件
+        if (wasPanning) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    
+    // 绑定事件监听器
+    this.container.addEventListener('mousedown', this.panMouseDownHandler);
+    document.addEventListener('mousemove', this.panMouseMoveHandler);
+    document.addEventListener('mouseup', this.panMouseUpHandler);
+  }
+  
+  /**
+   * 重置平移
+   */
+  resetPan() {
+    this.translateX = 0;
+    this.translateY = 0;
+    this.applyZoom();
+  }
+}
+

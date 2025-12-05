@@ -143,12 +143,18 @@ importers:
       '@element-plus/icons-vue':
         specifier: ^2.3.2
         version: 2.3.2(vue@3.5.24(typescript@5.9.3))
+      codemirror:
+        specifier: ^5.65.16
+        version: 5.65.20
       element-plus:
         specifier: ^2.11.8
         version: 2.11.8(vue@3.5.24(typescript@5.9.3))
       jointjs:
         specifier: ^3.4.2
         version: 3.7.7
+      mermaid:
+        specifier: ^11.12.2
+        version: 11.12.2
       pinia:
         specifier: ^2.1.7
         version: 2.3.1(typescript@5.9.3)(vue@3.5.24(typescript@5.9.3))
@@ -156,6 +162,9 @@ importers:
         specifier: ^3.4.0
         version: 3.5.24(typescript@5.9.3)
     devDependencies:
+      '@types/codemirror':
+        specifier: ^5.60.5
+        version: 5.60.17
       '@vitejs/plugin-vue':
         specifier: ^5.0.0
         version: 5.2.4(vite@5.4.21(@types/node@22.19.1)(lightningcss@1.30.2)(terser@5.44.1))(vue@3.5.24(typescript@5.9.3))
@@ -1023,6 +1032,9 @@ packages:
   '@types/cacheable-request@6.0.3':
     resolution: {integrity: sha512-IQ3EbTzGxIigb1I3qPZc1rWJnH0BmSKv5QYTalEwweFvyBDLSAe24zP0le/hyi7ecGfZVlIVAg4BZqb8WBwKqw==}
 
+  '@types/codemirror@5.60.17':
+    resolution: {integrity: sha512-AZq2FIsUHVMlp7VSe2hTfl5w4pcUkoFkM3zVsRKsn1ca8CXRDYvnin04+HP2REkwsxemuHqvDofdlhUWNpbwfw==}
+
   '@types/d3-array@3.2.2':
     resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
 
@@ -1182,6 +1194,9 @@ packages:
 
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
+
+  '@types/tern@0.23.9':
+    resolution: {integrity: sha512-ypzHFE/wBzh+BlH6rrBgS5I/Z7RD21pGhZ2rltb/+ZrVM1awdZwjx7hE5XfuYgHWk9uvV5HLZN3SloevCAp3Bw==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -3650,6 +3665,9 @@ packages:
   mermaid@11.12.1:
     resolution: {integrity: sha512-UlIZrRariB11TY1RtTgUWp65tphtBv4CSq7vyS2ZZ2TgoMjs2nloq+wFqxiwcxlhHUvs7DPGgMjs2aeQxz5h9g==}
 
+  mermaid@11.12.2:
+    resolution: {integrity: sha512-n34QPDPEKmaeCG4WDMGy0OT6PSyxKCfy2pJgShP+Qow2KLrvWjclwbc3yXfSIf4BanqWEhQEpngWwNp/XhZt6w==}
+
   micromatch@4.0.8:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
     engines: {node: '>=8.6'}
@@ -6043,6 +6061,10 @@ snapshots:
       '@types/node': 20.19.25
       '@types/responselike': 1.0.3
 
+  '@types/codemirror@5.60.17':
+    dependencies:
+      '@types/tern': 0.23.9
+
   '@types/d3-array@3.2.2': {}
 
   '@types/d3-axis@3.0.6':
@@ -6228,6 +6250,10 @@ snapshots:
   '@types/semver@7.7.1': {}
 
   '@types/stack-utils@2.0.3': {}
+
+  '@types/tern@0.23.9':
+    dependencies:
+      '@types/estree': 1.0.8
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -9217,6 +9243,31 @@ snapshots:
   merge2@1.4.1: {}
 
   mermaid@11.12.1:
+    dependencies:
+      '@braintree/sanitize-url': 7.1.1
+      '@iconify/utils': 3.0.2
+      '@mermaid-js/parser': 0.6.3
+      '@types/d3': 7.4.3
+      cytoscape: 3.33.1
+      cytoscape-cose-bilkent: 4.1.0(cytoscape@3.33.1)
+      cytoscape-fcose: 2.2.0(cytoscape@3.33.1)
+      d3: 7.9.0
+      d3-sankey: 0.12.3
+      dagre-d3-es: 7.0.13
+      dayjs: 1.11.19
+      dompurify: 3.3.0
+      katex: 0.16.25
+      khroma: 2.1.0
+      lodash-es: 4.17.21
+      marked: 16.4.2
+      roughjs: 4.6.6
+      stylis: 4.3.6
+      ts-dedent: 2.2.0
+      uuid: 11.1.0
+    transitivePeerDependencies:
+      - supports-color
+
+  mermaid@11.12.2:
     dependencies:
       '@braintree/sanitize-url': 7.1.1
       '@iconify/utils': 3.0.2

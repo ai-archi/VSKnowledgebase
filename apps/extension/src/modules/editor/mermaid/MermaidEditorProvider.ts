@@ -45,16 +45,15 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
   ): Promise<void> {
     // 设置 Webview 内容
     const extensionPath = this.context.extensionPath;
-    const mermaidEditorPath = path.join(extensionPath, 'dist', 'mermaid-editor');
-    const mermaidEditorUri = vscode.Uri.file(mermaidEditorPath);
+    const webviewPath = path.join(extensionPath, 'dist', 'webview');
+    const webviewUri = vscode.Uri.file(webviewPath);
     
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.context.extensionUri, 'out'),
-        mermaidEditorUri,
+        webviewUri,
       ],
-      // 禁用 Trusted Types 以允许内联脚本（Next.js 需要）
       enableCommandUris: false,
     };
 
@@ -64,14 +63,68 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
       this.context.extensionUri
     );
 
-    // 处理来自 Webview 的消息
+    // 处理来自 Webview 的消息（使用 ExtensionService 格式）
     const changeDocumentSubscription = webviewPanel.webview.onDidReceiveMessage(
-      async (e) => {
-        // 处理 API 请求（来自 api.ts 的 VSCode 适配）
-        if (e.type && e.type.startsWith('api-') && e.messageId) {
-          const apiType = e.type.substring(4); // 去掉 'api-' 前缀
-          const messageId = e.messageId;
-          const payload = e.payload;
+      async (message) => {
+        try {
+          // 使用 ExtensionService 的消息格式
+          if (message.method === 'fetchDiagram') {
+            const source = document.getText();
+            const diagram = mermaidToDiagramData(source, document.uri.fsPath);
+            console.log('[MermaidEditor] Generated diagram data:', {
+              nodes: diagram.nodes.length,
+              edges: diagram.edges.length,
+            });
+            
+            webviewPanel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: diagram,
+            });
+          } else if (message.method === 'saveDiagram') {
+            const { diagram } = message.params || {};
+            if (diagram) {
+              const mermaidSource = diagramDataToMermaid(diagram);
+              const edit = new vscode.WorkspaceEdit();
+              edit.replace(
+                document.uri,
+                new vscode.Range(0, 0, document.lineCount, 0),
+                mermaidSource
+              );
+              await vscode.workspace.applyEdit(edit);
+              await document.save();
+              
+              webviewPanel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: { success: true },
+              });
+              
+              // 发送更新后的图表数据
+              const updatedSource = document.getText();
+              const updatedDiagram = mermaidToDiagramData(updatedSource, document.uri.fsPath);
+              webviewPanel.webview.postMessage({
+                method: 'load',
+                params: { diagram: updatedDiagram },
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Message handler error:', error);
+          webviewPanel.webview.postMessage({
+            id: message.id,
+            error: {
+              code: -1,
+              message: error instanceof Error ? error.message : 'Unknown error',
+            },
+          });
+        }
+        
+        // 兼容旧的消息格式（保留一段时间）
+        if (message.type && message.type.startsWith('api-') && message.messageId) {
+          const apiType = message.type.substring(4); // 去掉 'api-' 前缀
+          const messageId = message.messageId;
+          const payload = message.payload;
 
           try {
             let result: unknown = undefined;
@@ -274,79 +327,81 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
           return;
         }
 
-        // 处理原有的消息类型
-        switch (e.type) {
-          case 'load-request':
-            // Webview 请求加载图表数据
-            console.log('[MermaidEditor] Received load-request from webview');
-            const source = document.getText();
-            const diagram = mermaidToDiagramData(source, document.uri.fsPath);
-            console.log('[MermaidEditor] Sending load-response with diagram:', {
-              nodes: diagram.nodes.length,
-              edges: diagram.edges.length,
-              sourceLength: diagram.source.length,
-            });
-            webviewPanel.webview.postMessage({
-              type: 'load-response',
-              diagram,
-            });
-            break;
+        // 处理原有的消息类型（兼容旧格式）
+        if (message.type && !message.method) {
+          switch (message.type) {
+            case 'load-request':
+              // Webview 请求加载图表数据
+              console.log('[MermaidEditor] Received load-request from webview');
+              const source = document.getText();
+              const diagram = mermaidToDiagramData(source, document.uri.fsPath);
+              console.log('[MermaidEditor] Sending load-response with diagram:', {
+                nodes: diagram.nodes.length,
+                edges: diagram.edges.length,
+                sourceLength: diagram.source.length,
+              });
+              webviewPanel.webview.postMessage({
+                type: 'load-response',
+                diagram,
+              });
+              break;
 
-          case 'save':
-            // 保存完整的图表数据
-            if (e.diagram) {
-              const diagram = e.diagram as DiagramData;
-              const mermaidSource = diagramDataToMermaid(diagram);
-              const edit = new vscode.WorkspaceEdit();
-              edit.replace(
-                document.uri,
-                new vscode.Range(0, 0, document.lineCount, 0),
-                mermaidSource
-              );
-              const success = await vscode.workspace.applyEdit(edit);
-              if (!success) {
-                vscode.window.showErrorMessage('Failed to save document');
-              } else {
-                await document.save();
+            case 'save':
+              // 保存完整的图表数据
+              if ((message as any).diagram) {
+                const diagram = (message as any).diagram as DiagramData;
+                const mermaidSource = diagramDataToMermaid(diagram);
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(
+                  document.uri,
+                  new vscode.Range(0, 0, document.lineCount, 0),
+                  mermaidSource
+                );
+                const success = await vscode.workspace.applyEdit(edit);
+                if (!success) {
+                  vscode.window.showErrorMessage('Failed to save document');
+                } else {
+                  await document.save();
+                }
+              } else if ((message as any).content) {
+                // 兼容旧的保存方式（直接保存内容）
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(
+                  document.uri,
+                  new vscode.Range(0, 0, document.lineCount, 0),
+                  (message as any).content
+                );
+                const success = await vscode.workspace.applyEdit(edit);
+                if (!success) {
+                  vscode.window.showErrorMessage('Failed to save document');
+                } else {
+                  await document.save();
+                }
               }
-            } else if (e.content) {
-              // 兼容旧的保存方式（直接保存内容）
-              const edit = new vscode.WorkspaceEdit();
-              edit.replace(
-                document.uri,
-                new vscode.Range(0, 0, document.lineCount, 0),
-                e.content
-              );
-              const success = await vscode.workspace.applyEdit(edit);
-              if (!success) {
-                vscode.window.showErrorMessage('Failed to save document');
-              } else {
-                await document.save();
-              }
-            }
-            break;
+              break;
 
-          case 'save-source':
-            // 保存源代码
-            if (e.source) {
-              const edit = new vscode.WorkspaceEdit();
-              edit.replace(
-                document.uri,
-                new vscode.Range(0, 0, document.lineCount, 0),
-                e.source
-              );
-              const success = await vscode.workspace.applyEdit(edit);
-              if (!success) {
-                vscode.window.showErrorMessage('Failed to save document');
-              } else {
-                await document.save();
+            case 'save-source':
+              // 保存源代码
+              if ((message as any).source) {
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(
+                  document.uri,
+                  new vscode.Range(0, 0, document.lineCount, 0),
+                  (message as any).source
+                );
+                const success = await vscode.workspace.applyEdit(edit);
+                if (!success) {
+                  vscode.window.showErrorMessage('Failed to save document');
+                } else {
+                  await document.save();
+                }
               }
-            }
-            break;
+              break;
 
-          case 'error':
-            vscode.window.showErrorMessage(`Editor error: ${e.message}`);
-            break;
+            case 'error':
+              vscode.window.showErrorMessage(`Editor error: ${(message as any).message || 'Unknown error'}`);
+              break;
+          }
         }
       }
     );
@@ -358,8 +413,8 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
           const source = e.document.getText();
           const diagram = mermaidToDiagramData(source, document.uri.fsPath);
           webviewPanel.webview.postMessage({
-            type: 'load',
-            diagram,
+            method: 'load',
+            params: { diagram },
           });
         }
       }
@@ -381,8 +436,8 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
         sourceLength: diagram.source.length,
       });
       webviewPanel.webview.postMessage({
-        type: 'load',
-        diagram,
+        method: 'load',
+        params: { diagram },
       });
     };
 
@@ -410,258 +465,81 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     extensionUri: vscode.Uri
   ): string {
-    // 获取 mermaid-editor 的路径
+    // 获取 webview 构建产物路径
     const extensionPath = this.context.extensionPath;
-    const mermaidEditorPath = path.join(extensionPath, 'dist', 'mermaid-editor');
-    // 使用 V2 版本的 index-v2.html
-    const indexHtmlPath = path.join(mermaidEditorPath, 'index-v2.html');
+    const webviewPath = path.join(extensionPath, 'dist', 'webview');
+    const mermaidEditorHtmlPath = path.join(webviewPath, 'mermaid-editor.html');
     
     // 检查构建产物是否存在
-    if (!fs.existsSync(indexHtmlPath)) {
-      // 提供更详细的错误信息
-      const possiblePaths = [
-        indexHtmlPath,
-        path.join(extensionPath, 'dist', 'mermaid-editor', 'app', 'index-v2.html'),
-      ];
-      
-      const errorMessage = `Mermaid editor V2 build artifacts not found.
-Expected path: ${indexHtmlPath}
+    if (!fs.existsSync(mermaidEditorHtmlPath)) {
+      const errorMessage = `Mermaid editor HTML not found: ${mermaidEditorHtmlPath}
 Extension path: ${extensionPath}
-Checked paths:
-${possiblePaths.map(p => `  - ${p} (exists: ${fs.existsSync(p)})`).join('\n')}
+Webview dist path: ${webviewPath}
 
-Please run: pnpm run build:mermaid-editor (or npm run build:v2 in packages/mermaid-editor)`;
+Please run: cd apps/webview && pnpm build`;
       
       console.error(errorMessage);
       throw new Error(errorMessage);
     }
     
     // 读取静态 HTML 文件
-    let htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8');
+    let htmlContent = fs.readFileSync(mermaidEditorHtmlPath, 'utf-8');
     
     // 获取 webview URI 辅助函数
-    // Next.js 输出的路径格式：/_next/static/xxx
-    const mermaidEditorUri = vscode.Uri.file(mermaidEditorPath);
-    const webviewUri = (relativePath: string) => {
-      // 跳过已经是 webview URI 或 blob URL 的路径
-      if (relativePath.startsWith('vscode-webview://') || 
-          relativePath.startsWith('blob:') ||
-          relativePath.startsWith('data:')) {
+    const webviewUri = vscode.Uri.file(webviewPath);
+    const webviewUriHelper = (relativePath: string) => {
+      // 跳过已经是绝对路径的
+      if (
+        relativePath.startsWith('http://') ||
+        relativePath.startsWith('https://') ||
+        relativePath.startsWith('data:') ||
+        relativePath.startsWith('blob:') ||
+        relativePath.startsWith('vscode-webview://')
+      ) {
         return relativePath;
       }
-      
-      // 处理 Next.js 的路径格式：
-      // /_next/static/xxx -> _next/static/xxx (去掉开头的 /)
-      // /favicon.ico -> favicon.ico
-      // ./xxx -> xxx
+
+      // 规范化路径
       let normalizedPath = relativePath;
-      if (normalizedPath.startsWith('/')) {
-        normalizedPath = normalizedPath.substring(1); // 去掉开头的 /
-      } else if (normalizedPath.startsWith('./')) {
-        normalizedPath = normalizedPath.substring(2); // 去掉 ./
+      if (normalizedPath.startsWith('./')) {
+        normalizedPath = normalizedPath.substring(2);
+      } else if (normalizedPath.startsWith('/')) {
+        normalizedPath = normalizedPath.substring(1);
       }
-      
-      // 检查文件是否存在
-      const fullPath = path.join(mermaidEditorPath, normalizedPath);
-      if (!fs.existsSync(fullPath)) {
-        console.warn(`[MermaidEditor] Resource not found: ${normalizedPath}, full path: ${fullPath}`);
-        // 仍然尝试转换，可能文件在子目录中
+
+      const resourceFile = path.join(webviewPath, normalizedPath);
+      if (fs.existsSync(resourceFile)) {
+        const resourceUri = webview.asWebviewUri(
+          vscode.Uri.file(resourceFile)
+        );
+        return resourceUri.toString();
       }
-      
-      const uri = vscode.Uri.joinPath(mermaidEditorUri, normalizedPath);
-      return webview.asWebviewUri(uri).toString();
+
+      return relativePath;
     };
-    
+
     // 替换所有资源文件的路径为 webview URI
-    // Next.js 输出的路径格式：/_next/static/chunks/xxx.js
-    
-    // 1. 替换 CSS 文件路径
     htmlContent = htmlContent.replace(
-      /<link[^>]*href=["']([^"']+)["'][^>]*>/gi,
-      (match, href) => {
-        if (href.startsWith('http://') || 
-            href.startsWith('https://') || 
-            href.startsWith('data:') ||
-            href.startsWith('blob:') ||
-            href.startsWith('vscode-webview://')) {
+      /(src|href)=["']([^"']+)["']/g,
+      (match: string, attr: string, resourcePath: string) => {
+        if (
+          resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)
+        ) {
           return match;
         }
-        return match.replace(href, webviewUri(href));
+        return `${attr}="${webviewUriHelper(resourcePath)}"`;
       }
     );
-    
-    // 2. 替换所有 script 标签中的 JS 文件路径
-    htmlContent = htmlContent.replace(
-      /<script[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi,
-      (match, src) => {
-        if (src.startsWith('http://') || 
-            src.startsWith('https://') || 
-            src.startsWith('data:') ||
-            src.startsWith('blob:') ||
-            src.startsWith('vscode-webview://')) {
-          return match;
-        }
-        // 保持原有属性
-        return match.replace(src, webviewUri(src));
-      }
-    );
-    
-    // 3. 替换 preload 链接
-    htmlContent = htmlContent.replace(
-      /<link[^>]*href=["']([^"']+)["'][^>]*as=["'](script|style|font|image)["'][^>]*>/gi,
-      (match, href) => {
-        if (href.startsWith('http://') || 
-            href.startsWith('https://') || 
-            href.startsWith('data:') ||
-            href.startsWith('blob:') ||
-            href.startsWith('vscode-webview://')) {
-          return match;
-        }
-        return match.replace(href, webviewUri(href));
-      }
-    );
-    
-    // 4. 替换其他资源文件（如图片、字体等）
-    htmlContent = htmlContent.replace(
-      /(src|href)=["']([^"']+\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico))["']/gi,
-      (match, attr, resourcePath) => {
-        if (resourcePath.startsWith('http://') || 
-            resourcePath.startsWith('https://') || 
-            resourcePath.startsWith('data:') ||
-            resourcePath.startsWith('blob:') ||
-            resourcePath.startsWith('vscode-webview://')) {
-          return match;
-        }
-        return `${attr}="${webviewUri(resourcePath)}"`;
-      }
-    );
-    
-    // 5. 处理内联脚本中可能出现的动态导入路径（如 import() 语句）
-    // Next.js 可能会在运行时动态加载代码块，这些路径也需要转换
-    // 注意：这只能处理静态字符串，动态生成的路径需要在运行时处理
-    
-    // 5. 处理内联脚本（Next.js 的内联脚本）
-    // VS Code webview 支持内联脚本，但需要确保内容正确
-    // 注意：Next.js 的内联脚本是必需的，用于初始化应用
-    // 我们不需要修改它们，VS Code webview 应该能够执行
-    
-    // 6. 注入初始内容和 VS Code API
-    // 注意：acquireVsCodeApi() 只能调用一次，所以在这里调用
-    // 将脚本注入到第一个 script 标签之前，确保在 Next.js 脚本之前执行
-    const source = document.getText();
-    const mermaidEditorBasePath = webview.asWebviewUri(mermaidEditorUri).toString();
-    const initialContentScript = `<script>
-(function() {
-    try {
-        window.initialContent = ${JSON.stringify(source)};
-        
-        // 路径转换辅助函数（用于运行时动态导入）
-        // Next.js 使用 webpack 进行代码分割，需要拦截动态导入的路径
-        const basePath = '${mermaidEditorBasePath}';
-        
-        // 拦截 fetch/XMLHttpRequest 以处理动态导入的资源
-        const originalFetch = window.fetch;
-        window.fetch = function(input, init) {
-            if (typeof input === 'string') {
-                // 如果是相对路径且不是已转换的路径，进行转换
-                if (!input.startsWith('http://') && 
-                    !input.startsWith('https://') && 
-                    !input.startsWith('vscode-webview://') && 
-                    !input.startsWith('blob:') && 
-                    !input.startsWith('data:')) {
-                    let normalizedPath = input;
-                    if (normalizedPath.startsWith('/')) {
-                        normalizedPath = normalizedPath.substring(1);
-                    } else if (normalizedPath.startsWith('./')) {
-                        normalizedPath = normalizedPath.substring(2);
-                    }
-                    input = basePath + '/' + normalizedPath;
-                }
-            }
-            return originalFetch.call(this, input, init);
-        };
-        
-        // 拦截 Next.js 的 __webpack_require__.p (publicPath)
-        if (typeof window.__webpack_require__ !== 'undefined' && window.__webpack_require__.p) {
-            const originalPublicPath = window.__webpack_require__.p;
-            Object.defineProperty(window.__webpack_require__, 'p', {
-                get: function() {
-                    return basePath + '/';
-                },
-                configurable: true
-            });
-        }
-        
-        if (typeof acquireVsCodeApi !== 'undefined') {
-            window.vscode = acquireVsCodeApi();
-            window.isVSCodeWebview = true;
-            console.log('[MermaidEditor] VS Code API initialized');
-            
-            // 监听来自扩展的消息
-            window.addEventListener('message', function(event) {
-                console.log('[MermaidEditor] Received message in inline script:', event.data);
-                if (event.data && event.data.type === 'load' && event.data.diagram) {
-                    // 如果 React 应用还没有加载，将数据存储在 window 上
-                    window.pendingDiagram = event.data.diagram;
-                    console.log('[MermaidEditor] Stored pending diagram data');
-                }
-            });
-            
-            // 请求初始数据
-            setTimeout(function() {
-                if (window.vscode) {
-                    console.log('[MermaidEditor] Requesting initial data from inline script');
-                    window.vscode.postMessage({ type: 'load-request' });
-                }
-            }, 100);
-            
-            // 添加全局错误处理器来捕获 React 加载错误
-            window.addEventListener('error', function(event) {
-                console.error('[MermaidEditor] Global error:', event.error, event.message, event.filename, event.lineno);
-            });
-            
-            window.addEventListener('unhandledrejection', function(event) {
-                console.error('[MermaidEditor] Unhandled promise rejection:', event.reason);
-            });
-            
-            // 检查 React 是否加载（延迟检查，给 React 时间加载）
-            setTimeout(function() {
-                console.log('[MermaidEditor] Checking if React app loaded...');
-                console.log('[MermaidEditor] window.pendingDiagram:', !!window.pendingDiagram);
-                console.log('[MermaidEditor] document.querySelector(".app"):', !!document.querySelector('.app'));
-                console.log('[MermaidEditor] document.querySelector("main"):', !!document.querySelector('main'));
-                console.log('[MermaidEditor] All script tags:', document.querySelectorAll('script').length);
-                // 如果 React 还没有加载，尝试触发一个事件
-                if (!document.querySelector('.app') || !document.querySelector('main')) {
-                    console.warn('[MermaidEditor] React app may not have loaded yet');
-                    // 尝试手动触发 React 加载
-                    const scripts = document.querySelectorAll('script[src]');
-                    console.log('[MermaidEditor] Found', scripts.length, 'script tags with src');
-                    scripts.forEach(function(script, index) {
-                        console.log('[MermaidEditor] Script', index, ':', script.getAttribute('src'));
-                    });
-                } else {
-                    console.log('[MermaidEditor] React app appears to be loaded');
-                }
-            }, 2000);
-        } else {
-            console.warn('[MermaidEditor] acquireVsCodeApi is not available');
-        }
-    } catch (e) {
-        console.error('[MermaidEditor] Failed to initialize VS Code API:', e);
-    }
-})();
-</script>`;
-    
-    // 在第一个 <script> 标签之前注入（在 </head> 之前）
-    const firstScriptMatch = htmlContent.match(/<script[^>]*>/i);
-    if (firstScriptMatch) {
-      htmlContent = htmlContent.replace(firstScriptMatch[0], `${initialContentScript}\n${firstScriptMatch[0]}`);
-    } else {
-      // 如果没有找到 script 标签，在 </head> 之前注入
-      htmlContent = htmlContent.replace('</head>', `${initialContentScript}\n</head>`);
-    }
-    
+
+    // 注入 VSCode API
+    const vscodeScript = `
+      <script>
+        const vscode = acquireVsCodeApi();
+        window.acquireVsCodeApi = () => vscode;
+      </script>
+    `;
+    htmlContent = htmlContent.replace('</head>', `${vscodeScript}</head>`);
+
     return htmlContent;
   }
 }

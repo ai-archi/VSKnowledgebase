@@ -1,0 +1,653 @@
+/* VSCode 主题变量适配 */
+:root {
+  --mermaid-bg: var(--vscode-editor-background, #1e1e1e);
+  --mermaid-text: var(--vscode-editor-foreground, #cccccc);
+  --mermaid-border: var(--vscode-panel-border, #3e3e3e);
+  --mermaid-panel-bg: var(--vscode-sideBar-background, #252526);
+  --mermaid-toolbar-bg: var(--vscode-titleBar-activeBackground, #2d2d30);
+  --mermaid-button-bg: var(--vscode-button-secondaryBackground, #3c3c3c);
+  --mermaid-button-text: var(--vscode-button-secondaryForeground, #cccccc);
+  --mermaid-button-hover: var(--vscode-button-secondaryHoverBackground, #4c4c4c);
+  --mermaid-error-bg: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+  --mermaid-error-text: var(--vscode-errorForeground, #f48771);
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif);
+  font-size: var(--vscode-font-size, 14px);
+  background: var(--mermaid-bg);
+  color: var(--mermaid-text);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  height: 100vh;
+  min-width: 100%;
+  background: var(--mermaid-bg);
+  color: var(--mermaid-text);
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--mermaid-toolbar-bg);
+  border-bottom: 1px solid var(--mermaid-border);
+  min-height: 40px;
+}
+
+.status {
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground, #999999);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid var(--mermaid-border);
+  background: var(--mermaid-button-bg);
+  color: var(--mermaid-button-text);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.actions button:hover:not(:disabled) {
+  background: var(--mermaid-button-hover);
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Workspace */
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  min-width: 100%;
+  height: 100%;
+}
+
+.diagram-panel {
+  flex: 1;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.workspace-divider {
+  width: 6px;
+  cursor: col-resize;
+  background: var(--mermaid-panel-bg);
+  border-left: 1px solid var(--mermaid-border);
+  border-right: 1px solid var(--mermaid-border);
+  flex: 0 0 auto;
+}
+
+.workspace-divider:hover,
+.workspace-divider.dragging {
+  background: var(--vscode-list-hoverBackground, #2a2d2e);
+}
+
+.workspace.resizing,
+.workspace.resizing * {
+  cursor: col-resize !important;
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mermaid-border);
+  background: var(--mermaid-panel-bg);
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.panel-caption {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.panel-caption.muted {
+  color: #adb5bd;
+}
+
+.panel-body {
+  padding: 16px;
+  flex: 1;
+}
+
+.style-section {
+  margin-bottom: 24px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-heading h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.section-caption {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.section-caption.muted {
+  color: #adb5bd;
+}
+
+.style-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.style-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.style-control span {
+  font-size: 12px;
+  color: #495057;
+}
+
+.style-control input[type="color"],
+.style-control input[type="text"],
+.style-control input[type="number"],
+.style-control select {
+  padding: 6px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.style-control input[type="color"] {
+  height: 36px;
+  cursor: pointer;
+}
+
+.style-control:disabled,
+.style-control[aria-disabled="true"] input,
+.style-control[aria-disabled="true"] select {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.image-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-control-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.image-control-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #dee2e6;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.image-control-actions button:hover:not(:disabled) {
+  background: #e9ecef;
+}
+
+.image-control-meta {
+  font-size: 11px;
+  color: #6c757d;
+}
+
+.image-control-meta.muted {
+  color: #adb5bd;
+}
+
+.style-reset {
+  margin-top: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #dee2e6;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.style-reset:hover:not(:disabled) {
+  background: #e9ecef;
+}
+
+/* Diagram Container */
+.diagram-container {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  background: var(--mermaid-bg);
+  cursor: grab;
+}
+
+/* 隐藏 Mermaid 自动插入的错误信息 - 只保留 SVG 元素 */
+.diagram-container > *:not(svg) {
+  display: none !important;
+}
+
+/* 确保容器不会因为错误信息而增加高度 */
+.diagram-container {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 隐藏所有包含错误文本的元素 */
+.diagram-container * {
+  position: relative;
+}
+
+.diagram-container div,
+.diagram-container p,
+.diagram-container span {
+  /* 检查文本内容，如果是错误信息则隐藏 */
+}
+
+/* 使用 JavaScript 在运行时移除，CSS 无法检查文本内容 */
+
+.diagram-container:active {
+  cursor: grabbing;
+}
+
+.diagram-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.diagram {
+  width: 100%;
+  height: 100%;
+  cursor: default;
+}
+
+.diagram .node {
+  cursor: move;
+}
+
+.diagram .node.selected {
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5));
+}
+
+.diagram .edge {
+  cursor: pointer;
+}
+
+.diagram .edge.selected {
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
+}
+
+.diagram .handle {
+  fill: #3b82f6;
+  stroke: #ffffff;
+  stroke-width: 2;
+  cursor: move;
+}
+
+.diagram .handle.active {
+  fill: #10b981;
+}
+
+.diagram .handle:hover {
+  fill: #2563eb;
+}
+
+.diagram .subgraph {
+  cursor: grab;
+}
+
+.diagram .subgraph:active {
+  cursor: grabbing;
+}
+
+.diagram .alignment-guide {
+  stroke: #3b82f6;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+
+/* Mermaid 选择样式 */
+.mermaid-selected-node {
+  filter: drop-shadow(0 0 4px #007bff);
+  opacity: 0.9;
+}
+
+.mermaid-selected-edge path {
+  stroke-width: 4 !important;
+  filter: drop-shadow(0 0 2px #007bff);
+}
+
+.mermaid-selection-box {
+  pointer-events: none;
+}
+
+/* Mermaid 容器样式 */
+#diagram-container {
+  position: relative;
+  overflow: auto;
+  background: var(--mermaid-bg);
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#diagram-container:active {
+  cursor: grabbing;
+}
+
+#diagram-container svg {
+  display: block;
+  min-width: 100%;
+  min-height: 100%;
+  transform-origin: top left;
+  transition: transform 0.1s ease-out;
+  will-change: transform;
+}
+
+/* 缩放控制按钮 */
+.zoom-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 100;
+  background: var(--mermaid-panel-bg);
+  border: 1px solid var(--mermaid-border);
+  border-radius: 4px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.zoom-controls button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--mermaid-button-bg);
+  color: var(--mermaid-button-text);
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.zoom-controls button:hover:not(:disabled) {
+  background: var(--mermaid-button-hover);
+}
+
+.zoom-controls button:active:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground, #2c2c2c);
+}
+
+.zoom-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 交互元素样式 */
+[data-interactive="true"] {
+  transition: opacity 0.2s;
+}
+
+[data-interactive="true"]:hover {
+  opacity: 0.8;
+}
+
+/* 连接目标高亮 */
+.mermaid-hover-target {
+  filter: drop-shadow(0 0 6px #28a745) !important;
+  opacity: 0.9 !important;
+}
+
+/* 添加节点对话框样式 */
+.mermaid-add-node-dialog {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* 标签编辑器样式 */
+.mermaid-label-editor input {
+  outline: none;
+}
+
+.mermaid-label-editor input:focus {
+  border-color: #0056b3 !important;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+/* CodeMirror 编辑器样式 */
+.source-panel .CodeMirror {
+  height: 100% !important;
+  width: 100%;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  flex: 1;
+  min-height: 0;
+  border: none !important;
+  border-right: none !important;
+  border-left: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+.source-panel .CodeMirror-scroll {
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+.source-panel .CodeMirror-scroll {
+  min-height: 100%;
+}
+
+.source-panel .CodeMirror-lines {
+  padding: 0;
+}
+
+/* CodeMirror 包装器 */
+.source-panel .CodeMirror-wrap {
+  height: 100%;
+  width: 100%;
+  border: none !important;
+}
+
+.source-panel .CodeMirror-gutters {
+  border: none !important;
+  border-right: none !important;
+}
+
+/* 显示垂直滚动条 */
+.source-panel .CodeMirror-vscrollbar {
+  display: block !important;
+}
+
+.source-panel .CodeMirror-scrollbar-filler {
+  display: none !important;
+}
+
+.CodeMirror-line {
+  padding: 0;
+}
+
+/* 错误行样式 */
+.CodeMirror-line.error-line {
+  background-color: #fee;
+}
+
+/* 原生编辑器样式（降级方案） */
+.mermaid-source-editor {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+/* Source Panel */
+.source-panel {
+  width: 320px;
+  min-width: 240px;
+  border-left: 1px solid var(--mermaid-border);
+  display: flex;
+  flex-direction: column;
+  background: var(--mermaid-panel-bg);
+  flex: 0 0 auto;
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+}
+
+.panel-path {
+  font-size: 11px;
+  color: #6c757d;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.source-editor {
+  flex: 1;
+  padding: 8px;
+  margin: 0;
+  border: none;
+  resize: none;
+  font-family: var(--vscode-editor-font-family, 'Monaco', 'Menlo', 'Ubuntu Mono', monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  line-height: 1.5;
+  background: var(--vscode-editor-background, #1e1e1e);
+  color: var(--vscode-editor-foreground, #cccccc);
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  height: 100%;
+}
+
+.source-editor:focus {
+  outline: none;
+}
+
+.panel-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  background: #f8f9fa;
+}
+
+.source-status {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.source-status.synced {
+  color: #10b981;
+}
+
+.source-status.pending {
+  color: #f59e0b;
+}
+
+.source-status.saving {
+  color: #3b82f6;
+}
+
+.source-status.error {
+  color: #ef4444;
+}
+
+.selection-label {
+  color: #6c757d;
+  font-size: 11px;
+}
+
+/* Error Message - 已移除，改为底部弹窗提示 */
+
+/* Placeholder */
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+/* Context Menu */
+.context-menu {
+  position: absolute;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  z-index: 1000;
+  min-width: 120px;
+}
+
+.context-menu button {
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #212529;
+}
+
+.context-menu button:hover {
+  background: #f8f9fa;
+}
+
