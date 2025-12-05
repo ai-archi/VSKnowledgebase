@@ -386,25 +386,39 @@ export class MermaidEditorAppV2 {
         this.removeErrorElementsFromContainer(this.renderer.container);
       }
       
-      // 对于空内容错误，不显示错误消息
-      if (error.message && error.message.includes('No diagram type detected')) {
-        this.stateManager.setState({ error: null });
-      } else {
-        // 显示完整的错误消息
-        let errorMessage = error.message || '未知错误';
-        
-        // 如果是解析错误，保留完整信息但格式化
-        if (errorMessage.includes('Parsing failed')) {
-          // 提取主要错误信息
-          const lines = errorMessage.split('\n');
-          const mainError = lines[0] || errorMessage;
-          errorMessage = mainError;
+      // 显示错误消息（包括 UnknownDiagramError 和 No diagram type detected）
+      let errorMessage = error.message || '未知错误';
+      
+      // 处理 UnknownDiagramError 和 No diagram type detected 错误
+      if (errorMessage.includes('UnknownDiagramError') || errorMessage.includes('No diagram type detected')) {
+        // 提取错误类型和主要信息
+        if (errorMessage.includes('UnknownDiagramError')) {
+          // 格式：UnknownDiagramError: No diagram type detected matching given configuration for text: radar
+          const match = errorMessage.match(/UnknownDiagramError:\s*(.+)/);
+          if (match && match[1]) {
+            errorMessage = match[1].trim();
+          } else {
+            // 如果没有匹配到，使用原始消息但去掉 "UnknownDiagramError: " 前缀
+            errorMessage = errorMessage.replace(/UnknownDiagramError:\s*/i, '').trim();
+          }
         }
         
-        this.stateManager.setState({
-          error: errorMessage
-        });
+        // 如果错误消息太长，提取关键部分
+        if (errorMessage.length > 200) {
+          const lines = errorMessage.split('\n');
+          errorMessage = lines[0] || errorMessage;
+        }
+      } else if (errorMessage.includes('Parsing failed')) {
+        // 如果是解析错误，保留完整信息但格式化
+        const lines = errorMessage.split('\n');
+        const mainError = lines[0] || errorMessage;
+        errorMessage = mainError;
       }
+      
+      // 显示错误消息
+      this.stateManager.setState({
+        error: errorMessage
+      });
     }
   }
   

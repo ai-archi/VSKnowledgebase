@@ -1,14 +1,11 @@
-architecture-layers
-    title 系统架构分层
-    
-    layer 表示层
-    layer 业务层
-    layer 数据层
-    
-    component 表示层
-    component 业务层
-    component 数据层
-    
-    表示层 --> 业务层
-    业务层 --> 数据层
+architecture-beta
+    group api(cloud)[API]
 
+    service db(database)[Database] in api
+    service disk1(disk)[Storage] in api
+    service disk2(disk)[Storage] in api
+    service server(server)[Server] in api
+
+    db:L -- R:server
+    disk1:T -- B:server
+    disk2:T -- B:db

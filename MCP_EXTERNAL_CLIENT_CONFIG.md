@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档说明如何在外部 MCP Client（如 Claude Desktop、Cursor）中配置 ArchiTool MCP Server，使 AI 助手能够访问知识库。
+本文档说明如何在外部 MCP Client（如 Cursor）中配置 ArchiTool MCP Server，使 AI 助手能够访问知识库。
 
 **当前状态**：❌ **未实现**
 
@@ -12,85 +12,81 @@
 
 ### 方案架构
 
-**混合架构**：扩展启动 stdio MCP Server 子进程
+**关键理解**：
+- VS Code 扩展跟随 VS Code 进程启动，在 VS Code 主进程中运行
+- MCP Server 子进程由**外部 MCP Client**（如 Cursor）启动，不是 VS Code 扩展的子进程
+- 这两个进程是**独立的**，需要通过进程间通信机制连接
+- **MCP Server 只起桥接作用**：转发外部请求到 VS Code 扩展，不直接访问 `.architool` 目录
+- **功能逻辑在插件中实现**：所有业务逻辑和数据访问都在 VS Code 扩展中完成
+
+**架构图**：
 
 ```
 ┌─────────────────────────────────────┐
-│   VS Code Extension (主进程)        │
-│   - 扩展功能                        │
-│   - MCPTools/MCPResources (接口)   │
+│   外部 MCP Client                   │
+│   - Cursor                          │
+│   - 其他支持 MCP 的 AI 工具        │
 └──────────────┬──────────────────────┘
-               │ IPC 通信
-               │
-┌──────────────▼──────────────────────┐
-│   MCP Server (子进程)                │
-│   - stdio 传输层                    │
-│   - MCP 协议处理                    │
-│   - 调用主进程的 MCP 接口           │
-└──────────────┬──────────────────────┘
+               │ 启动子进程
                │ stdio (stdin/stdout)
                │
 ┌──────────────▼──────────────────────┐
-│   外部 MCP Client                   │
-│   - Claude Desktop                  │
-│   - Cursor                          │
-│   - 其他支持 MCP 的 AI 工具        │
+│   MCP Server (桥接进程)              │
+│   - 由外部 MCP Client 启动           │
+│   - stdio 传输层                    │
+│   - MCP 协议处理                    │
+│   - 仅负责协议转换和转发            │
+│   - 不直接访问文件系统              │
+└──────────────┬──────────────────────┘
+               │ 进程间通信
+               │ (命名管道/Unix Socket/HTTP等)
+               │
+┌──────────────▼──────────────────────┐
+│   VS Code Extension                 │
+│   - 在 VS Code 主进程中运行          │
+│   - MCPTools/MCPResources (接口)    │
+│   - 实现所有业务逻辑                │
+│   - 访问 .architool 目录            │
+│   - 可能未运行或存在多个窗口实例    │
+└──────────────┬──────────────────────┘
+               │ 文件系统访问
+               │
+┌──────────────▼──────────────────────┐
+│   .architool 目录                    │
+│   - 工作区根目录/.architool          │
+│   - 知识库数据（artifacts/metadata） │
 └─────────────────────────────────────┘
 ```
 
 ### 实现要点
 
-1. **子进程启动**
-   - 扩展激活时，启动独立的 MCP Server 子进程
-   - 子进程通过 stdio（stdin/stdout）与外部 MCP Client 通信
-   - 子进程通过 IPC（进程间通信）调用主进程的 MCP 接口
+1. **进程启动关系**
+   - **外部 MCP Client** 启动 MCP Server 进程（MCP Client 的子进程）
+   - **VS Code 扩展**在 VS Code 主进程中运行（VS Code 的子进程）
+   - 这两个进程是**独立的**，没有父子关系
+   - MCP Server 需要能够发现并连接到 VS Code 扩展实例
 
 2. **传输层实现**
-   - 实现标准 MCP 协议的 stdio 传输层
+   - MCP Server 实现标准 MCP 协议的 stdio 传输层
    - 处理 JSON-RPC 消息格式
    - 支持初始化、工具调用、资源访问等协议流程
+   - 通过 stdio（stdin/stdout）与外部 MCP Client 通信
 
-3. **进程间通信**
-   - 子进程通过 IPC 通道（如 Node.js `child_process` IPC）与主进程通信
-   - 主进程的 `MCPTools` 和 `MCPResources` 接口保持不变
-   - 子进程作为代理，转发外部请求到主进程
-   - 工作区路径由主进程确定，子进程通过 IPC 获取，无需外部配置
+3. **进程间通信（必需）**
+   - MCP Server **只起桥接作用**，不直接访问 `.architool` 目录
+   - MCP Server 需要能够发现并连接到 VS Code 扩展实例
+   - 通信方式：命名管道、Unix Socket、HTTP 本地服务器等
+   - VS Code 扩展的 `MCPTools` 和 `MCPResources` 接口保持不变
+   - MCP Server 作为代理，转发外部请求到 VS Code 扩展
+   - **所有业务逻辑在 VS Code 扩展中实现**，MCP Server 仅负责协议转换
 
 4. **生命周期管理**
-   - 扩展激活时启动子进程
-   - 扩展停用时停止子进程
-   - 处理子进程异常退出和重启
+   - **MCP Server**：由外部 MCP Client 启动和停止
+   - **VS Code 扩展**：跟随 VS Code 进程启动和停止
+   - 两个进程的生命周期**独立**，需要处理连接断开和重连
+   - VS Code 扩展可能未运行，MCP Server 需要处理这种情况并返回适当的错误
 
 ## 配置方式
-
-### Claude Desktop 配置
-
-在 Claude Desktop 的 MCP 配置文件中添加 ArchiTool 服务器配置。
-
-**配置文件位置**：
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Linux: `~/.config/Claude/claude_desktop_config.json`
-
-**配置示例**：
-
-```json
-{
-  "mcpServers": {
-    "architool": {
-      "command": "node",
-      "args": [
-        "/path/to/architool-mcp-server.js"
-      ]
-    }
-  }
-}
-```
-
-**配置说明**：
-- `command`: 启动 MCP Server 的命令（通常是 `node`）
-- `args`: 命令参数，仅需包含 MCP Server 脚本路径
-- **工作区路径**：由主进程（VS Code 扩展）自动确定，无需在配置中指定
 
 ### Cursor 配置
 
@@ -131,10 +127,20 @@
 
 ### 阶段 1：基础架构
 
-1. **创建 MCP Server 子进程启动器**
-   - 在扩展中实现子进程启动逻辑
-   - 处理子进程生命周期（启动、停止、重启）
-   - 建立 IPC 通信通道
+1. **实现进程间通信机制**
+   - VS Code 扩展启动时，创建 IPC 服务器（命名管道/Unix Socket/HTTP）
+   - 每个扩展实例暴露独立的 IPC 端点（标识不同的工作区）
+   - MCP Server 启动时，扫描并发现活动的 VS Code 扩展实例
+   - 连接到选定的扩展实例，建立 IPC 通信通道
+   - 处理连接断开和重连逻辑
+   - 处理 VS Code 扩展未运行的情况（返回适当的错误）
+
+2. **实现协议转换层**
+   - MCP Server 接收外部 MCP Client 的请求（通过 stdio）
+   - 将 MCP 协议请求转换为 IPC 消息
+   - 转发到 VS Code 扩展的 `MCPTools` 接口
+   - 将扩展的响应转换回 MCP 协议格式
+   - 返回给外部 MCP Client
 
 2. **实现 stdio 传输层**
    - 实现 MCP 协议的 stdio 传输
@@ -150,9 +156,10 @@
    - 处理 `resources/list` 请求（可选）
 
 2. **实现工具调用转发**
-   - 子进程接收工具调用请求
-   - 通过 IPC 转发到主进程的 `MCPTools` 接口
-   - 将结果返回给外部客户端
+   - MCP Server 接收外部 MCP Client 的工具调用请求
+   - 通过 IPC 转发到 VS Code 扩展的 `MCPTools` 接口
+   - VS Code 扩展执行实际的业务逻辑（访问 `.architool` 目录、查询数据等）
+   - 扩展返回结果，MCP Server 转换并返回给外部客户端
 
 ### 阶段 3：完善和优化
 
@@ -176,17 +183,130 @@
 ### 多进程问题
 
 **⚠️ 重要提示**：
-- 外部 MCP Client 会启动独立的 MCP Server 进程
-- 如果 VS Code 扩展也在运行，会有多个进程（扩展进程 + MCP Server 进程）
+- **外部 MCP Client** 启动独立的 MCP Server 进程（MCP Client 的子进程）
+- **VS Code 扩展**在 VS Code 主进程中运行（VS Code 的子进程）
+- 这两个进程是**完全独立的**，没有父子关系
 - 多个进程之间无法直接共享扩展的上下文和状态
-- 需要通过 IPC 进行进程间通信
+- 需要通过 IPC（命名管道/Unix Socket/HTTP）进行进程间通信
+- VS Code 扩展可能未运行，MCP Server 需要处理这种情况
+
+### 多窗口冲突
+
+**⚠️ 潜在问题**：
+- 如果同时打开多个 VS Code 窗口，每个窗口都有自己的扩展实例和工作区
+- 外部 MCP Client 只能配置一个 MCP Server 启动命令
+- MCP Server 需要能够发现并连接到正确的 VS Code 扩展实例
+
+**架构限制**：
+
+由于 MCP Server 由外部 MCP Client 启动，而 VS Code 扩展在 VS Code 进程中运行，存在以下限制：
+
+1. **进程独立性**
+   - MCP Server 是外部 MCP Client 的子进程，与 VS Code 扩展进程完全独立
+   - 每个 VS Code 窗口的扩展实例是独立的，它们之间没有直接的通信机制
+   - MCP Server 不知道有哪些活动的 VS Code 窗口，也不知道如何连接到它们
+
+2. **连接发现机制**
+   - MCP Server 需要能够发现活动的 VS Code 扩展实例
+   - 每个扩展实例需要暴露 IPC 端点（命名管道/Unix Socket/HTTP）
+   - 需要处理多个扩展实例同时存在的情况
+
+**多窗口支持机制**：
+
+**1. 扩展实例发现机制**
+
+- **IPC 端点命名**：每个扩展实例创建独立的 IPC 端点
+  - 使用工作区路径的哈希值作为标识：`~/.architool/mcp-servers/{workspace-hash}.sock`
+- **注册表机制**：所有活动的扩展实例在注册表中记录
+  - 注册表位置：`~/.architool/mcp-servers/registry.json`
+  - 记录每个实例的工作区路径、IPC 端点、最后激活时间
+- **MCP Server 发现流程**：
+  1. 读取注册表 `~/.architool/mcp-servers/registry.json`
+  2. 验证 IPC 端点是否仍然活动（检查文件是否存在）
+  3. 选择最近激活的扩展实例进行连接
+  4. 建立一对一 IPC 连接
+
+**2. 一对一映射关系**
+
+- **映射规则**：一个 MCP Server 连接一个扩展实例
+- **选择逻辑**：MCP Server 启动时，从注册表中选择最近激活的扩展实例
+- **连接管理**：
+  - 每个 MCP Server 独立选择要连接的扩展实例
+  - 扩展实例的 IPC 服务器支持客户端连接
+  - 处理连接断开和重连
+
+**实现机制**：
+
+1. **扩展实例 IPC 端点管理**：
+   ```
+   ~/.architool/
+   ├── mcp-servers/
+   │   ├── {workspace-hash-1}.sock  # 窗口 1 的 IPC 端点
+   │   ├── {workspace-hash-2}.sock  # 窗口 2 的 IPC 端点
+   │   └── registry.json             # 注册表，记录所有活动的扩展实例
+   ```
+
+2. **注册表格式**（`registry.json`）：
+   ```json
+   {
+     "instances": [
+       {
+         "workspaceHash": "abc123",
+         "workspacePath": "/path/to/workspace1",
+         "ipcEndpoint": "~/.architool/mcp-servers/abc123.sock",
+         "lastActive": "2024-01-01T12:00:00Z"
+       },
+       {
+         "workspaceHash": "def456",
+         "workspacePath": "/path/to/workspace2",
+         "ipcEndpoint": "~/.architool/mcp-servers/def456.sock",
+         "lastActive": "2024-01-01T12:05:00Z"
+       }
+     ]
+   }
+   ```
+
+3. **MCP Server 启动流程**：
+   - 读取注册表 `~/.architool/mcp-servers/registry.json`
+   - 验证 IPC 端点是否仍然活动（检查文件是否存在）
+   - 选择最近激活的扩展实例（通过 `lastActive` 时间戳）
+   - 建立一对一 IPC 连接
+   - 如果连接失败，尝试下一个实例
+
+**当前窗口信息获取**：
+
+- **MCP Server 无法直接获取当前窗口信息**：MCP Server 是由外部 MCP Client（如 Cline、Cursor）启动的独立进程，不知道是哪个 VS Code 窗口触发了它
+- **通过注册表获取**：MCP Server 通过读取注册表中的 `lastActive` 时间戳，选择最近激活的扩展实例
+- **扩展实例维护激活时间**：VS Code 扩展在窗口激活时更新注册表的 `lastActive` 字段
+- **实时同步机制**：扩展实例可以通过 IPC 向 MCP Server 提供当前窗口信息（工作区路径、窗口 ID 等），但需要扩展主动推送或 MCP Server 主动查询
+
+4. **扩展实例生命周期**：
+   - 启动时：创建 IPC 端点，更新注册表
+   - 激活时：更新注册表的 `lastActive` 时间戳（通过 VS Code API 监听窗口激活事件）
+   - 关闭时：删除 IPC 端点，从注册表移除
+
+**窗口激活检测机制**：
+
+- **VS Code 扩展监听窗口事件**：使用 `vscode.window.onDidChangeActiveTextEditor` 或 `vscode.window.onDidChangeWindowState` 监听窗口激活
+- **实时更新注册表**：窗口激活时，扩展实例立即更新注册表中的 `lastActive` 时间戳
+- **MCP Server 选择逻辑**：MCP Server 启动时，选择 `lastActive` 最新的扩展实例，即当前活动的窗口
+- **局限性**：如果用户在 MCP Server 启动后切换窗口，MCP Server 仍连接之前的窗口，直到重新启动
 
 ### 工作区路径
 
-- 工作区路径由主进程（VS Code 扩展）自动确定
-- 子进程通过 IPC 从主进程获取工作区路径
+**工作区路径由 VS Code 扩展确定**：
+
+- 工作区路径由 VS Code 扩展自动确定（基于当前打开的 VS Code 工作区）
+- MCP Server **不直接访问文件系统**，通过 IPC 从连接的 VS Code 扩展实例获取工作区信息
 - 无需在外部 MCP Client 配置中指定工作区路径
-- 主进程会根据当前打开的 VS Code 工作区自动选择对应的知识库
+- 如果连接了多个 VS Code 窗口，MCP Server 需要知道使用哪个窗口的工作区
+
+**工作区发现机制**：
+
+- MCP Server 启动时，通过注册表发现活动的 VS Code 扩展实例
+- 选择最近激活的扩展实例建立一对一连接
+- 通过 IPC 获取该实例的工作区路径
+- 每个 VS Code 窗口的扩展实例暴露独立的 IPC 端点，支持多窗口场景
 
 ### 权限和安全
 
@@ -204,7 +324,6 @@
 
 - [MCP 协议规范](https://modelcontextprotocol.io/)
 - [MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
-- [Claude Desktop MCP 配置文档](https://claude.ai/docs/mcp)
 - [Cursor MCP 集成文档](https://cursor.sh/docs/mcp)
 
 ## 总结
@@ -217,5 +336,5 @@
 4. ✅ **生命周期管理**：处理子进程启动、停止、重启
 5. ✅ **错误处理**：完善的异常处理和恢复机制
 
-**建议**：优先考虑实际需求，如果主要使用场景是在 VS Code/Cursor 中，进程内实现可能更合适。只有在明确需要与 Claude Desktop 等外部工具集成时，才考虑实现标准 MCP 协议。
+**建议**：优先考虑实际需求，如果主要使用场景是在 VS Code/Cursor 中，进程内实现可能更合适。只有在明确需要与外部 MCP Client 集成时，才考虑实现标准 MCP 协议。
 

@@ -1,9 +1,24 @@
 zenuml
-    title 用户登录流程
-    User -> AuthService: login(username, password)
-    AuthService -> Database: queryUser(username)
-    Database --> AuthService: userData
-    AuthService -> TokenService: generateToken(userData)
-    TokenService --> AuthService: token
-    AuthService --> User: return token
+    title Order Service
+    @Actor Client #FFEBE6
+    @Boundary OrderController #0747A6
+    @EC2 <<BFF>> OrderService #E3FCEF
+    group BusinessService {
+      @Lambda PurchaseService
+      @AzureFunction InvoiceService
+    }
 
+    @Starter(Client)
+    // `POST /orders`
+    OrderController.post(payload) {
+      OrderService.create(payload) {
+        order = new Order(payload)
+        if(order != null) {
+          par {
+            PurchaseService.createPO(order)
+            InvoiceService.createInvoice(order)      
+          }      
+        }
+      }
+    }
+    

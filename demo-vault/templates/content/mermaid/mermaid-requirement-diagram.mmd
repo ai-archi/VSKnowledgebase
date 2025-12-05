@@ -1,13 +1,14 @@
 requirementDiagram
-    requirement 功能需求
-    requirement 性能需求
-    requirement 安全需求
-    
-    element 系统设计
-    element 数据库设计
-    element API设计
-    
-    功能需求 - satisfies -> 系统设计
-    性能需求 - satisfies -> 数据库设计
-    安全需求 - satisfies -> API设计
 
+    requirement test_req {
+    id: 1
+    text: the test text.
+    risk: high
+    verifymethod: test
+    }
+
+    element test_entity {
+    type: simulation
+    }
+
+    test_entity - satisfies -> test_req

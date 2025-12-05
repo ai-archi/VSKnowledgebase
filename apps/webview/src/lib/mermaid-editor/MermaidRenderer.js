@@ -31,11 +31,73 @@ export class MermaidRenderer {
     this.init();
   }
   
+  /**
+   * 检测当前 VSCode 主题（dark 或 light）
+   * 通过检查背景色的亮度来判断
+   */
+  detectVSCodeTheme() {
+    if (typeof document === 'undefined') {
+      return 'dark'; // 默认返回 dark
+    }
+    
+    // 获取 VSCode 背景色
+    const root = document.documentElement;
+    const bgColor = getComputedStyle(root).getPropertyValue('--vscode-editor-background').trim();
+    
+    // 如果没有设置，使用默认值
+    if (!bgColor || bgColor === '') {
+      return 'dark'; // 默认 dark 主题
+    }
+    
+    // 解析颜色值（支持 hex、rgb、rgba）
+    let r, g, b;
+    
+    if (bgColor.startsWith('#')) {
+      // Hex 格式：#1e1e1e 或 #fff
+      const hex = bgColor.slice(1);
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else {
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      }
+    } else if (bgColor.startsWith('rgb')) {
+      // RGB 或 RGBA 格式：rgb(30, 30, 30) 或 rgba(30, 30, 30, 1)
+      const match = bgColor.match(/\d+/g);
+      if (match && match.length >= 3) {
+        r = parseInt(match[0], 10);
+        g = parseInt(match[1], 10);
+        b = parseInt(match[2], 10);
+      } else {
+        return 'dark'; // 解析失败，默认 dark
+      }
+    } else {
+      return 'dark'; // 未知格式，默认 dark
+    }
+    
+    // 计算亮度（使用相对亮度公式）
+    // L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    
+    // 如果亮度小于 0.5，认为是 dark 主题；否则是 light 主题
+    return luminance < 0.5 ? 'dark' : 'light';
+  }
+  
   async init() {
+    // 检测 VSCode 主题
+    const vsTheme = this.detectVSCodeTheme();
+    
+    // 根据 VSCode 主题设置 Mermaid 主题
+    // dark 主题使用 'dark'，light 主题使用 'base'
+    const mermaidTheme = vsTheme === 'dark' ? 'dark' : 'base';
+    
     // 初始化 mermaid
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'default',
+      theme: mermaidTheme,
       securityLevel: 'loose', // 允许交互
       flowchart: {
         useMaxWidth: true,
