@@ -1,5 +1,7 @@
 # PlantUML Editor 集成到 Webview 改造方案
 
+> **注意**：此文档记录了从 `packages/plantuml-js` 迁移到 `apps/webview` 的改造过程。迁移已完成，`packages/plantuml-js` 目录已删除。
+
 ## 一、可行性分析
 
 ### ✅ 可以集成

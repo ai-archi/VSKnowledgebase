@@ -1,0 +1,45 @@
+@startuml
+!theme plain
+
+title Use Case Diagram Demo - Online Shopping System
+
+left to right direction
+
+actor Customer
+actor Admin
+actor "Payment Provider" as PaymentProvider
+
+rectangle "E-commerce System" {
+  Customer --> (Browse Products)
+  Customer --> (Search Products)
+  Customer --> (Add to Cart)
+  Customer --> (View Cart)
+  Customer --> (Checkout)
+  Customer --> (Track Order)
+  Customer --> (Write Review)
+  
+  Admin --> (Manage Products)
+  Admin --> (View Orders)
+  Admin --> (Manage Users)
+  Admin --> (Generate Reports)
+  
+  Customer --> (Process Payment)
+  PaymentProvider --> (Process Payment)
+  
+  (Checkout) ..> (Process Payment) : includes
+  (Process Payment) ..> (Update Inventory) : includes
+  (Process Payment) ..> (Send Confirmation) : includes
+}
+
+note right of (Process Payment)
+  Payment is processed
+  through external provider
+end note
+
+note bottom of (Manage Products)
+  Admin can add, edit,
+  and remove products
+end note
+
+@enduml
+

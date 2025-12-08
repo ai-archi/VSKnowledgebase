@@ -182,7 +182,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
 
   /**
    * 获取 Webview HTML 内容
-   * 参考 plantuml-js 的简单实现方式
+   * 参考 webview 的简单实现方式
    */
   private getWebviewContent(
     webview: vscode.Webview,
@@ -204,7 +204,7 @@ export class ArchimateEditorProvider implements vscode.CustomTextEditorProvider 
     // 读取静态 HTML 文件
     let htmlContent = fs.readFileSync(indexHtmlPath, 'utf-8');
     
-    // 获取 webview URI 辅助函数（参考 plantuml-js 的实现）
+    // 获取 webview URI 辅助函数
     // 统一转换为 CDN 格式：https://file+.vscode-resource.vscode-cdn.net/...
     const archimateJsUri = vscode.Uri.file(archimateJsPath);
     const webviewUri = (relativePath: string) => {

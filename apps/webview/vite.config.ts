@@ -29,6 +29,7 @@ export default defineConfig({
         'create-task-dialog': resolve(__dirname, 'create-task-dialog.html'),
         'viewpoint-panel': resolve(__dirname, 'viewpoint-panel.html'),
         'mermaid-editor': resolve(__dirname, 'mermaid-editor.html'),
+        'plantuml-editor': resolve(__dirname, 'plantuml-editor.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

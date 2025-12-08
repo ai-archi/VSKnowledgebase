@@ -32,7 +32,17 @@ export class ExtensionService {
 
   constructor() {
     // 获取 VSCode API（在 Webview 环境中可用）
-    this.vscode = (window as any).acquireVsCodeApi?.() || null;
+    // HTML 中已经注入了 acquireVsCodeApi，它会返回已存在的实例
+    // 优先使用已存在的 vscode 实例，否则通过 acquireVsCodeApi 获取
+    if ((window as any).vscode) {
+      this.vscode = (window as any).vscode;
+    } else if (typeof (window as any).acquireVsCodeApi === 'function') {
+      this.vscode = (window as any).acquireVsCodeApi();
+      // 保存到 window 以便其他地方使用
+      (window as any).vscode = this.vscode;
+    } else {
+      this.vscode = null;
+    }
 
     // 监听来自 Extension 的消息
     window.addEventListener('message', (event) => {
