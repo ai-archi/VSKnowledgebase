@@ -103,7 +103,18 @@ function getMostRecentActiveInstance(maxRetries = 10, retryDelay = 1000): Promis
       }
 
       // 过滤活动的实例
+      // 不仅要检查 socket 文件是否存在，还要检查 lastActive 时间戳是否在合理范围内
+      const now = Date.now();
+      const MAX_INSTANCE_AGE_MS = 5 * 60 * 1000; // 5分钟，超过此时间的实例视为过期
+      
       const activeInstances = registry.instances.filter(inst => {
+        // 检查 lastActive 时间戳，过滤掉过期的实例
+        const lastActiveTime = new Date(inst.lastActive).getTime();
+        const age = now - lastActiveTime;
+        if (age > MAX_INSTANCE_AGE_MS) {
+          return false; // 实例过期，跳过
+        }
+        
         if (process.platform === 'win32') {
           // Windows 命名管道无法通过文件系统检查
           // 命名管道以 \\.\pipe\ 开头，直接返回 true，连接时会验证
@@ -111,7 +122,23 @@ function getMostRecentActiveInstance(maxRetries = 10, retryDelay = 1000): Promis
         } else {
           // Unix/Linux/macOS 检查 socket 文件是否存在
           const endpointPath = inst.ipcEndpoint.replace('~', os.homedir());
-          return fs.existsSync(endpointPath);
+          if (!fs.existsSync(endpointPath)) {
+            return false; // Socket 文件不存在
+          }
+          
+          // 验证 socket 文件是否真的是 socket 文件（而不是普通文件）
+          try {
+            const stats = fs.statSync(endpointPath);
+            if (!stats.isSocket()) {
+              // 如果不是 socket 文件，可能是僵尸文件，跳过
+              return false;
+            }
+          } catch (error) {
+            // 如果无法获取文件信息，跳过
+            return false;
+          }
+          
+          return true;
         }
       });
 
@@ -161,11 +188,64 @@ function connectToExtension(ipcEndpoint: string, maxRetries = 10, retryDelay = 1
     
     const tryConnect = (): void => {
       attempts++;
+      
+      // 在连接前，对于 Unix Socket，验证文件是否真的是 socket 文件
+      if (process.platform !== 'win32' && !ipcEndpoint.startsWith('\\\\.\\pipe\\')) {
+        try {
+          if (!fs.existsSync(ipcEndpoint)) {
+            if (attempts < maxRetries) {
+              setTimeout(() => {
+                tryConnect();
+              }, retryDelay);
+            } else {
+              reject(new Error(`Socket file does not exist: ${ipcEndpoint}`));
+            }
+            return;
+          }
+          
+          const stats = fs.statSync(ipcEndpoint);
+          if (!stats.isSocket()) {
+            // 如果不是 socket 文件，可能是僵尸文件，直接失败
+            reject(new Error(`Path exists but is not a socket file: ${ipcEndpoint}`));
+            return;
+          }
+        } catch (error: any) {
+          if (attempts < maxRetries) {
+            setTimeout(() => {
+              tryConnect();
+            }, retryDelay);
+          } else {
+            reject(new Error(`Failed to verify socket file: ${error.message}`));
+          }
+          return;
+        }
+      }
+      
       const socket = net.createConnection(ipcEndpoint, () => {
         resolve(socket);
       });
 
       socket.on('error', (error: Error) => {
+        // 如果连接失败，可能是 socket 文件是僵尸文件
+        // 对于 Unix Socket，尝试删除僵尸文件
+        if (process.platform !== 'win32' && !ipcEndpoint.startsWith('\\\\.\\pipe\\')) {
+          try {
+            if (fs.existsSync(ipcEndpoint)) {
+              const stats = fs.statSync(ipcEndpoint);
+              if (stats.isSocket()) {
+                // 尝试删除僵尸 socket 文件
+                try {
+                  fs.unlinkSync(ipcEndpoint);
+                } catch (unlinkError) {
+                  // 忽略删除错误
+                }
+              }
+            }
+          } catch (statError) {
+            // 忽略统计错误
+          }
+        }
+        
         if (attempts < maxRetries) {
           // 等待后重试
           setTimeout(() => {
@@ -329,16 +409,37 @@ async function main() {
 
     try {
       const mcpMessage = JSON.parse(line) as MCPMessage;
+      
+      // 尝试从原始输入中提取 id（以防解析时丢失）
+      let requestId: string | number | null | undefined = mcpMessage.id;
+      if (requestId === undefined || requestId === null) {
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed && typeof parsed === 'object' && 'id' in parsed) {
+            requestId = parsed.id;
+          }
+        } catch {
+          // 如果无法解析，使用 mcpMessage.id
+        }
+      }
 
       // 处理 initialize
       if (mcpMessage.method === 'initialize') {
-        // initialize 请求必须有 id，所以响应也必须有 id
+        // 根据 MCP 协议，initialize 请求必须有 id，响应也必须包含相同的 id
+        if (requestId === undefined || requestId === null) {
+          // 如果 initialize 请求没有 id，这是一个协议错误
+          // 但根据 JSON-RPC 2.0，对于通知（没有 id 的请求），我们不应该发送响应
+          // 然而，MCP Client 可能期望所有响应都有 id，所以这里我们静默忽略
+          return;
+        }
+        
         const response: any = {
           jsonrpc: '2.0',
+          id: requestId, // initialize 请求必须有 id，所以响应也必须有 id
           result: {
             protocolVersion: '2024-11-05',
             capabilities: {
-              tools: {}
+              tools: {} // 空对象表示支持工具功能
             },
             serverInfo: {
               name: 'architool',
@@ -346,11 +447,6 @@ async function main() {
             }
           }
         };
-        
-        // 只有当请求有 id 时，才在响应中包含 id
-        if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
-          response.id = mcpMessage.id;
-        }
         
         console.log(JSON.stringify(response));
         return;
@@ -370,39 +466,67 @@ async function main() {
             tools: [
               {
                 name: 'search_knowledge_base',
-                description: 'Search the knowledge base',
+                description: 'Search the knowledge base for documents, designs, and artifacts. Use this tool when you need to find information, documentation, design diagrams, or any content stored in the knowledge base. This is the primary tool for most knowledge base queries (covers ~90% of use cases). Supports full-text search across titles, descriptions, and content. You can filter by tags, vault name, and limit results.',
                 inputSchema: {
                   type: 'object',
                   properties: {
-                    query: { type: 'string' },
-                    vaultName: { type: 'string' },
-                    tags: { type: 'array', items: { type: 'string' } },
-                    limit: { type: 'number' }
+                    query: { 
+                      type: 'string',
+                      description: 'Search query string. Search across titles, descriptions, and content.'
+                    },
+                    vaultName: { 
+                      type: 'string',
+                      description: 'Optional: Filter results to a specific vault by name.'
+                    },
+                    tags: { 
+                      type: 'array', 
+                      items: { type: 'string' },
+                      description: 'Optional: Filter by tags (AND relationship, must include all specified tags).'
+                    },
+                    limit: { 
+                      type: 'number',
+                      description: 'Optional: Maximum number of results to return (default: 50).'
+                    }
                   },
                   required: ['query']
                 }
               },
               {
                 name: 'get_documents_for_code',
-                description: 'Get documents associated with code path',
+                description: 'Get documents and design diagrams associated with a specific code file or directory path. Use this tool when analyzing code and need to find related documentation, design diagrams, or specifications. Supports wildcard matching (e.g., "src/auth/*" matches "src/auth/login.ts"). This tool is essential when you need to understand the design context or documentation for specific code paths.',
                 inputSchema: {
                   type: 'object',
                   properties: {
-                    codePath: { type: 'string' }
+                    codePath: { 
+                      type: 'string',
+                      description: 'Code file or directory path (relative to workspace root). Supports wildcards like "src/auth/*" to match all files in a directory.'
+                    }
                   },
                   required: ['codePath']
                 }
               },
               {
                 name: 'list_entries',
-                description: 'List knowledge base entries',
+                description: 'List knowledge base entries by type and category. Use this tool when you need to browse entries by type (document/design/development/test) or category, or when you need to get a list of all entries in a vault. Less frequently used (~2% of use cases).',
                 inputSchema: {
                   type: 'object',
                   properties: {
-                    vaultName: { type: 'string' },
-                    viewType: { type: 'string' },
-                    category: { type: 'string' },
-                    limit: { type: 'number' }
+                    vaultName: { 
+                      type: 'string',
+                      description: 'Optional: Filter entries to a specific vault by name.'
+                    },
+                    viewType: { 
+                      type: 'string',
+                      description: 'Optional: Filter by view type (document/design/development/test).'
+                    },
+                    category: { 
+                      type: 'string',
+                      description: 'Optional: Filter by category.'
+                    },
+                    limit: { 
+                      type: 'number',
+                      description: 'Optional: Maximum number of results to return (default: 20).'
+                    }
                   }
                 }
               }
@@ -411,8 +535,8 @@ async function main() {
         };
         
         // 只有当请求有 id 时，才在响应中包含 id
-        if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
-          response.id = mcpMessage.id;
+        if (requestId !== undefined && requestId !== null) {
+          response.id = requestId;
         }
         
         console.log(JSON.stringify(response));
@@ -438,53 +562,55 @@ async function main() {
             );
             
             if (isArtifactArray) {
-              // 为每个文档创建资源引用和文本内容
-              const summaryLines: string[] = [];
-              summaryLines.push(`Found ${result.length} document(s) in knowledge base:\n`);
-              
-              result.forEach((artifact: any, index: number) => {
-                const title = artifact.title || artifact.name || artifact.id || 'Untitled';
-                const artifactId = artifact.id || `artifact-${index}`;
-                
-                // 添加资源引用（如果 artifact 有 id）
-                if (artifact.id) {
-                  content.push({
-                    type: 'resource',
-                    resource: {
-                      uri: `archi://artifact/${artifact.id}`,
-                      name: title,
-                      description: artifact.description || `Document from ${artifact.vault?.name || 'unknown vault'}`,
-                      mimeType: artifact.format === 'md' ? 'text/markdown' : 
-                               artifact.format === 'yml' || artifact.format === 'yaml' ? 'text/yaml' :
-                               'text/plain'
-                    }
-                  });
+              // 格式化为结构化的 JSON 格式（参考建议的响应格式）
+              const structuredResults = result.map((artifact: any) => {
+                // 构建文件 URI（使用 file:// 协议）
+                let uri = '';
+                if (artifact.contentLocation) {
+                  uri = `file://${artifact.contentLocation}`;
+                } else if (artifact.path && artifact.vault?.name) {
+                  // 如果没有完整路径，尝试构建
+                  uri = `archi://artifact/${artifact.id}`;
+                } else if (artifact.id) {
+                  // 如果都没有，至少使用 artifact ID 构建一个 URI
+                  uri = `archi://artifact/${artifact.id}`;
+                } else {
+                  // 如果连 ID 都没有，使用一个默认 URI（避免 undefined）
+                  uri = `archi://artifact/unknown-${Date.now()}`;
                 }
                 
-                // 添加文档摘要信息
-                const docInfo: string[] = [];
-                docInfo.push(`### ${index + 1}. ${title}`);
-                if (artifact.id) docInfo.push(`- **ID**: ${artifact.id}`);
-                if (artifact.vault?.name) docInfo.push(`- **Vault**: ${artifact.vault.name}`);
-                if (artifact.path) docInfo.push(`- **Path**: ${artifact.path}`);
-                if (artifact.viewType) docInfo.push(`- **Type**: ${artifact.viewType}`);
-                if (artifact.description) docInfo.push(`- **Description**: ${artifact.description}`);
-                if (artifact.tags && artifact.tags.length > 0) {
-                  docInfo.push(`- **Tags**: ${artifact.tags.join(', ')}`);
-                }
-                summaryLines.push(docInfo.join('\n'));
+                // 构建完整路径
+                const fullPath = artifact.contentLocation || artifact.path || '';
                 
-                // 如果有关联的代码路径，也显示
-                if (artifact.codePaths && artifact.codePaths.length > 0) {
-                  summaryLines.push(`- **Related Code**: ${artifact.codePaths.join(', ')}`);
+                // 构建摘要（使用 description 或 body 的前几行）
+                let summary = artifact.description || '';
+                if (!summary && artifact.body) {
+                  // 从 body 中提取前几行作为摘要
+                  const lines = artifact.body.split('\n').filter((line: string) => line.trim());
+                  summary = lines.slice(0, 3).join(' ').substring(0, 200); // 最多200字符
                 }
+                if (!summary) {
+                  summary = 'Document from knowledge base';
+                }
+                
+                return {
+                  uri: uri,
+                  path: fullPath,
+                  title: artifact.title || artifact.name || artifact.id || 'Untitled',
+                  summary: summary,
+                  score: 1.0, // 默认评分，可以根据相关性调整
+                  // 只保留 MCP Client 需要的字段，移除内部概念（vault、viewType、codePaths、tags 等）
+                  id: artifact.id
+                };
               });
               
-              // 添加汇总文本内容
+              // 格式化为易读的文本格式
+              const textContent = JSON.stringify({ results: structuredResults }, null, 2);
+              
+              // 只添加文本内容（MCP Client 工具调用响应只支持 text 类型）
               content.push({
                 type: 'text',
-                text: summaryLines.join('\n\n') + '\n\n---\n\n' + 
-                      `**Full Data**:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``
+                text: textContent
               });
             } else {
               // 其他类型的数组，使用 JSON 格式
@@ -515,8 +641,8 @@ async function main() {
           };
           
           // 只有当请求有 id 时，才在响应中包含 id
-          if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
-            response.id = mcpMessage.id;
+          if (requestId !== undefined && requestId !== null) {
+            response.id = requestId;
           }
           
           console.log(JSON.stringify(response));
@@ -530,8 +656,8 @@ async function main() {
           };
           
           // 只有当请求有 id 时，才在错误响应中包含 id
-          if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
-            errorResponse.id = mcpMessage.id;
+          if (requestId !== undefined && requestId !== null) {
+            errorResponse.id = requestId;
           }
           
           console.log(JSON.stringify(errorResponse));
@@ -551,8 +677,8 @@ async function main() {
       };
       
       // 只有当请求有 id 时，才在响应中包含 id
-      if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
-        errorResponse.id = mcpMessage.id;
+      if (requestId !== undefined && requestId !== null) {
+        errorResponse.id = requestId;
       }
       
       console.log(JSON.stringify(errorResponse));
