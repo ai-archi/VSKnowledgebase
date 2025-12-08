@@ -281,7 +281,7 @@ export class ViewpointCommands {
     const vaultId = vaultsResult.value[0].id;
     const result = await this.taskService.createTask({
       vaultId,
-      artifactPath: params.artifactPath || `tasks/${params.title || '新任务'}.md`,
+      artifactPath: params.artifactPath || `archi-tasks/${params.title || '新任务'}.yml`,
       title: params.title || '新任务',
       status: params.status || 'pending',
       priority: params.priority,

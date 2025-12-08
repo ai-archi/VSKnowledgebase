@@ -188,7 +188,7 @@ export class TaskCommands extends BaseFileTreeCommands<TaskTreeItem> {
 
           const result = await this.taskService.createTask({
             vaultId: selectedVault.id,
-            artifactPath: `task/${taskTitle}.md`,
+            artifactPath: `archi-tasks/${taskTitle}.yml`,
             title: taskTitle,
             status: 'pending',
           });

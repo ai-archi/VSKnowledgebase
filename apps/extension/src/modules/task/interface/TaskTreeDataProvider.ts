@@ -36,7 +36,15 @@ export class TaskTreeDataProvider extends BaseArtifactTreeViewProvider<TaskTreeI
   }
 
   protected getRootDirectory(): string {
-    return 'tasks';
+    return 'archi-tasks';
+  }
+
+  /**
+   * 过滤 vault：显示所有 vault（不过滤类型）
+   */
+  protected filterVaults(vaults: Array<{ id: string; name: string; type?: string }>): Array<{ id: string; name: string; type?: string }> {
+    // 任务视图显示所有 vault，因为任务可能存在于任何类型的 vault 中
+    return vaults;
   }
 
   protected createTreeItem(
@@ -84,7 +92,7 @@ export class TaskTreeDataProvider extends BaseArtifactTreeViewProvider<TaskTreeI
     }
 
     const ext = path.extname(node.path).toLowerCase();
-    if (ext === '.md') {
+    if (ext === '.md' || ext === '.yml' || ext === '.yaml') {
       return new vscode.ThemeIcon('checklist');
     } else {
       return new vscode.ThemeIcon('file');

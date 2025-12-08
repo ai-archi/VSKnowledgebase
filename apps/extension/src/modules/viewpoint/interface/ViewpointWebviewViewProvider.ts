@@ -264,8 +264,8 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       throw new Error('Vault ID is required');
     }
 
-    // 构建任务路径
-    const artifactPath = params.artifactPath || `tasks/${params.title || '新任务'}.md`;
+    // 构建任务路径（使用 archi-tasks/ 目录，YAML 格式）
+    const artifactPath = params.artifactPath || `archi-tasks/${params.title || '新任务'}.yml`;
 
     // 创建任务
     const result = await this.taskService.createTask({
@@ -304,8 +304,21 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       } as any);
       
       if (updateResult.success) {
+        // 刷新任务树视图
+        try {
+          await vscode.commands.executeCommand('archi.task.refresh');
+        } catch (error) {
+          this.logger.warn('[ViewpointWebviewViewProvider] Failed to refresh task tree view', error);
+        }
         return updateResult.value;
       }
+    }
+
+    // 刷新任务树视图
+    try {
+      await vscode.commands.executeCommand('archi.task.refresh');
+    } catch (error) {
+      this.logger.warn('[ViewpointWebviewViewProvider] Failed to refresh task tree view', error);
     }
 
     return task;

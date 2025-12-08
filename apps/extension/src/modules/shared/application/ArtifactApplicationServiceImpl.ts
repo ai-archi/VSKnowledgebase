@@ -1711,13 +1711,11 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       return artifacts;
     }
 
-    // 需要排除的目录
+    // Artifact 提供通用能力：只排除系统目录，不排除 archi-* 目录
+    // 各个视图根据自己的需求决定展示哪些内容
     const excludedDirs = [
       '.metadata',
       '.git',
-      'archi-templates',
-      'archi-tasks',
-      'archi-ai-enhancements',
     ];
 
     // 递归扫描 vault 根目录
@@ -1727,15 +1725,9 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         this.logger.info(`Scanning directory: ${dir}, found ${entries.length} entries`);
         
         for (const entry of entries) {
-          // 跳过排除的目录
+          // 跳过排除的目录（只排除系统目录）
           if (entry.isDirectory() && excludedDirs.includes(entry.name)) {
             this.logger.info(`Skipping excluded directory: ${entry.name}`);
-            continue;
-          }
-          
-          // 跳过以 archi- 开头的目录
-          if (entry.isDirectory() && entry.name.startsWith('archi-')) {
-            this.logger.info(`Skipping archi- directory: ${entry.name}`);
             continue;
           }
           

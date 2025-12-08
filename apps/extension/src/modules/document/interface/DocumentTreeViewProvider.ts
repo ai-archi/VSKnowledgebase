@@ -70,6 +70,17 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
     return vaults.filter(vault => vault.type === 'document');
   }
 
+  /**
+   * 过滤节点：文档视图排除所有 archi-* 目录
+   */
+  protected shouldIncludeNode(node: FileTreeNode, dirPath: string): boolean {
+    // 在 vault 根目录时，排除所有 archi-* 目录
+    if (!dirPath && node.isDirectory && node.name.startsWith('archi-')) {
+      return false;
+    }
+    return true;
+  }
+
   protected createTreeItem(
     label: string,
     collapsibleState: vscode.TreeItemCollapsibleState,

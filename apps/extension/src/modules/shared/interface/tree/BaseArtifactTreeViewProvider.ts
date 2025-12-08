@@ -170,6 +170,17 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
   }
 
   /**
+   * 判断是否应该包含该节点（子类可以覆盖以添加特定过滤逻辑）
+   * @param node 文件树节点
+   * @param dirPath 当前目录路径（空字符串表示 vault 根目录）
+   * @returns true 表示包含该节点，false 表示排除
+   */
+  protected shouldIncludeNode(node: FileTreeNode, dirPath: string): boolean {
+    // 默认包含所有节点（子类可以覆盖此方法来实现过滤逻辑）
+    return true;
+  }
+
+  /**
    * 获取 vault 引用（从 element 或通过查找）
    */
   private async getVaultRef(element: T): Promise<{ id: string; name: string } | undefined> {
@@ -212,21 +223,18 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
       const items: T[] = [];
       const filePromises: Promise<T>[] = [];
 
-      // 需要排除的目录（只在 vault 根目录时排除）
-      const excludedDirs = [
-        '.metadata',
-        '.git',
-        'archi-templates',
-        'archi-tasks',
-        'archi-ai-enhancements',
-      ];
+      // 系统目录（所有视图都排除）
+      const systemDirs = ['.metadata', '.git'];
 
       for (const node of listResult.value) {
-        // 如果是在 vault 根目录（dirPath 为空），排除特定目录
-        if (!dirPath && node.isDirectory) {
-          if (excludedDirs.includes(node.name) || node.name.startsWith('archi-')) {
-            continue;
-          }
+        // 排除系统目录
+        if (node.isDirectory && systemDirs.includes(node.name)) {
+          continue;
+        }
+
+        // 调用子类的过滤方法，让子类决定是否排除该节点
+        if (!this.shouldIncludeNode(node, dirPath)) {
+          continue;
         }
 
         const itemRelativePath = relativePath ? `${relativePath}/${node.name}` : node.name;

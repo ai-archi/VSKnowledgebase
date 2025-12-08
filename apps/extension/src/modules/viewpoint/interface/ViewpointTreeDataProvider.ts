@@ -406,8 +406,8 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
           const documents: Artifact[] = [];
           
           for (const artifact of vaultArtifacts) {
-            // 任务：路径以 'tasks/' 开头
-            if (artifact.path.startsWith('tasks/')) {
+            // 任务：路径以 'archi-tasks/' 开头
+            if (artifact.path.startsWith('archi-tasks/')) {
               tasks.push(artifact);
             } else {
               documents.push(artifact);
@@ -599,8 +599,8 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
           return [];
         }
 
-        // 过滤出任务（路径以 'tasks/' 开头）
-        const tasks = artifactsResult.value.filter(a => a.path.startsWith('tasks/'));
+        // 过滤出任务（路径以 'archi-tasks/' 开头）
+        const tasks = artifactsResult.value.filter(a => a.path.startsWith('archi-tasks/'));
 
         this.logger.info('[ViewpointTreeDataProvider] Found tasks from code path', {
           codePath: currentFilePath,
@@ -764,7 +764,7 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
         }
 
         // 过滤出文档（非任务）
-        const documents = artifactsResult.value.filter(a => !a.path.startsWith('tasks/'));
+        const documents = artifactsResult.value.filter(a => !a.path.startsWith('archi-tasks/'));
 
         this.logger.info('[ViewpointTreeDataProvider] Found documents from code path (fallback)', {
           codePath: currentFilePath,
@@ -1007,8 +1007,8 @@ export class ViewpointTreeDataProvider implements vscode.TreeDataProvider<Viewpo
       const documents: Artifact[] = [];
       
       for (const artifact of artifactsResult.value) {
-        // 任务：路径以 'tasks/' 开头
-        if (artifact.path.startsWith('tasks/')) {
+        // 任务：路径以 'archi-tasks/' 开头
+        if (artifact.path.startsWith('archi-tasks/')) {
           tasks.push(artifact);
         } else {
           documents.push(artifact);
