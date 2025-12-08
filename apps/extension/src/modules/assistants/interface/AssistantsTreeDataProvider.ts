@@ -8,16 +8,16 @@ import { TreeViewUtils } from '../../shared/infrastructure/utils/TreeViewUtils';
 import { PathUtils } from '../../shared/infrastructure/utils/PathUtils';
 
 /**
- * 助手树项（支持templates和ai-enhancements）
+ * 助手树项（支持archi-templates和archi-ai-enhancements）
  * 
  * 设计原则：
- * - folderPath 和 filePath 统一从 vault 根目录开始（如 'templates/structure/template.yml'）
+ * - folderPath 和 filePath 统一从 vault 根目录开始（如 'archi-templates/structure/template.yml'）
  * - rootType 仅用于展示层级和上下文判断，不影响路径处理
- * - 展示可以从 templates 或 ai-enhancements 开始，但工件处理统一从 vault 开始
+ * - 展示可以从 archi-templates 或 archi-ai-enhancements 开始，但工件处理统一从 vault 开始
  */
 export class AssistantsTreeItem extends BaseArtifactTreeItem {
-  // 标识这是哪个根目录（templates 或 ai-enhancements），仅用于展示和上下文判断
-  rootType?: 'templates' | 'ai-enhancements';
+  // 标识这是哪个根目录（archi-templates 或 archi-ai-enhancements），仅用于展示和上下文判断
+  rootType?: 'archi-templates' | 'archi-ai-enhancements';
 
   constructor(
     label: string,
@@ -27,7 +27,7 @@ export class AssistantsTreeItem extends BaseArtifactTreeItem {
     folderPath?: string,
     filePath?: string,
     contextValue?: string,
-    rootType?: 'templates' | 'ai-enhancements'
+    rootType?: 'archi-templates' | 'archi-ai-enhancements'
   ) {
     super(label, collapsibleState, vaultName, vaultId, folderPath, filePath, contextValue);
     this.rootType = rootType;
@@ -36,10 +36,10 @@ export class AssistantsTreeItem extends BaseArtifactTreeItem {
 
 /**
  * 助手树视图数据提供者
- * 显示 templates 和 ai-enhancements 两个目录
+ * 显示 archi-templates 和 archi-ai-enhancements 两个目录
  * 
  * 设计原则：
- * - 展示层可以从 vault 下层的分类（templates/ai-enhancements）开始
+ * - 展示层可以从 vault 下层的分类（archi-templates/archi-ai-enhancements）开始
  * - 工件处理层统一从 vault 根目录开始，所有路径和 ID 保持一致
  * - 解耦展示逻辑和工件处理逻辑，避免不同视图采用不同的处理方式
  */
@@ -49,7 +49,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
   readonly onDidChangeTreeData: vscode.Event<AssistantsTreeItem | undefined | null | void> =
     this._onDidChangeTreeData.event;
 
-  private readonly ROOT_DIRECTORIES = ['templates', 'ai-enhancements'] as const;
+  private readonly ROOT_DIRECTORIES = ['archi-templates', 'archi-ai-enhancements'] as const;
 
   constructor(
     private vaultService: VaultApplicationService,
@@ -80,7 +80,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
         return [];
       }
 
-      // Vault 节点：显示 templates 和 ai-enhancements 两个根目录
+      // Vault 节点：显示 archi-templates 和 archi-ai-enhancements 两个根目录
       // 注意：需要排除有 rootType 的节点（根目录节点也有 folderPath === undefined）
       if (element.isVault(element.vaultName!) && !element.rootType) {
         this.logger.info(`[AssistantsTree] Expanding vault node: ${element.vaultName}`);
@@ -89,14 +89,14 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
         for (const rootDir of this.ROOT_DIRECTORIES) {
           // 创建根目录节点（folderPath 设为 undefined，表示这是根目录）
           const rootItem = this.createTreeItem(
-            rootDir === 'templates' ? '📁 Templates' : '🤖 AI Enhancements',
+            rootDir === 'archi-templates' ? '📁 Templates' : '🤖 AI Enhancements',
             vscode.TreeItemCollapsibleState.Collapsed,
             element.vaultName,
             element.vaultId,
             undefined, // folderPath 设为 undefined，表示这是根目录节点
             undefined,
             this.getItemContextValue(undefined, 'folder', rootDir),
-            rootDir as 'templates' | 'ai-enhancements'
+            rootDir as 'archi-templates' | 'archi-ai-enhancements'
           );
           
           rootItems.push(rootItem);
@@ -106,7 +106,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
         return rootItems;
       }
 
-      // 根目录节点（templates 或 ai-enhancements）：显示该目录下的文件和子目录
+      // 根目录节点（archi-templates 或 archi-ai-enhancements）：显示该目录下的文件和子目录
       // 判断条件：rootType 存在 且 folderPath 为 undefined（这是根目录节点的特征）
       // 根目录节点是在 Vault 节点下创建的，folderPath 被显式设置为 undefined
       if (element.rootType && element.folderPath === undefined && !element.filePath) {
@@ -119,8 +119,8 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
       // 文件夹节点：显示该目录下的文件和子目录
       // 判断条件：folderPath 存在且不为空，且 rootType 存在，且不是文件节点
       // folderPath 是相对于 vault 根目录的完整路径（统一从 vault 开始）
-      // 例如：'templates/structure' 或 'ai-enhancements/commands'
-      // 注意：即使 folderPath === rootType（如 'templates'），只要 folderPath 不是 undefined，就是文件夹节点
+      // 例如：'archi-templates/structure' 或 'archi-ai-enhancements/commands'
+      // 注意：即使 folderPath === rootType（如 'archi-templates'），只要 folderPath 不是 undefined，就是文件夹节点
       if (element.folderPath !== undefined && element.folderPath !== '' && element.rootType && !element.filePath) {
         const dirPath = element.folderPath;
         // 确保 dirPath 以 rootType 开头，避免路径错误
@@ -154,7 +154,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
         return undefined;
       }
 
-      // 根目录节点（templates 或 ai-enhancements）的父节点是 vault
+      // 根目录节点（archi-templates 或 archi-ai-enhancements）的父节点是 vault
       if (element.rootType && element.folderPath === undefined) {
         const rootVaults = await this.getRootVaults();
         return rootVaults.find(item => item.isVault(element.vaultName!));
@@ -168,14 +168,14 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
 
       const parentPath = PathUtils.dirname(currentPath);
       
-      // 如果父路径为空，说明在根目录（templates 或 ai-enhancements），父节点是根目录节点
+      // 如果父路径为空，说明在根目录（archi-templates 或 archi-ai-enhancements），父节点是根目录节点
       if (parentPath === '') {
         if (!element.rootType) {
           return undefined;
         }
         
         return this.createTreeItem(
-          element.rootType === 'templates' ? '📁 Templates' : '🤖 AI Enhancements',
+          element.rootType === 'archi-templates' ? '📁 Templates' : '🤖 AI Enhancements',
           vscode.TreeItemCollapsibleState.Collapsed,
           element.vaultName,
           element.vaultId,
@@ -189,7 +189,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
       // 如果父路径就是 rootType，说明父节点是根目录节点
       if (parentPath === element.rootType) {
         return this.createTreeItem(
-          element.rootType === 'templates' ? '📁 Templates' : '🤖 AI Enhancements',
+          element.rootType === 'archi-templates' ? '📁 Templates' : '🤖 AI Enhancements',
           vscode.TreeItemCollapsibleState.Collapsed,
           element.vaultName,
           element.vaultId,
@@ -252,7 +252,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
     vaultRef: { id: string; name: string },
     dirPath: string,
     relativePath: string,
-    rootType: 'templates' | 'ai-enhancements'
+    rootType: 'archi-templates' | 'archi-ai-enhancements'
   ): Promise<AssistantsTreeItem[]> {
     try {
       this.logger.info(`[AssistantsTree] Listing directory: ${dirPath} in vault: ${vaultRef.name}`);
@@ -278,8 +278,8 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
 
       for (const node of listResult.value) {
         // node.path 是相对于 vault 根目录的完整路径（统一从 vault 开始）
-        // 例如：dirPath='templates' 时，node.path='templates/structure'
-        //      dirPath='templates/structure' 时，node.path='templates/structure/subfolder'
+        // 例如：dirPath='archi-templates' 时，node.path='archi-templates/structure'
+        //      dirPath='archi-templates/structure' 时，node.path='archi-templates/structure/subfolder'
         // 所有路径处理统一使用完整路径，rootType 仅用于展示和上下文判断
         
         if (node.isDirectory) {
@@ -345,7 +345,7 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
     folderPath?: string,
     filePath?: string,
     contextValue?: string,
-    rootType?: 'templates' | 'ai-enhancements'
+    rootType?: 'archi-templates' | 'archi-ai-enhancements'
   ): AssistantsTreeItem {
     return new AssistantsTreeItem(
       label,
@@ -362,22 +362,22 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
   private getItemContextValue(
     item: AssistantsTreeItem | undefined,
     type: 'vault' | 'folder' | 'file',
-    rootType?: 'templates' | 'ai-enhancements'
+    rootType?: 'archi-templates' | 'archi-ai-enhancements'
   ): string {
     switch (type) {
       case 'vault':
         return 'vault';
       case 'folder':
-        if (rootType === 'templates') {
+        if (rootType === 'archi-templates') {
         return 'template.directory';
-        } else if (rootType === 'ai-enhancements') {
+        } else if (rootType === 'archi-ai-enhancements') {
           return 'ai-command.directory';
         }
         return 'assistant.directory';
       case 'file':
-        if (rootType === 'templates') {
+        if (rootType === 'archi-templates') {
         return 'template.file';
-        } else if (rootType === 'ai-enhancements') {
+        } else if (rootType === 'archi-ai-enhancements') {
           return 'ai-command.file';
         }
         return 'assistant.file';
