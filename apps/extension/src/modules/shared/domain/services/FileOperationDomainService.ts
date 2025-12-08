@@ -148,9 +148,8 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
     vault: Vault,
     operation: 'create' | 'delete' | 'update'
   ): string | null {
-    if (vault.readOnly) {
-      return `Cannot ${operation} to read-only vault: ${vault.name}`;
-    }
+    // 新结构：所有 vault 在本地都是可写的
+    // Git vault 的同步由用户通过 Git 命令控制
     return null;
   }
 
@@ -335,9 +334,13 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
         if (templateFileName) {
           // 尝试从多个可能的位置加载模板
           const possiblePaths = [
-            // 从 .architool/demo-vault/templates/content/archimate/ 加载
+            // 从 .architool/demo-vault-document/archi-templates/content/archimate/ 加载
+            path.join(architoolRoot, 'demo-vault-document', 'archi-templates', 'content', 'archimate', templateFileName),
+            // 从项目根目录的 demo-vaults/demo-vault-document 加载（开发环境）
+            path.join(__dirname, '../../../../../../demo-vaults/demo-vault-document/archi-templates/content/archimate', templateFileName),
+            // 兼容旧格式：从 .architool/demo-vault/templates/content/archimate/ 加载
             path.join(architoolRoot, 'demo-vault', 'templates', 'content', 'archimate', templateFileName),
-            // 从项目根目录的 demo-vault 加载（开发环境）
+            // 兼容旧格式：从项目根目录的 demo-vault 加载（开发环境）
             path.join(__dirname, '../../../../../../demo-vault/templates/content/archimate', templateFileName),
           ];
 

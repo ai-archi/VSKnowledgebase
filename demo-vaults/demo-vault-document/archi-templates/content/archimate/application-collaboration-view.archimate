@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-application-collaboration-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统应用协作图</archimate:name>
+  <archimate:documentation>应用协作图展示ERP系统中应用组件之间的协作关系</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-collaboration-1" type="ApplicationCollaboration">
+      <archimate:name>订单处理协作</archimate:name>
+      <archimate:documentation>订单管理应用与库存管理应用之间的协作</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-component-1" type="ApplicationComponent">
+      <archimate:name>订单管理应用</archimate:name>
+      <archimate:documentation>处理订单业务的应用组件</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-component-2" type="ApplicationComponent">
+      <archimate:name>库存管理应用</archimate:name>
+      <archimate:documentation>处理库存业务的应用组件</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-collaboration-diagram">
+        <archimate:name>应用协作图 (Application Collaboration View)</archimate:name>
+        <archimate:documentation>ERP系统应用协作图 - 展示应用组件之间的协作关系</archimate:documentation>
+        <archimate:node id="id-collaboration-node-1" type="Element" elementRef="id-collaboration-1" x="250" y="150" w="200" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-component-node-1" type="Element" elementRef="id-component-1" x="100" y="50" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-component-node-2" type="Element" elementRef="id-component-2" x="450" y="50" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-collaboration-rel-1" type="Assignment" source="id-component-1" target="id-collaboration-1">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-collaboration-rel-2" type="Assignment" source="id-component-2" target="id-collaboration-1">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

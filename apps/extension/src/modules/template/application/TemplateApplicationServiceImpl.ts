@@ -87,8 +87,10 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       
       this.logger.info(`Loading templates for vaultId: ${vaultId}, vaultName: ${vault.name}`);
 
-      // 检查 templates 目录是否存在
-      const templatesDirExists = await this.artifactService.exists(vaultRef, 'templates');
+      // 检查 archi-templates 目录
+      const templatesDir = 'archi-templates';
+      const templatesDirExists = await this.artifactService.exists(vaultRef, templatesDir);
+      
       if (!templatesDirExists.success || !templatesDirExists.value) {
         this.logger.warn(`Templates directory not found for vault: ${vault.name}`);
         return { success: true, value: [] };
@@ -96,10 +98,10 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
 
       const templates: Template[] = [];
 
-      // 递归扫描 templates 目录下的所有文件
+      // 递归扫描模板目录下的所有文件
       const templatesDirResult = await this.artifactService.listDirectory(
         vaultRef,
-        'templates',
+        templatesDir,
         { recursive: true, includeHidden: false }
       );
 
@@ -515,16 +517,8 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
       }
 
       const vault = vaultResult.value;
-      if (vault.readOnly) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.OPERATION_FAILED,
-            `Cannot create artifact in read-only vault: ${vault.name}`,
-            { vaultId: opts.vaultId }
-          ),
-        };
-      }
+      // 新结构：所有 vault 在本地都是可写的
+      // Git vault 的同步由用户通过 Git 命令控制
 
       // 查找模板
       const templatesResult = await this.getTemplates(opts.vaultId);

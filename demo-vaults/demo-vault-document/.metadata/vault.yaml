@@ -1,22 +1,18 @@
-id: demo-vault-document
 name: Demo Vault - Document
 type: document
 description: |
   这是一个文档类型的演示 Vault，专注于文档管理和组织。
   
   该 Vault 包含了以下内容：
-  - artifacts/: 存放设计文档和示例文件（Archimate、Markdown 等）
-  - templates/: 提供丰富的模板库，包括：
+  - 文档文件：可直接放在根目录或自定义目录（如 design/）
+  - archi-templates/: 提供丰富的模板库，包括：
     - Archimate 模板：各种架构视图模板
     - Markdown 模板：项目文档、需求文档、设计文档等
     - Mermaid 模板：各种图表模板
     - PlantUML 模板：UML 图表模板
-  - metadata/: 元数据管理
-  - viewpoints/: 视点组织
+  - .metadata/: 元数据管理（隐藏目录）
   
   文档类型的 Vault 主要用于存储和管理各种架构文档、设计文档和项目文档。
-selfContained: true
-readOnly: false
+
 createdAt: 2025-11-22T00:00:00.000Z
 updatedAt: 2025-11-22T00:00:00.000Z
-

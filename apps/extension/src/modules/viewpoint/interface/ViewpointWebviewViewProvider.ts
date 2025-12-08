@@ -524,7 +524,25 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
           });
         } else if (message.method === 'document.list') {
           // 获取文档列表（支持查询）
+          // 注意：只处理 document 类型的 vault
           const params = message.params || {};
+          
+          // 如果指定了 vaultId，验证 vault 类型
+          if (params.vaultId) {
+            const vaultResult = await this.vaultService.getVault(params.vaultId);
+            if (vaultResult.success && vaultResult.value) {
+              // 只处理 document 类型的 vault
+              if (vaultResult.value.type !== 'document') {
+                panel.webview.postMessage({
+                  id: message.id,
+                  method: message.method,
+                  result: [],
+                });
+                return;
+              }
+            }
+          }
+          
           const result = await this.artifactService.listFilesAndFolders(params.vaultId, {
             query: params.query,
           });

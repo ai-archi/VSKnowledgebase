@@ -19,32 +19,40 @@ export class ArtifactFileSystemAdapter {
 
   /**
    * 获取 Vault 在 .architool 下的存储路径
+   * @param vaultIdOrName Vault ID（目录名）或名称，优先使用 ID
    */
-  getVaultPath(vaultName: string): string {
-    return path.join(this.architoolRoot, vaultName);
+  getVaultPath(vaultIdOrName: string): string {
+    return path.join(this.architoolRoot, vaultIdOrName);
   }
 
   /**
    * 获取 Artifact 文件的完整路径
+   * 新结构：文档文件可直接放在 vault 根目录，不再使用 artifacts 子目录
    */
   getArtifactPath(vaultName: string, artifactPath: string): string {
-    return path.join(this.getVaultPath(vaultName), 'artifacts', artifactPath);
+    // 如果 artifactPath 为空，返回 vault 根目录
+    if (!artifactPath) {
+      return this.getVaultPath(vaultName);
+    }
+    // 新结构：直接放在 vault 根目录下
+    return path.join(this.getVaultPath(vaultName), artifactPath);
   }
 
   /**
    * 获取元数据文件路径
+   * 新结构：元数据文件存放在 .metadata 目录
    */
   getMetadataPath(vaultName: string, metadataId: string): string {
     return path.join(
       this.getVaultPath(vaultName),
-      'metadata',
+      '.metadata',
       `${metadataId}.metadata.yml`
     );
   }
 
   async readArtifact(vaultName: string, artifactPath: string): Promise<Result<string, ArtifactError>> {
     try {
-      const fullPath = path.join(this.getVaultPath(vaultName), 'artifacts', artifactPath);
+      const fullPath = this.getArtifactPath(vaultName, artifactPath);
       
       if (!fs.existsSync(fullPath)) {
         return {
@@ -81,7 +89,7 @@ export class ArtifactFileSystemAdapter {
     content: string
   ): Promise<Result<void, ArtifactError>> {
     try {
-      const fullPath = path.join(this.getVaultPath(vaultName), 'artifacts', artifactPath);
+      const fullPath = this.getArtifactPath(vaultName, artifactPath);
       const dir = path.dirname(fullPath);
 
       // 确保目录存在
@@ -110,7 +118,7 @@ export class ArtifactFileSystemAdapter {
 
   async deleteArtifact(vaultName: string, artifactPath: string): Promise<Result<void, ArtifactError>> {
     try {
-      const fullPath = path.join(this.getVaultPath(vaultName), 'artifacts', artifactPath);
+      const fullPath = this.getArtifactPath(vaultName, artifactPath);
       
       if (!fs.existsSync(fullPath)) {
         return {

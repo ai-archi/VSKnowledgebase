@@ -28,8 +28,8 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       name: opts.name,
       type: opts.type || 'document',
       description: opts.description,
-      selfContained: true,
-      readOnly: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     await this.fileAdapter.createVaultDirectory(vault);
@@ -48,8 +48,8 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       type: opts.type || 'document',
       description: opts.description,
       remote: opts.remote,
-      selfContained: false,
-      readOnly: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     // Determine target path for clone
@@ -109,8 +109,8 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
         name: newVaultName,
         type: sourceVault.type || 'document',
         description: `Forked from ${sourceVault.name}`,
-        selfContained: true,
-        readOnly: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
       // Save new vault
@@ -220,7 +220,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
 
     // 如果指定删除文件，先删除文件目录
     if (opts?.deleteFiles) {
-      const vaultPath = this.fileAdapter.getVaultPath(vault.name);
+      const vaultPath = this.fileAdapter.getVaultPath(vault.id);
       if (fs.existsSync(vaultPath)) {
         try {
           fs.rmSync(vaultPath, { recursive: true, force: true });

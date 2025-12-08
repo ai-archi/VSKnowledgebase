@@ -222,7 +222,13 @@ export class AssistantsTreeDataProvider implements vscode.TreeDataProvider<Assis
     if (!vaultsResult.success || vaultsResult.value.length === 0) {
       return [];
     }
-    return vaultsResult.value.map(vault =>
+    
+    // 只显示 ai-enhancement 和 template 类型的 vault
+    const filteredVaults = vaultsResult.value.filter(
+      vault => vault.type === 'ai-enhancement' || vault.type === 'template'
+    );
+    
+    return filteredVaults.map(vault =>
       this.createTreeItem(
         vault.name,
         vscode.TreeItemCollapsibleState.Collapsed,

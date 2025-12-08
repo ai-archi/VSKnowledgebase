@@ -103,6 +103,7 @@ export class VaultRepositoryImpl implements VaultRepository {
 
   /**
    * 扫描文件系统中的 vault 目录
+   * 零配置识别：任何在 .architool 下的目录都可以被识别为 vault
    */
   private async scanFileSystemVaults(architoolRoot: string): Promise<Vault[]> {
     const vaults: Vault[] = [];
@@ -120,53 +121,11 @@ export class VaultRepositoryImpl implements VaultRepository {
         continue;
       }
       
-      // 如果是目录，检查是否是有效的 vault（包含 artifacts 目录）
+      // 如果是目录，识别为 vault（不再要求 artifacts 目录）
       if (entry.isDirectory()) {
         const vaultPath = path.join(architoolRoot, entry.name);
-        const artifactsPath = path.join(vaultPath, 'artifacts');
-        
-        if (fs.existsSync(artifactsPath)) {
-          // 这是一个有效的 vault，尝试读取 vault.yaml
-          const vaultYamlPath = path.join(vaultPath, 'vault.yaml');
-          let vault: Vault;
-          
-          if (fs.existsSync(vaultYamlPath)) {
-            // 读取 vault.yaml 文件
-            try {
-              const yamlContent = fs.readFileSync(vaultYamlPath, 'utf-8');
-              const vaultData = yaml.load(yamlContent) as any;
-              
-              vault = {
-                id: vaultData.id || entry.name,
-                name: vaultData.name || entry.name,
-                type: this.validateVaultType(vaultData.type) || 'document',
-                description: vaultData.description,
-                selfContained: vaultData.selfContained !== undefined ? vaultData.selfContained : true,
-                readOnly: vaultData.readOnly !== undefined ? vaultData.readOnly : false,
-              };
-            } catch (error) {
-              // 如果解析失败，使用默认值
-              vault = {
-                id: entry.name,
-                name: entry.name,
-                type: 'document',
-                description: undefined,
-                selfContained: true,
-                readOnly: false,
-              };
-            }
-          } else {
-            // 没有 vault.yaml，使用默认值
-            vault = {
-              id: entry.name,
-              name: entry.name,
-              type: 'document',
-              description: undefined,
-              selfContained: true,
-              readOnly: false,
-            };
-          }
-          
+        const vault = await this.loadVaultFromPath(vaultPath, entry.name);
+        if (vault) {
           vaults.push(vault);
         }
       }
@@ -176,16 +135,86 @@ export class VaultRepositoryImpl implements VaultRepository {
   }
 
   /**
+   * 从路径加载 vault 信息
+   * 优先从 .metadata/vault.yaml 读取，如果不存在则根据目录结构推断
+   */
+  private async loadVaultFromPath(vaultPath: string, vaultName: string): Promise<Vault | null> {
+    // 尝试从 .metadata/vault.yaml 读取配置
+    const metadataVaultYamlPath = path.join(vaultPath, '.metadata', 'vault.yaml');
+    
+    let vault: Vault | null = null;
+    
+    // 读取 .metadata/vault.yaml
+    if (fs.existsSync(metadataVaultYamlPath)) {
+      try {
+        const yamlContent = fs.readFileSync(metadataVaultYamlPath, 'utf-8');
+        const vaultData = yaml.load(yamlContent) as any;
+        
+        vault = {
+          id: vaultData.id || vaultName,
+          name: vaultData.name || vaultName,
+          type: this.validateVaultType(vaultData.type) || this.inferVaultType(vaultPath),
+          description: vaultData.description,
+          remote: vaultData.remote,
+          createdAt: vaultData.createdAt,
+          updatedAt: vaultData.updatedAt,
+        };
+      } catch (error) {
+        // 解析失败，使用推断值
+      }
+    }
+    
+    // 如果没有配置文件，根据目录结构推断类型
+    if (!vault) {
+      const inferredType = this.inferVaultType(vaultPath);
+      vault = {
+        id: vaultName,
+        name: vaultName,
+        type: inferredType,
+        description: undefined,
+      };
+    }
+    
+    return vault;
+  }
+
+  /**
+   * 根据目录结构推断 vault 类型
+   */
+  private inferVaultType(vaultPath: string): VaultType {
+    // 检查约定目录
+    const archiAiEnhancementsPath = path.join(vaultPath, 'archi-ai-enhancements');
+    const archiTemplatesPath = path.join(vaultPath, 'archi-templates');
+    const archiTasksPath = path.join(vaultPath, 'archi-tasks');
+    
+    if (fs.existsSync(archiAiEnhancementsPath)) {
+      return 'ai-enhancement';
+    }
+    
+    if (fs.existsSync(archiTemplatesPath)) {
+      return 'template';
+    }
+    
+    if (fs.existsSync(archiTasksPath)) {
+      return 'task';
+    }
+    
+    // 默认为 document 类型
+    return 'document';
+  }
+
+  /**
    * 验证 Vault 类型
    */
   private validateVaultType(type: any): VaultType | null {
-    if (type === 'document' || type === 'assistant' || type === 'task') {
+    if (type === 'document' || type === 'ai-enhancement' || type === 'template' || type === 'task') {
       return type as VaultType;
     }
     return null;
   }
 
   async save(vault: Vault): Promise<Result<void, VaultError>> {
+    try {
     // 保存认证信息到 SecretStorage（如果存在）
     if (this.secretStorage && vault.remote) {
       const credentials: {
@@ -222,9 +251,66 @@ export class VaultRepositoryImpl implements VaultRepository {
     } else {
       await this.configManager.addVault(vault);
     }
+      
+      // 保存 vault.yaml 到 .metadata/vault.yaml
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      const vaultPath = path.join(architoolRoot, vault.name);
+      const metadataDir = path.join(vaultPath, '.metadata');
+      const vaultYamlPath = path.join(metadataDir, 'vault.yaml');
+      
+      // 确保 .metadata 目录存在
+      if (!fs.existsSync(metadataDir)) {
+        fs.mkdirSync(metadataDir, { recursive: true });
+      }
+      
+      // 准备要保存的数据（不包含敏感信息）
+      const vaultData: any = {
+        name: vault.name,
+        type: vault.type,
+      };
+      
+      if (vault.description) {
+        vaultData.description = vault.description;
+      }
+      
+      if (vault.remote) {
+        vaultData.remote = {
+          url: vault.remote.url,
+          branch: vault.remote.branch,
+        };
+      }
+      
+      if (vault.createdAt) {
+        vaultData.createdAt = vault.createdAt;
+      }
+      
+      if (vault.updatedAt) {
+        vaultData.updatedAt = vault.updatedAt;
+      } else {
+        vaultData.updatedAt = new Date().toISOString();
+      }
+      
+      // 写入 YAML 文件
+      const yamlContent = yaml.dump(vaultData, { 
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+      });
+      fs.writeFileSync(vaultYamlPath, yamlContent, 'utf-8');
     
     this.vaultsCache.set(vault.id, vault);
     return { success: true, value: undefined };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: new VaultError(
+          VaultErrorCode.OPERATION_FAILED,
+          `Failed to save vault: ${error.message}`,
+          { vaultId: vault.id },
+          error
+        ),
+      };
+    }
   }
 
   async delete(vaultId: string): Promise<Result<void, VaultError>> {

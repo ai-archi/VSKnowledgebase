@@ -13,52 +13,23 @@ export class VaultFileSystemAdapter {
     return this.architoolRoot;
   }
 
-  getVaultPath(vaultName: string): string {
-    return path.join(this.architoolRoot, vaultName);
+  getVaultPath(vaultId: string): string {
+    return path.join(this.architoolRoot, vaultId);
   }
 
   async createVaultDirectory(vault: Vault): Promise<void> {
-    const vaultPath = this.getVaultPath(vault.name);
+    const vaultPath = this.getVaultPath(vault.id);
     if (!fs.existsSync(vaultPath)) {
       fs.mkdirSync(vaultPath, { recursive: true });
     }
 
-    // 创建完整的 Vault 目录结构（包括子目录）
-    const subDirs = [
-      'artifacts',
-      'metadata',
-      'templates',
-      'ai-enhancements',
-      'hooks',
-      'tasks',
-      'viewpoints',
-    ];
-
-    for (const dir of subDirs) {
-      const dirPath = path.join(vaultPath, dir);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-      }
-    }
-
-    // 创建 ai-enhancements 的子目录结构
-    const aiEnhancementsDirs = [
-      'ai-enhancements/commands',
-      'ai-enhancements/commands/file-commands',
-      'ai-enhancements/commands/folder-commands',
-      'ai-enhancements/commands/design-commands',
-    ];
-
-    for (const dir of aiEnhancementsDirs) {
-      const dirPath = path.join(vaultPath, dir);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-      }
-    }
+    // 新结构：不再创建固定目录，按需创建
+    // 只有在需要时才创建 .metadata 目录和 archi-* 目录
+    // 这里只确保 vault 根目录存在即可
   }
 
-  async vaultExists(vaultName: string): Promise<boolean> {
-    const vaultPath = this.getVaultPath(vaultName);
+  async vaultExists(vaultId: string): Promise<boolean> {
+    const vaultPath = this.getVaultPath(vaultId);
     return fs.existsSync(vaultPath);
   }
 }

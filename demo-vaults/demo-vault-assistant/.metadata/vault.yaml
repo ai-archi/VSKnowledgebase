@@ -1,0 +1,16 @@
+name: Demo Vault - AI Enhancement
+type: ai-enhancement
+description: |
+  这是一个 AI 增强类型的演示 Vault，专注于 AI 增强功能。
+  
+  该 Vault 包含了以下内容：
+  - archi-ai-enhancements/: AI 增强命令，提供分析、优化、重构等功能
+    - commands/design-commands/: 设计相关的 AI 命令
+    - commands/file-commands/: 文件相关的 AI 命令
+    - commands/folder-commands/: 文件夹相关的 AI 命令
+  
+  AI 增强类型的 Vault 主要用于存储和管理 AI 增强命令，帮助用户通过 AI 助手
+  进行文档分析、优化、重构等操作。
+
+createdAt: 2025-11-22T00:00:00.000Z
+updatedAt: 2025-11-22T00:00:00.000Z

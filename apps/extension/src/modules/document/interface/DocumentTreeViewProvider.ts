@@ -59,7 +59,15 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
   }
 
   protected getRootDirectory(): string {
-    return 'artifacts';
+    // 新结构：文档文件直接在 vault 根目录下，不再使用 artifacts 子目录
+    return '';
+  }
+
+  /**
+   * 过滤 vault：只显示 document 类型的 vault
+   */
+  protected filterVaults(vaults: Array<{ id: string; name: string; type?: string }>): Array<{ id: string; name: string; type?: string }> {
+    return vaults.filter(vault => vault.type === 'document');
   }
 
   protected createTreeItem(

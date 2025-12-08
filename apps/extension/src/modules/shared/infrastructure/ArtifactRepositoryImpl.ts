@@ -70,12 +70,11 @@ export class ArtifactRepositoryImpl implements ArtifactRepository {
         };
       }
 
-      const vaultName = vaultResult.value.name;
+      const vault = vaultResult.value;
 
       // 构建完整的文件路径
       const fullPath = path.join(
-        this.fileAdapter.getVaultPath(vaultName),
-        'artifacts',
+        this.fileAdapter.getVaultPath(vault.id),
         artifactPath
       );
 
@@ -84,7 +83,7 @@ export class ArtifactRepositoryImpl implements ArtifactRepository {
       }
 
       // 从文件构建 Artifact 对象
-      const artifact = await this.buildArtifactFromFile(vaultId, vaultName, artifactPath, fullPath);
+      const artifact = await this.buildArtifactFromFile(vault.id, vault.name, artifactPath, fullPath);
       return { success: true, value: artifact };
     } catch (error: any) {
       return {
@@ -209,25 +208,42 @@ export class ArtifactRepositoryImpl implements ArtifactRepository {
   }
 
   /**
-   * 扫描指定 vault 的 artifacts 目录
+   * 扫描指定 vault 的文档文件
+   * 新结构：扫描 vault 根目录，排除 archi-* 目录和 .metadata 目录
    */
   private async scanVaultArtifacts(vaultId: string, vaultName: string): Promise<Artifact[]> {
     const artifacts: Artifact[] = [];
-    const artifactsDir = path.join(
-      this.fileAdapter.getVaultPath(vaultName),
-      'artifacts'
-    );
+    const vaultPath = this.fileAdapter.getVaultPath(vaultId);
     
-    if (!fs.existsSync(artifactsDir)) {
+    if (!fs.existsSync(vaultPath)) {
       return artifacts;
     }
 
-    // 递归扫描 artifacts 目录
+    // 需要排除的目录
+    const excludedDirs = [
+      '.metadata',
+      '.git',
+      'archi-templates',
+      'archi-tasks',
+      'archi-ai-enhancements',
+    ];
+
+    // 递归扫描 vault 根目录
     const scanDirectory = (dir: string, basePath: string = ''): void => {
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         
         for (const entry of entries) {
+          // 跳过排除的目录
+          if (entry.isDirectory() && excludedDirs.includes(entry.name)) {
+            continue;
+          }
+          
+          // 跳过以 archi- 开头的目录
+          if (entry.isDirectory() && entry.name.startsWith('archi-')) {
+            continue;
+          }
+          
           const fullPath = path.join(dir, entry.name);
           const relativePath = basePath ? path.join(basePath, entry.name) : entry.name;
           
@@ -235,8 +251,10 @@ export class ArtifactRepositoryImpl implements ArtifactRepository {
             scanDirectory(fullPath, relativePath);
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).slice(1);
-            if (!ext || ext === 'md' || ext === 'yml' || ext === 'yaml') {
-              const artifact = this.buildArtifactFromFileSync(vaultId, vaultName, relativePath, fullPath, ext);
+            // 支持更多文件格式
+            const supportedFormats = ['md', 'yml', 'yaml', 'archimate', 'puml', 'mmd', 'mermaid'];
+            if (!ext || supportedFormats.includes(ext.toLowerCase())) {
+              const artifact = this.buildArtifactFromFileSync(vaultId, vaultName, relativePath, fullPath, ext || 'md');
               if (artifact) {
                 artifacts.push(artifact);
               }
@@ -248,7 +266,7 @@ export class ArtifactRepositoryImpl implements ArtifactRepository {
       }
     };
 
-    scanDirectory(artifactsDir);
+    scanDirectory(vaultPath);
     return artifacts;
   }
 
@@ -269,7 +287,7 @@ export class ArtifactRepositoryImpl implements ArtifactRepository {
       let metadataRaw: any = null;
       
       try {
-        const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadataId);
+        const metadataPath = this.fileAdapter.getMetadataPath(vaultId, metadataId);
         if (fs.existsSync(metadataPath)) {
           const content = fs.readFileSync(metadataPath, 'utf-8');
           metadata = yaml.load(content) as ArtifactMetadata;

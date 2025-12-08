@@ -311,8 +311,8 @@ export class AssistantsCommands extends BaseFileTreeCommands<AssistantsTreeItem>
             return;
           }
 
-          // 过滤可写 Vault
-          const writableVaults = vaultsResult.value.filter(v => !v.readOnly);
+          // 新结构：所有 vault 在本地都是可写的
+          const writableVaults = vaultsResult.value;
           if (writableVaults.length === 0) {
             vscode.window.showErrorMessage('No writable vaults available');
             return;

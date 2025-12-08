@@ -79,37 +79,55 @@ export class ArchitoolDirectoryManager {
   }
 
   /**
-   * 如果 .architool 目录没有 vault，则复制 demo-vault 到 .architool 目录
-   * @param demoVaultSourcePath demo-vault 源路径
+   * 如果 .architool 目录没有 vault，则复制 demo-vaults 下的所有 vault 到 .architool 目录
+   * @param demoVaultsSourcePath demo-vaults 源路径
    */
-  async initializeDemoVaultIfEmpty(demoVaultSourcePath: string): Promise<void> {
-    const demoVaultName = 'demo-vault';
-    const targetVaultPath = path.join(this.rootPath, demoVaultName);
-
-    // 如果目标已存在，则不复制
-    if (fs.existsSync(targetVaultPath)) {
-      this.logger?.info(`Demo vault already exists at: ${targetVaultPath}`);
-      return;
-    }
-
+  async initializeDemoVaultsIfEmpty(demoVaultsSourcePath: string): Promise<void> {
     // 如果已经有其他 vault，则不复制
     if (!this.hasNoVaults()) {
-      this.logger?.info('Other vaults exist, skipping demo-vault initialization');
+      this.logger?.info('Other vaults exist, skipping demo-vaults initialization');
       return;
     }
 
     // 如果源路径不存在，记录警告但不抛出错误
-    if (!fs.existsSync(demoVaultSourcePath)) {
-      this.logger?.warn(`Demo vault source path does not exist: ${demoVaultSourcePath}`);
+    if (!fs.existsSync(demoVaultsSourcePath)) {
+      this.logger?.warn(`Demo vaults source path does not exist: ${demoVaultsSourcePath}`);
       return;
     }
 
-    this.logger?.info(`Copying demo-vault from ${demoVaultSourcePath} to ${targetVaultPath}`);
+    // 读取 demo-vaults 目录下的所有子目录
+    const entries = fs.readdirSync(demoVaultsSourcePath, { withFileTypes: true });
+    const vaultDirs = entries.filter(entry => entry.isDirectory() && entry.name.startsWith('demo-vault-'));
+
+    if (vaultDirs.length === 0) {
+      this.logger?.warn(`No demo vaults found in ${demoVaultsSourcePath}`);
+      return;
+    }
+
+    this.logger?.info(`Found ${vaultDirs.length} demo vaults to copy`);
+
+    // 复制每个 vault
+    for (const vaultDir of vaultDirs) {
+      const sourceVaultPath = path.join(demoVaultsSourcePath, vaultDir.name);
+      const targetVaultPath = path.join(this.rootPath, vaultDir.name);
+
+      // 如果目标已存在，则跳过
+      if (fs.existsSync(targetVaultPath)) {
+        this.logger?.info(`Demo vault ${vaultDir.name} already exists at: ${targetVaultPath}`);
+        continue;
+      }
+
+      this.logger?.info(`Copying demo vault ${vaultDir.name} from ${sourceVaultPath} to ${targetVaultPath}`);
     
+      try {
     // 复制整个目录
-    await this.copyDirectory(demoVaultSourcePath, targetVaultPath);
-    
-    this.logger?.info(`Demo vault copied successfully to: ${targetVaultPath}`);
+        await this.copyDirectory(sourceVaultPath, targetVaultPath);
+        this.logger?.info(`Demo vault ${vaultDir.name} copied successfully to: ${targetVaultPath}`);
+      } catch (error: any) {
+        this.logger?.error(`Failed to copy demo vault ${vaultDir.name}:`, error);
+        // 继续复制其他 vault，不中断
+      }
+    }
   }
 
   /**

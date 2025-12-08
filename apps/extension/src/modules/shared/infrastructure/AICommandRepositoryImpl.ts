@@ -17,7 +17,7 @@ import { Logger } from '../../../core/logger/Logger';
  */
 @injectable()
 export class AICommandRepositoryImpl implements AICommandRepository {
-  private readonly COMMANDS_DIR = 'ai-enhancements/commands';
+  private readonly COMMANDS_DIR = 'archi-ai-enhancements/commands';;
 
   constructor(
     @inject(TYPES.ArtifactFileSystemAdapter) private fileAdapter: ArtifactFileSystemAdapter,
@@ -62,9 +62,9 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         };
       }
 
-      const vaultName = vaultResult.value.name;
+      const vault = vaultResult.value;
       const fullPath = path.join(
-        this.fileAdapter.getVaultPath(vaultName),
+        this.fileAdapter.getVaultPath(vault.id),
         commandPath
       );
 
@@ -72,7 +72,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         return { success: true, value: null };
       }
 
-      const command = await this.parseCommandFile(vaultId, vaultName, commandPath, fullPath);
+      const command = await this.parseCommandFile(vault.id, vault.name, commandPath, fullPath);
       return { success: true, value: command };
     } catch (error: any) {
       return {
@@ -272,8 +272,9 @@ export class AICommandRepositoryImpl implements AICommandRepository {
     try {
       // 使用ArtifactService扫描commands目录
       const vaultRef = { id: vaultId, name: vaultName };
-      this.logger.info(`[AICommandRepository] Loading commands from vault: ${vaultName}, directory: ${this.COMMANDS_DIR}`);
-      const listResult = await this.artifactService.listDirectory(vaultRef, this.COMMANDS_DIR, { recursive: true });
+      const commandsDir = this.COMMANDS_DIR;
+      this.logger.info(`[AICommandRepository] Loading commands from vault: ${vaultName}, directory: ${commandsDir}`);
+      const listResult = await this.artifactService.listDirectory(vaultRef, commandsDir, { recursive: true });
       
       if (!listResult.success) {
         this.logger.warn(`[AICommandRepository] Failed to list directory for commands: ${listResult.error.message}`);
@@ -291,18 +292,19 @@ export class AICommandRepositoryImpl implements AICommandRepository {
           // 所以 commandPath 应该是 'ai-enhancements/commands/file-commands/summarize.yml'
           let commandPath: string;
           if (node.path) {
-            // node.path 已经是相对于 COMMANDS_DIR 的路径，直接拼接
-            commandPath = node.path.startsWith(this.COMMANDS_DIR) 
+            // node.path 已经是相对于 commandsDir 的路径，直接拼接
+            commandPath = node.path.startsWith(commandsDir) 
               ? node.path 
-              : `${this.COMMANDS_DIR}/${node.path}`;
+              : `${commandsDir}/${node.path}`;
           } else {
-            // 如果 node.path 为空，说明文件直接在 COMMANDS_DIR 下
-            commandPath = `${this.COMMANDS_DIR}/${node.name}`;
+            // 如果 node.path 为空，说明文件直接在 commandsDir 下
+            commandPath = `${commandsDir}/${node.name}`;
           }
           
           // 使用 node.fullPath 如果存在，否则拼接
+          // 注意：使用 vaultId（目录名）而不是 vaultName（显示名称）来构建路径
           const fullPath = node.fullPath || path.join(
-            this.fileAdapter.getVaultPath(vaultName),
+            this.fileAdapter.getVaultPath(vaultId),
             commandPath
           );
 

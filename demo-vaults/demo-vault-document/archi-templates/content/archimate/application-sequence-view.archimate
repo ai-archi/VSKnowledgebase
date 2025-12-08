@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-application-sequence-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统应用序列图</archimate:name>
+  <archimate:documentation>应用序列图展示ERP系统中应用组件之间的交互序列</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-component-1" type="ApplicationComponent">
+      <archimate:name>订单管理组件</archimate:name>
+      <archimate:documentation>订单管理应用组件</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-component-2" type="ApplicationComponent">
+      <archimate:name>库存管理组件</archimate:name>
+      <archimate:documentation>库存管理应用组件</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-component-3" type="ApplicationComponent">
+      <archimate:name>财务组件</archimate:name>
+      <archimate:documentation>财务管理应用组件</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-sequence-diagram">
+        <archimate:name>应用序列图 (Application Sequence View)</archimate:name>
+        <archimate:documentation>ERP系统应用序列图 - 展示应用组件之间的交互序列</archimate:documentation>
+        <archimate:node id="id-component-node-1" type="Element" elementRef="id-component-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-component-node-2" type="Element" elementRef="id-component-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-component-node-3" type="Element" elementRef="id-component-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-sequence-rel-1" type="Serving" source="id-component-1" target="id-component-2">
+      <archimate:name>查询库存</archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-sequence-rel-2" type="Serving" source="id-component-2" target="id-component-3">
+      <archimate:name>更新财务</archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

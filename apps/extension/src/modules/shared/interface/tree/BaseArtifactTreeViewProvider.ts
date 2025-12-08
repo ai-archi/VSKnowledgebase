@@ -82,7 +82,8 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
       // 文件夹节点：显示该目录下的文件和子目录
       if (element.folderPath) {
         const rootDir = this.getRootDirectory();
-        const dirPath = `${rootDir}/${element.folderPath}`;
+        // 如果 rootDir 为空，表示从 vault 根目录开始，直接使用 folderPath
+        const dirPath = rootDir ? `${rootDir}/${element.folderPath}` : element.folderPath;
         return this.getDirectoryFiles(vaultRef, dirPath, element.folderPath);
       }
 
@@ -136,13 +137,18 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
 
   /**
    * 获取根节点（所有 vault）
+   * 子类可以覆盖此方法以添加过滤逻辑
    */
-  private async getRootVaults(): Promise<T[]> {
+  protected async getRootVaults(): Promise<T[]> {
     const vaultsResult = await this.vaultService.listVaults();
     if (!vaultsResult.success || vaultsResult.value.length === 0) {
       return [];
     }
-    return vaultsResult.value.map(vault =>
+    
+    // 默认返回所有 vault，子类可以覆盖以添加过滤
+    const filteredVaults = this.filterVaults(vaultsResult.value);
+    
+    return filteredVaults.map(vault =>
       this.createTreeItem(
         vault.name,
         vscode.TreeItemCollapsibleState.Collapsed,
@@ -153,6 +159,14 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
         this.getItemContextValue(undefined, 'vault')
       )
     );
+  }
+
+  /**
+   * 过滤 vault（子类可以覆盖以添加特定过滤逻辑）
+   */
+  protected filterVaults(vaults: Array<{ id: string; name: string; type?: string }>): Array<{ id: string; name: string; type?: string }> {
+    // 默认返回所有 vault
+    return vaults;
   }
 
   /**
@@ -198,7 +212,23 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
       const items: T[] = [];
       const filePromises: Promise<T>[] = [];
 
+      // 需要排除的目录（只在 vault 根目录时排除）
+      const excludedDirs = [
+        '.metadata',
+        '.git',
+        'archi-templates',
+        'archi-tasks',
+        'archi-ai-enhancements',
+      ];
+
       for (const node of listResult.value) {
+        // 如果是在 vault 根目录（dirPath 为空），排除特定目录
+        if (!dirPath && node.isDirectory) {
+          if (excludedDirs.includes(node.name) || node.name.startsWith('archi-')) {
+            continue;
+          }
+        }
+
         const itemRelativePath = relativePath ? `${relativePath}/${node.name}` : node.name;
 
         if (node.isDirectory) {

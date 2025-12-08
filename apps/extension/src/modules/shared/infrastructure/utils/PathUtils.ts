@@ -32,10 +32,14 @@ export class PathUtils {
   /**
    * 移除根目录前缀
    * @param filePath 完整路径
-   * @param rootDir 根目录名称（如 'artifacts', 'templates'）
+   * @param rootDir 根目录名称（如 'artifacts', 'templates'，空字符串表示从 vault 根目录开始）
    * @returns 移除前缀后的路径
    */
   static removeRootDirPrefix(filePath: string, rootDir: string): string {
+    // 如果 rootDir 为空字符串，表示从 vault 根目录开始，不需要移除前缀
+    if (!rootDir) {
+      return filePath;
+    }
     if (filePath.startsWith(`${rootDir}/`)) {
       return filePath.substring(rootDir.length + 1);
     }

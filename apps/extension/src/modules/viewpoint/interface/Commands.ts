@@ -98,7 +98,7 @@ export class ViewpointCommands {
           // 多个 Vault，让用户选择
           const vaultItems = vaultsResult.value.map(v => ({
             label: v.name,
-            description: v.description || (v.readOnly ? 'Git vault' : 'Local vault'),
+            description: v.description || (v.remote ? 'Git vault' : 'Local vault'),
             id: v.id,
           }));
 

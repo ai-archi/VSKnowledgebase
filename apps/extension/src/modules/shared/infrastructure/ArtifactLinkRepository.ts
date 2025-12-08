@@ -136,8 +136,8 @@ export class ArtifactLinkRepositoryImpl implements ArtifactLinkRepository {
         : vaultsResult.value;
 
       for (const vault of vaults) {
-        const vaultPath = this.vaultAdapter.getVaultPath(vault.name);
-        const metadataDir = path.join(vaultPath, 'metadata');
+        const vaultPath = this.vaultAdapter.getVaultPath(vault.id);
+        const metadataDir = path.join(vaultPath, '.metadata');
         
         if (!fs.existsSync(metadataDir)) {
           continue;

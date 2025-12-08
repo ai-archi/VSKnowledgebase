@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-application-function-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统应用功能图</archimate:name>
+  <archimate:documentation>应用功能图展示ERP系统的应用功能模块</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-function-1" type="ApplicationFunction">
+      <archimate:name>订单处理功能</archimate:name>
+      <archimate:documentation>处理订单创建、修改、查询的应用功能</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-function-2" type="ApplicationFunction">
+      <archimate:name>库存管理功能</archimate:name>
+      <archimate:documentation>处理库存查询、入库、出库的应用功能</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-function-3" type="ApplicationFunction">
+      <archimate:name>财务计算功能</archimate:name>
+      <archimate:documentation>处理财务计算和统计的应用功能</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-function-diagram">
+        <archimate:name>应用功能图 (Application Function View)</archimate:name>
+        <archimate:documentation>ERP系统应用功能图 - 展示应用功能模块</archimate:documentation>
+        <archimate:node id="id-function-node-1" type="Element" elementRef="id-function-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-function-node-2" type="Element" elementRef="id-function-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-function-node-3" type="Element" elementRef="id-function-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-function-rel-1" type="Flow" source="id-function-1" target="id-function-2">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-function-rel-2" type="Flow" source="id-function-2" target="id-function-3">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

@@ -1,0 +1,16 @@
+gitGraph
+    commit id: "初始提交"
+    branch develop
+    checkout develop
+    commit id: "开发功能1"
+    commit id: "开发功能2"
+    checkout main
+    merge develop
+    commit id: "发布v1.0"
+    branch hotfix
+    checkout hotfix
+    commit id: "修复bug"
+    checkout main
+    merge hotfix
+    commit id: "发布v1.1"
+

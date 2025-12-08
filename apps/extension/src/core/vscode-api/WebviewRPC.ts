@@ -80,8 +80,53 @@ export class WebviewRPC {
     });
 
     // Document 相关方法（不限制文件类型，支持查询）
+    // 注意：只处理 document 类型的 vault
     this.webviewAdapter.registerMethod('document.list', async (params: { vaultId?: string; query?: string }) => {
       this.logger.debug('document.list handler called', { vaultId: params.vaultId, query: params.query });
+      
+      // 如果指定了 vaultId，验证 vault 类型
+      if (params.vaultId) {
+        const vaultResult = await this.vaultService.getVault(params.vaultId);
+        if (vaultResult.success && vaultResult.value) {
+          // 只处理 document 类型的 vault
+          if (vaultResult.value.type !== 'document') {
+            this.logger.debug(`Skipping non-document vault: ${vaultResult.value.name} (type: ${vaultResult.value.type})`);
+            return [];
+          }
+        }
+      } else {
+        // 如果没有指定 vaultId，只返回 document 类型的 vault 的文件
+        // 这里需要特殊处理：获取所有 document 类型的 vault，然后合并结果
+        const vaultsResult = await this.vaultService.listVaults();
+        if (vaultsResult.success) {
+          const documentVaults = vaultsResult.value.filter(v => v.type === 'document');
+          if (documentVaults.length === 0) {
+            return [];
+          }
+          
+          // 合并所有 document vault 的文件
+          const allItems: any[] = [];
+          for (const vault of documentVaults) {
+            try {
+              const result = await this.artifactService.listFilesAndFolders(vault.id, {
+                query: params.query,
+              });
+              if (result.success) {
+                const items = result.value.map(item => ({
+                  ...item,
+                  vault: { id: vault.id, name: vault.name },
+                }));
+                allItems.push(...items);
+              }
+            } catch (error: any) {
+              this.logger.error(`Failed to list files from vault ${vault.name}:`, error);
+            }
+          }
+          return allItems;
+        }
+        return [];
+      }
+      
       this.logger.info(`[DEBUG] document.list - artifactService type: ${this.artifactService.constructor.name}`);
       // 调用应用服务层处理业务逻辑
       this.logger.info(`[DEBUG] document.list - calling listFilesAndFolders with vaultId: ${params.vaultId}, query: ${params.query}`);
@@ -251,7 +296,52 @@ export class WebviewRPC {
     });
 
     // Template 相关方法
+    // 注意：只处理 template 类型的 vault
     this.webviewAdapter.registerMethod('template.list', async (params: { vaultId?: string }) => {
+      // 如果指定了 vaultId，验证 vault 类型
+      if (params.vaultId) {
+        const vaultResult = await this.vaultService.getVault(params.vaultId);
+        if (vaultResult.success && vaultResult.value) {
+          // 只处理 template 类型的 vault
+          if (vaultResult.value.type !== 'template') {
+            this.logger.debug(`Skipping non-template vault: ${vaultResult.value.name} (type: ${vaultResult.value.type})`);
+            return [];
+          }
+        }
+      } else {
+        // 如果没有指定 vaultId，只返回 template 类型的 vault 的模板
+        const vaultsResult = await this.vaultService.listVaults();
+        if (vaultsResult.success) {
+          const templateVaults = vaultsResult.value.filter(v => v.type === 'template');
+          if (templateVaults.length === 0) {
+            return [];
+          }
+          
+          // 合并所有 template vault 的模板
+          const allTemplates: any[] = [];
+          for (const vault of templateVaults) {
+            try {
+              const result = await this.templateService.getTemplates(vault.id);
+              if (result.success) {
+                const templates = result.value.map(template => ({
+                  id: template.id,
+                  name: template.name,
+                  description: template.description,
+                  type: template.type,
+                  category: template.category,
+                  viewType: template.viewType,
+                }));
+                allTemplates.push(...templates);
+              }
+            } catch (error: any) {
+              this.logger.error(`Failed to get templates from vault ${vault.name}:`, error);
+            }
+          }
+          return allTemplates;
+        }
+        return [];
+      }
+      
       const result = await this.templateService.getTemplates(params.vaultId);
       if (!result.success) {
         throw new Error(result.error.message);
@@ -509,9 +599,56 @@ export class WebviewRPC {
     });
 
     // AI 命令相关方法
+    // 注意：只处理 ai-enhancement 类型的 vault
     this.webviewAdapter.registerMethod('aiCommand.list', async (params: { vaultId?: string; targetType?: string }) => {
       try {
         this.logger.info('[WebviewRPC] aiCommand.list called', { vaultId: params.vaultId, targetType: params.targetType });
+        
+        // 如果指定了 vaultId，验证 vault 类型
+        if (params.vaultId) {
+          const vaultResult = await this.vaultService.getVault(params.vaultId);
+          if (vaultResult.success && vaultResult.value) {
+            // 只处理 ai-enhancement 类型的 vault
+            if (vaultResult.value.type !== 'ai-enhancement') {
+              this.logger.debug(`Skipping non-ai-enhancement vault: ${vaultResult.value.name} (type: ${vaultResult.value.type})`);
+              return [];
+            }
+          }
+        } else {
+          // 如果没有指定 vaultId，只返回 ai-enhancement 类型的 vault 的命令
+          const vaultsResult = await this.vaultService.listVaults();
+          if (vaultsResult.success) {
+            const aiEnhancementVaults = vaultsResult.value.filter(v => v.type === 'ai-enhancement');
+            if (aiEnhancementVaults.length === 0) {
+              return [];
+            }
+            
+            // 合并所有 ai-enhancement vault 的命令
+            const allCommands: any[] = [];
+            for (const vault of aiEnhancementVaults) {
+              try {
+                const result = await this.aiCommandService.getCommands(vault.id, params.targetType as any);
+                if (result.success) {
+                  const commands = result.value.map(cmd => ({
+                    id: cmd.id,
+                    name: cmd.name,
+                    description: cmd.description,
+                    targetTypes: cmd.targetTypes,
+                    enabled: cmd.enabled,
+                    order: cmd.order,
+                  }));
+                  allCommands.push(...commands);
+                }
+              } catch (error: any) {
+                this.logger.error(`Failed to get commands from vault ${vault.name}:`, error);
+              }
+            }
+            this.logger.info('[WebviewRPC] aiCommand.list returning', { count: allCommands.length, targetType: params.targetType });
+            return allCommands;
+          }
+          return [];
+        }
+        
         const result = await this.aiCommandService.getCommands(params.vaultId, params.targetType as any);
         if (!result.success) {
           this.logger.error('[WebviewRPC] aiCommand.list failed', { error: result.error.message });

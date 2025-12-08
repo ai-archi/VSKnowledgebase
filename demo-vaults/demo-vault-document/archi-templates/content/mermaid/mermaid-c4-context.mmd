@@ -1,0 +1,12 @@
+C4Context
+    title 系统上下文图
+    
+    Person(user, "用户", "使用系统的最终用户")
+    System(system, "业务系统", "核心业务系统")
+    System_Ext(email, "邮件服务", "第三方邮件服务")
+    System_Ext(payment, "支付系统", "第三方支付系统")
+    
+    Rel(user, system, "使用")
+    Rel(system, email, "发送邮件")
+    Rel(system, payment, "处理支付")
+

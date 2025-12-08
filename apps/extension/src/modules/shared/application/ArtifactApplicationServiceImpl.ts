@@ -60,7 +60,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       path: opts.path,
       name: path.basename(opts.path, path.extname(opts.path)),
       format: opts.format || 'md',
-      contentLocation: this.fileAdapter.getArtifactPath(opts.vault.name, opts.path),
+      contentLocation: this.fileAdapter.getArtifactPath(opts.vault.id, opts.path),
       viewType: opts.viewType,
       category: opts.category,
       title: opts.title,
@@ -151,7 +151,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     }
 
     const writeResult = await this.fileAdapter.writeArtifact(
-      opts.vault.name,
+      opts.vault.id,
       opts.path,
       fileContent
     );
@@ -268,16 +268,8 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         };
       }
 
-      if (vaultResult.value.readOnly) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.VAULT_READ_ONLY,
-            `Cannot update artifact in read-only vault: ${vaultName}`,
-            { vaultId, vaultName }
-          ),
-        };
-      }
+      // 新结构：不再使用 readOnly 标志，所有 vault 在本地都是可写的
+      // Git vault 的同步由用户通过 Git 命令控制
 
       // 更新 Artifact 属性
       const updatedArtifact: Artifact = {
@@ -289,7 +281,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       // 如果更新了内容，需要写入文件
       if (updates.content !== undefined) {
         const writeResult = await this.fileAdapter.writeArtifact(
-          vaultName,
+          vaultId,
           artifact.path,
           updates.content
         );
@@ -352,20 +344,12 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         };
       }
 
-      if (vaultResult.value.readOnly) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.VAULT_READ_ONLY,
-            `Cannot update artifact content in read-only vault: ${vaultResult.value.name}`,
-            { vaultId }
-          ),
-        };
-      }
+      // 新结构：不再使用 readOnly 标志，所有 vault 在本地都是可写的
+      // Git vault 的同步由用户通过 Git 命令控制
 
       // 写入新内容
       const writeResult = await this.fileAdapter.writeArtifact(
-        vaultResult.value.name,
+        vaultResult.value.id,
         artifact.path,
         newContent
       );
@@ -412,7 +396,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         };
       }
 
-      const vaultName = vaultResult.value.name;
+      const vault = vaultResult.value;
       let artifactPath: string;
       let artifact: Artifact | null = null;
       let metadataId: string | undefined;
@@ -440,7 +424,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       }
 
       // 删除文件系统中的文件（无论是否找到 artifact 记录）
-      const deleteFileResult = await this.fileAdapter.deleteArtifact(vaultName, artifactPath);
+      const deleteFileResult = await this.fileAdapter.deleteArtifact(vault.id, artifactPath);
       if (!deleteFileResult.success) {
         return deleteFileResult;
       }
@@ -726,16 +710,8 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         };
       }
 
-      if (vaultResult.value.readOnly) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.VAULT_READ_ONLY,
-            `Cannot update metadata in read-only vault: ${artifact.vault.name}`,
-            { vaultId: artifact.vault.id }
-          ),
-        };
-      }
+      // 新结构：不再使用 readOnly 标志，所有 vault 在本地都是可写的
+      // Git vault 的同步由用户通过 Git 命令控制
 
       // 获取现有元数据
       const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
@@ -1180,10 +1156,9 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
             if (vaultResult.success && vaultResult.value) {
               const vault = vaultResult.value;
 
-              // 构建文件路径
+              // 构建文件路径（新结构：文件直接在 vault 根目录下）
               const filePath = path.join(
-                this.vaultAdapter.getVaultPath(vault.name),
-                'artifacts',
+                this.vaultAdapter.getVaultPath(vault.id),
                 targetPath
               );
 
@@ -1712,7 +1687,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   }
 
   getFullPath(vault: VaultReference, filePath: string): string {
-    const vaultPath = this.vaultAdapter.getVaultPath(vault.name);
+    const vaultPath = this.vaultAdapter.getVaultPath(vault.id);
     if (!filePath) {
       return vaultPath;
     }
@@ -1722,29 +1697,48 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   // ========== 私有辅助方法 ==========
 
   /**
-   * 扫描指定 vault 的 artifacts 目录
+   * 扫描指定 vault 的文档文件
+   * 新结构：扫描 vault 根目录，排除 archi-* 目录和 .metadata 目录
    */
   private async scanVaultArtifacts(vaultId: string, vaultName: string): Promise<Artifact[]> {
     const artifacts: Artifact[] = [];
-    // getArtifactPath 会返回 {architoolRoot}/{vaultName}/artifacts/{artifactPath}
-    // 如果 artifactPath 为空，我们需要直接获取 artifacts 目录
-    // 但是 getArtifactPath 会添加 'artifacts' 子目录，所以传入空字符串应该可以
-    const artifactsDir = this.fileAdapter.getArtifactPath(vaultName, '');
-    this.logger.info(`Scanning artifacts directory: ${artifactsDir}`);
-    this.logger.info(`Artifacts directory exists: ${fs.existsSync(artifactsDir)}`);
+    const vaultPath = this.fileAdapter.getVaultPath(vaultId);
+    this.logger.info(`Scanning vault root directory: ${vaultPath}`);
+    this.logger.info(`Vault directory exists: ${fs.existsSync(vaultPath)}`);
     
-    if (!fs.existsSync(artifactsDir)) {
-      this.logger.warn(`Artifacts directory does not exist: ${artifactsDir}`);
+    if (!fs.existsSync(vaultPath)) {
+      this.logger.warn(`Vault directory does not exist: ${vaultPath}`);
       return artifacts;
     }
 
-    // 递归扫描 artifacts 目录
+    // 需要排除的目录
+    const excludedDirs = [
+      '.metadata',
+      '.git',
+      'archi-templates',
+      'archi-tasks',
+      'archi-ai-enhancements',
+    ];
+
+    // 递归扫描 vault 根目录
     const scanDirectory = (dir: string, basePath = ''): void => {
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         this.logger.info(`Scanning directory: ${dir}, found ${entries.length} entries`);
         
         for (const entry of entries) {
+          // 跳过排除的目录
+          if (entry.isDirectory() && excludedDirs.includes(entry.name)) {
+            this.logger.info(`Skipping excluded directory: ${entry.name}`);
+            continue;
+          }
+          
+          // 跳过以 archi- 开头的目录
+          if (entry.isDirectory() && entry.name.startsWith('archi-')) {
+            this.logger.info(`Skipping archi- directory: ${entry.name}`);
+            continue;
+          }
+          
           const fullPath = path.join(dir, entry.name);
           const relativePath = basePath ? path.join(basePath, entry.name) : entry.name;
           
@@ -1756,15 +1750,17 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
             // 处理文件
             const ext = path.extname(entry.name).slice(1); // 去掉点号
             this.logger.info(`Found file: ${entry.name}, extension: ${ext}`);
-            if (!ext || ext === 'md' || ext === 'yml' || ext === 'yaml') {
-              // 只处理支持的格式
+            // 支持更多文件格式
+            const supportedFormats = ['md', 'yml', 'yaml', 'archimate', 'puml', 'mmd', 'mermaid'];
+            if (!ext || supportedFormats.includes(ext.toLowerCase())) {
+              // 处理支持的格式
               this.logger.info(`Processing artifact file: ${relativePath}`);
               const artifact = this.buildArtifactFromFile(
                 vaultId,
                 vaultName,
                 relativePath,
                 fullPath,
-                ext
+                ext || 'md'
               );
               if (artifact) {
                 this.logger.info(`Built artifact: ${artifact.title} (${artifact.id})`);
@@ -1782,7 +1778,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       }
     };
 
-    scanDirectory(artifactsDir);
+    scanDirectory(vaultPath);
     this.logger.info(`Finished scanning vault ${vaultName}, found ${artifacts.length} artifacts`);
     return artifacts;
   }
@@ -1804,11 +1800,11 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       let metadataRaw: any = null;
       
       try {
-        const metadataResult = this.readMetadataFile(vaultName, metadataId);
+        const metadataResult = this.readMetadataFile(vaultId, metadataId);
         if (metadataResult) {
           metadata = metadataResult;
           // 读取原始 metadata 以获取额外字段（如 title, path, viewType, description）
-          metadataRaw = this.readMetadataFileRaw(vaultName, metadataId);
+          metadataRaw = this.readMetadataFileRaw(vaultId, metadataId);
         }
       } catch (error) {
         // metadata 文件不存在，使用默认值
@@ -1864,9 +1860,9 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   /**
    * 读取 metadata 文件（返回 ArtifactMetadata 类型）
    */
-  private readMetadataFile(vaultName: string, metadataId: string): ArtifactMetadata | null {
+  private readMetadataFile(vaultId: string, metadataId: string): ArtifactMetadata | null {
     try {
-      const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadataId);
+      const metadataPath = this.fileAdapter.getMetadataPath(vaultId, metadataId);
       if (!fs.existsSync(metadataPath)) {
         return null;
       }
@@ -1883,9 +1879,9 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   /**
    * 读取 metadata 文件（返回原始对象，包含所有字段）
    */
-  private readMetadataFileRaw(vaultName: string, metadataId: string): any | null {
+  private readMetadataFileRaw(vaultId: string, metadataId: string): any | null {
     try {
-      const metadataPath = this.fileAdapter.getMetadataPath(vaultName, metadataId);
+      const metadataPath = this.fileAdapter.getMetadataPath(vaultId, metadataId);
       if (!fs.existsSync(metadataPath)) {
         return null;
       }

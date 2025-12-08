@@ -62,28 +62,28 @@ export async function activate(context: vscode.ExtensionContext) {
   const architoolManager = new ArchitoolDirectoryManager(architoolRoot, logger);
   await architoolManager.initialize();
 
-  // 2.1. 如果 .architool 目录没有 vault，则初始化 demo-vault
-  // 获取扩展根目录（通常是项目根目录，demo-vault 在项目根目录下）
+  // 2.1. 如果 .architool 目录没有 vault，则初始化 demo-vaults
+  // 获取扩展根目录（通常是项目根目录，demo-vaults 在项目根目录下）
   // 注意：在开发环境中，context.extensionPath 指向 apps/extension
-  // 我们需要找到项目根目录（包含 demo-vault 的目录）
+  // 我们需要找到项目根目录（包含 demo-vaults 的目录）
   const extensionPath = context.extensionPath;
   // 从 apps/extension 向上两级到项目根目录
   const projectRoot = path.resolve(extensionPath, '..', '..');
-  const demoVaultSourcePath = path.join(projectRoot, 'demo-vault');
+  const demoVaultsSourcePath = path.join(projectRoot, 'demo-vaults');
   
   logger.info(`Workspace root: ${workspaceRoot}`);
   logger.info(`Architool root: ${architoolRoot}`);
   logger.info(`Extension path: ${extensionPath}`);
   logger.info(`Project root: ${projectRoot}`);
-  logger.info(`Demo vault source path: ${demoVaultSourcePath}`);
-  logger.info(`Demo vault source exists: ${require('fs').existsSync(demoVaultSourcePath)}`);
+  logger.info(`Demo vaults source path: ${demoVaultsSourcePath}`);
+  logger.info(`Demo vaults source exists: ${require('fs').existsSync(demoVaultsSourcePath)}`);
   
   try {
-    await architoolManager.initializeDemoVaultIfEmpty(demoVaultSourcePath);
-    logger.info('Demo vault initialization completed');
+    await architoolManager.initializeDemoVaultsIfEmpty(demoVaultsSourcePath);
+    logger.info('Demo vaults initialization completed');
   } catch (error: any) {
     // 如果复制失败，记录错误但不阻止激活
-    logger.error('Failed to initialize demo-vault:', error);
+    logger.error('Failed to initialize demo-vaults:', error);
   }
 
   // 2.2. 复制 MCP Server 到固定位置
@@ -247,7 +247,8 @@ export async function activate(context: vscode.ExtensionContext) {
           if (documentName) {
             const vaultsResult = await vaultService.listVaults();
             if (vaultsResult.success && vaultsResult.value.length > 0) {
-              const writableVaults = vaultsResult.value.filter(v => !v.readOnly);
+              // 新结构：所有 vault 在本地都是可写的
+              const writableVaults = vaultsResult.value;
               if (writableVaults.length > 0) {
                 const newArtifactResult = await lookupService.quickCreate({
                   vaultId: writableVaults[0].id,
@@ -545,7 +546,7 @@ export async function activate(context: vscode.ExtensionContext) {
       callback: async () => {
         const result = await vaultService.listVaults();
         if (result.success) {
-          const vaultList = result.value.map(v => `- ${v.name} (${v.readOnly ? 'read-only' : 'writable'})`).join('\n');
+          const vaultList = result.value.map(v => `- ${v.name} (${v.remote ? 'Git vault' : 'Local vault'})`).join('\n');
           vscode.window.showInformationMessage(`Vaults:\n${vaultList}`);
         } else {
           vscode.window.showErrorMessage(`Failed to list vaults: ${result.error.message}`);
@@ -561,8 +562,8 @@ export async function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        // Filter to only Git vaults (read-only)
-        const gitVaults = vaultsResult.value.filter(v => v.readOnly && v.remote);
+        // Filter to only Git vaults
+        const gitVaults = vaultsResult.value.filter(v => v.remote);
         if (gitVaults.length === 0) {
           vscode.window.showErrorMessage('No Git vaults available to fork.');
           return;
@@ -615,7 +616,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         // Filter to only Git vaults
-        const gitVaults = vaultsResult.value.filter(v => v.readOnly && v.remote);
+        const gitVaults = vaultsResult.value.filter(v => v.remote);
         if (gitVaults.length === 0) {
           vscode.window.showErrorMessage('No Git vaults available to sync.');
           return;
@@ -653,7 +654,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const vaultItems = vaultsResult.value.map(v => ({
           label: v.name,
-          description: v.description || (v.readOnly ? 'Git vault' : 'Local vault'),
+          description: v.description || (v.remote ? 'Git vault' : 'Local vault'),
           id: v.id,
         }));
 
