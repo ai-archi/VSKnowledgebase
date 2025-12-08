@@ -55,9 +55,14 @@ import { FileTreeDomainService, FileTreeDomainServiceImpl } from '../../modules/
 import { FileOperationDomainService, FileOperationDomainServiceImpl } from '../../modules/shared/domain/services/FileOperationDomainService';
 import { CommandTemplateDomainService, CommandTemplateDomainServiceImpl } from '../../modules/shared/domain/services/CommandTemplateDomainService';
 
+// Secret Storage
+import { SecretStorageService } from '../../core/secret/SecretStorageService';
+import * as vscode from 'vscode';
+
 export function createContainer(
   architoolRoot: string,
-  dbPath: string
+  dbPath: string,
+  context?: vscode.ExtensionContext
 ): Container {
   const container = new Container();
 
@@ -68,6 +73,12 @@ export function createContainer(
     .toDynamicValue(() => new ConfigManager(architoolRoot, logger))
     .inSingletonScope();
   container.bind<EventBus>(TYPES.EventBus).to(EventBus).inSingletonScope();
+  
+  // Secret Storage Service (if context is provided)
+  if (context) {
+    container.bind<SecretStorageService>(TYPES.SecretStorageService)
+      .toConstantValue(new SecretStorageService(context));
+  }
 
   // Infrastructure Adapters
   container.bind<ArtifactFileSystemAdapter>(TYPES.ArtifactFileSystemAdapter)

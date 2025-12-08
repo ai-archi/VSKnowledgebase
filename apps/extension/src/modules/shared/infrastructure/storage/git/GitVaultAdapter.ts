@@ -9,6 +9,58 @@ export interface VaultError {
   message: string;
 }
 
+/**
+ * 构建带认证信息的 Git URL
+ * @param remote 远程仓库配置
+ * @returns 带认证信息的 URL
+ */
+export function buildAuthenticatedUrl(remote: RemoteEndpoint): string {
+  let url = remote.url;
+  
+  // 如果 URL 中已经包含认证信息，直接返回
+  if (url.includes('@') && (url.startsWith('http://') || url.startsWith('https://'))) {
+    return url;
+  }
+  
+  // 只处理 HTTPS/HTTP URL，SSH URL 使用 SSH key 认证
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return url;
+  }
+  
+  try {
+    const urlObj = new URL(url);
+    
+    // 优先使用 accessToken
+    if (remote.accessToken) {
+      // 检测 Git 服务提供商
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      if (hostname.includes('github.com')) {
+        // GitHub: 使用 token 作为用户名，密码留空
+        urlObj.username = remote.accessToken;
+        urlObj.password = '';
+      } else if (hostname.includes('gitlab.com') || hostname.includes('gitlab')) {
+        // GitLab: 使用 oauth2 作为用户名，token 作为密码
+        urlObj.username = 'oauth2';
+        urlObj.password = remote.accessToken;
+      } else {
+        // 其他 Git 服务：使用 token 作为用户名
+        urlObj.username = remote.accessToken;
+        urlObj.password = '';
+      }
+    } else if (remote.username && remote.password) {
+      // 使用用户名密码
+      urlObj.username = encodeURIComponent(remote.username);
+      urlObj.password = encodeURIComponent(remote.password);
+    }
+    
+    return urlObj.toString();
+  } catch (error) {
+    // 如果 URL 解析失败，返回原始 URL
+    return url;
+  }
+}
+
 export interface GitVaultAdapter {
   cloneRepository(remote: RemoteEndpoint, targetPath: string): Promise<Result<void, VaultError>>;
   pullRepository(vaultPath: string): Promise<Result<void, VaultError>>;
@@ -17,7 +69,8 @@ export interface GitVaultAdapter {
   getCurrentBranch(vaultPath: string): Promise<Result<string, VaultError>>;
   isGitRepository(vaultPath: string): Promise<boolean>;
   checkoutBranch(vaultPath: string, branch: string): Promise<Result<void, VaultError>>;
-  listRemoteBranches(remoteUrl: string): Promise<Result<string[], VaultError>>;
+  listRemoteBranches(remoteUrl: string, remote?: RemoteEndpoint): Promise<Result<string[], VaultError>>;
+  updateRemoteUrl(vaultPath: string, remote: RemoteEndpoint): Promise<Result<void, VaultError>>;
 }
 
 export class GitVaultAdapterImpl implements GitVaultAdapter {
@@ -52,9 +105,12 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
         }
       }
 
+      // Build authenticated URL if credentials are provided
+      const authenticatedUrl = buildAuthenticatedUrl(remote);
+
       // Clone repository
       const git = simpleGit();
-      await git.clone(remote.url, targetPath, ['--branch', remote.branch || 'main']);
+      await git.clone(authenticatedUrl, targetPath, ['--branch', remote.branch || 'main']);
 
       return { success: true, value: undefined };
     } catch (error: any) {
@@ -196,11 +252,14 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
     }
   }
 
-  async listRemoteBranches(remoteUrl: string): Promise<Result<string[], VaultError>> {
+  async listRemoteBranches(remoteUrl: string, remote?: RemoteEndpoint): Promise<Result<string[], VaultError>> {
     try {
+      // 如果提供了 remote 对象，使用带认证的 URL
+      const authenticatedUrl = remote ? buildAuthenticatedUrl(remote) : remoteUrl;
+      
       // 使用 git ls-remote 获取远程分支列表
       const git = simpleGit();
-      const result = await git.listRemote(['--heads', remoteUrl]);
+      const result = await git.listRemote(['--heads', authenticatedUrl]);
       
       // 解析输出，提取分支名称
       // 输出格式: <commit-hash>	refs/heads/branch-name
@@ -259,6 +318,45 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
         error: {
           code: 'CHECKOUT_FAILED',
           message: `Failed to checkout branch: ${error.message}`,
+        },
+      };
+    }
+  }
+
+  async updateRemoteUrl(vaultPath: string, remote: RemoteEndpoint): Promise<Result<void, VaultError>> {
+    try {
+      if (!(await this.isGitRepository(vaultPath))) {
+        return {
+          success: false,
+          error: {
+            code: 'NOT_A_GIT_REPOSITORY',
+            message: `Path is not a Git repository: ${vaultPath}`,
+          },
+        };
+      }
+
+      const git = this.getGitInstance(vaultPath);
+      const authenticatedUrl = buildAuthenticatedUrl(remote);
+      
+      // 检查 origin remote 是否存在
+      const remotes = await git.getRemotes();
+      const originExists = remotes.some(r => r.name === 'origin');
+      
+      if (originExists) {
+        // 更新现有的 remote URL
+        await git.removeRemote('origin');
+      }
+      
+      // 添加新的 remote URL
+      await git.addRemote('origin', authenticatedUrl);
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: {
+          code: 'UPDATE_REMOTE_FAILED',
+          message: `Failed to update remote URL: ${error.message}`,
         },
       };
     }

@@ -6,6 +6,7 @@ export const TYPES = {
   Logger: Symbol.for('Logger'),
   ConfigManager: Symbol.for('ConfigManager'),
   EventBus: Symbol.for('EventBus'),
+  SecretStorageService: Symbol.for('SecretStorageService'),
 
   // Infrastructure Adapters
   ArtifactFileSystemAdapter: Symbol.for('ArtifactFileSystemAdapter'),

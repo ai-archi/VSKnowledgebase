@@ -3,6 +3,7 @@ import { TYPES } from '../../../infrastructure/di/types';
 import { VaultApplicationService, AddLocalVaultOpts, AddVaultFromGitOpts } from './VaultApplicationService';
 import { Vault } from '../domain/entity/vault';
 import { Result, VaultError, VaultErrorCode } from '../domain/errors';
+import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
 import { VaultRepository } from '../infrastructure/VaultRepository';
 import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
 import { GitVaultAdapter } from '../infrastructure/storage/git/GitVaultAdapter';
@@ -172,6 +173,13 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     const vault = vaultResult.value;
     if (vault.remote) {
       const vaultPath = path.join(this.fileAdapter.getVaultsRoot(), vault.name);
+      
+      // 更新 remote URL（如果认证信息已更新）
+      const updateRemoteResult = await this.updateRemoteUrl(vaultPath, vault.remote);
+      if (!updateRemoteResult.success) {
+        this.logger.warn(`Failed to update remote URL: ${updateRemoteResult.error.message}`);
+      }
+      
       const pullResult = await this.gitAdapter.pullRepository(vaultPath);
       if (!pullResult.success) {
         return {
@@ -181,6 +189,20 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       }
     }
 
+    return { success: true, value: undefined };
+  }
+
+  /**
+   * 更新 Git 仓库的 remote URL（包含认证信息）
+   */
+  private async updateRemoteUrl(vaultPath: string, remote: RemoteEndpoint): Promise<Result<void, VaultError>> {
+    const result = await this.gitAdapter.updateRemoteUrl(vaultPath, remote);
+    if (!result.success) {
+      return {
+        success: false,
+        error: new VaultError(VaultErrorCode.OPERATION_FAILED, result.error.message),
+      };
+    }
     return { success: true, value: undefined };
   }
 

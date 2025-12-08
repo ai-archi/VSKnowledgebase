@@ -99,7 +99,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 3. 初始化 SQLite
   const dbPath = path.join(architoolRoot, 'cache', 'runtime.sqlite');
-  const container = createContainer(architoolRoot, dbPath);
+  const container = createContainer(architoolRoot, dbPath, context);
   const index = container.get<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex);
   
   try {
@@ -352,10 +352,21 @@ export async function activate(context: vscode.ExtensionContext) {
         });
         if (!remoteUrl) return;
 
-        // 从 Git URL 中提取仓库名称
+        // 从 Git URL 中提取仓库名称（移除认证信息）
         const extractRepoName = (url: string): string => {
+          // 移除认证信息（如果存在）
+          let cleanUrl = url;
+          if (cleanUrl.includes('@') && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
+            try {
+              const urlObj = new URL(cleanUrl);
+              cleanUrl = `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
+            } catch {
+              // 如果解析失败，使用原始 URL
+            }
+          }
+          
           // 移除 .git 后缀
-          let repoName = url.replace(/\.git$/, '');
+          let repoName = cleanUrl.replace(/\.git$/, '');
           
           // 处理 HTTPS/HTTP URL: https://github.com/user/repo
           if (repoName.includes('://')) {
@@ -380,9 +391,98 @@ export async function activate(context: vscode.ExtensionContext) {
           return;
         }
 
+        // 询问是否需要认证（仅对 HTTPS/HTTP URL）
+        let username: string | undefined;
+        let password: string | undefined;
+        let accessToken: string | undefined;
+        
+        const isHttpsUrl = remoteUrl.trim().startsWith('http://') || remoteUrl.trim().startsWith('https://');
+        if (isHttpsUrl) {
+          let authComplete = false;
+          
+          while (!authComplete) {
+            const authChoice = await vscode.window.showQuickPick(
+              [
+                { label: 'No authentication', description: 'Public repository' },
+                { label: 'Access Token', description: 'Use personal access token' },
+                { label: 'Username & Password', description: 'Use username and password' },
+              ],
+              {
+                placeHolder: 'Select authentication method (optional)',
+                ignoreFocusOut: false,
+              }
+            );
+
+            if (!authChoice) {
+              // 用户取消了选择，退出整个流程
+              return;
+            }
+
+            if (authChoice.label === 'No authentication') {
+              // 不需要认证，直接完成
+              authComplete = true;
+            } else if (authChoice.label === 'Access Token') {
+              const token = await vscode.window.showInputBox({
+                prompt: 'Enter access token',
+                password: true,
+                validateInput: (value) => {
+                  if (!value || value.trim().length === 0) {
+                    return 'Access token cannot be empty';
+                  }
+                  return null;
+                },
+              });
+              if (token) {
+                accessToken = token.trim();
+                authComplete = true;
+              }
+              // 如果用户取消了 token 输入，继续循环让用户重新选择
+            } else if (authChoice.label === 'Username & Password') {
+              const user = await vscode.window.showInputBox({
+                prompt: 'Enter username',
+                validateInput: (value) => {
+                  if (!value || value.trim().length === 0) {
+                    return 'Username cannot be empty';
+                  }
+                  return null;
+                },
+              });
+              if (user) {
+                const pass = await vscode.window.showInputBox({
+                  prompt: 'Enter password',
+                  password: true,
+                  validateInput: (value) => {
+                    if (!value || value.trim().length === 0) {
+                      return 'Password cannot be empty';
+                    }
+                    return null;
+                  },
+                });
+                if (pass) {
+                  username = user.trim();
+                  password = pass.trim();
+                  authComplete = true;
+                }
+                // 如果用户取消了密码输入，继续循环让用户重新选择
+              }
+              // 如果用户取消了用户名输入，继续循环让用户重新选择
+            }
+          }
+        }
+
+        // 构建 RemoteEndpoint 对象（用于获取分支列表）
+        const remoteForBranchList: RemoteEndpoint = {
+          url: remoteUrl.trim(),
+          branch: 'main',
+          sync: 'manual',
+          ...(accessToken && { accessToken }),
+          ...(username && { username }),
+          ...(password && { password }),
+        };
+
         // 获取远程分支列表
         const gitAdapter = container.get<GitVaultAdapter>(TYPES.GitVaultAdapter);
-        const branchesResult = await gitAdapter.listRemoteBranches(remoteUrl.trim());
+        const branchesResult = await gitAdapter.listRemoteBranches(remoteUrl.trim(), remoteForBranchList);
         
         let branchOptions: vscode.QuickPickItem[] = [];
         if (branchesResult.success && branchesResult.value.length > 0) {
@@ -414,6 +514,9 @@ export async function activate(context: vscode.ExtensionContext) {
           url: remoteUrl.trim(),
           branch: branch || 'main',
           sync: 'manual',
+          ...(accessToken && { accessToken }),
+          ...(username && { username }),
+          ...(password && { password }),
         };
 
         // 显示进度提示
