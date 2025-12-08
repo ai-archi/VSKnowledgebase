@@ -89,14 +89,52 @@ export class MCPIPCServer {
         if (process.platform !== 'win32') {
           // 确保目录存在
           const dir = path.dirname(this.socketPath);
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+          this.logger.info(`[MCP IPC] Preparing socket directory: ${dir}`);
+          
+          const dirExistsBefore = fs.existsSync(dir);
+          if (!dirExistsBefore) {
+            try {
+              fs.mkdirSync(dir, { recursive: true });
+              this.logger.info(`[MCP IPC] Created socket directory: ${dir}`);
+            } catch (error: any) {
+              this.logger.error(`[MCP IPC] Failed to create socket directory: ${dir}`, error);
+              throw error;
+            }
+          } else {
+            this.logger.info(`[MCP IPC] Socket directory already exists: ${dir}`);
+          }
+          
+          // 验证目录权限
+          try {
+            const dirStat = fs.statSync(dir);
+            this.logger.info(`[MCP IPC] Directory stats: mode=${dirStat.mode.toString(8)}, uid=${dirStat.uid}, gid=${dirStat.gid}`);
+          } catch (error: any) {
+            this.logger.warn(`[MCP IPC] Failed to get directory stats: ${dir}`, error);
           }
 
           // 如果 socket 文件已存在，删除它
-          if (fs.existsSync(this.socketPath)) {
-            fs.unlinkSync(this.socketPath);
+          const socketExistsBefore = fs.existsSync(this.socketPath);
+          if (socketExistsBefore) {
+            this.logger.info(`[MCP IPC] Existing socket file found, removing: ${this.socketPath}`);
+            try {
+              fs.unlinkSync(this.socketPath);
+              this.logger.info(`[MCP IPC] Removed existing socket file: ${this.socketPath}`);
+              
+              // 验证文件确实被删除
+              if (fs.existsSync(this.socketPath)) {
+                this.logger.error(`[MCP IPC] WARNING: Socket file still exists after unlink: ${this.socketPath}`);
+              } else {
+                this.logger.info(`[MCP IPC] Confirmed socket file removed: ${this.socketPath}`);
+              }
+            } catch (error: any) {
+              this.logger.error(`[MCP IPC] Failed to remove existing socket file: ${this.socketPath}`, error);
+              throw error;
+            }
+          } else {
+            this.logger.info(`[MCP IPC] No existing socket file found at: ${this.socketPath}`);
           }
+          
+          this.logger.info(`[MCP IPC] Socket path will be: ${this.socketPath}`);
         }
 
         this.server = net.createServer((socket) => {
@@ -134,6 +172,41 @@ export class MCPIPCServer {
 
         this.server.listen(this.socketPath, () => {
           this.isRunning = true;
+          this.logger.info(`[MCP IPC] Server.listen() callback invoked for: ${this.socketPath}`);
+          
+          // 验证 socket 文件是否已创建（仅 Unix/Linux/macOS）
+          if (process.platform !== 'win32') {
+            // 立即检查
+            const existsImmediately = fs.existsSync(this.socketPath);
+            this.logger.info(`[MCP IPC] Socket file exists immediately after listen: ${existsImmediately} at ${this.socketPath}`);
+            
+            if (existsImmediately) {
+              try {
+                const stat = fs.statSync(this.socketPath);
+                this.logger.info(`[MCP IPC] Socket file stats: mode=${stat.mode.toString(8)}, size=${stat.size}, uid=${stat.uid}, gid=${stat.gid}, isSocket=${stat.isSocket()}`);
+              } catch (error: any) {
+                this.logger.warn(`[MCP IPC] Failed to get socket file stats: ${this.socketPath}`, error);
+              }
+            }
+            
+            // 多次检查以确保文件确实存在
+            const checkIntervals = [50, 100, 200, 500];
+            checkIntervals.forEach((delay, index) => {
+              setTimeout(() => {
+                const exists = fs.existsSync(this.socketPath);
+                if (exists) {
+                  try {
+                    const stat = fs.statSync(this.socketPath);
+                    this.logger.info(`[MCP IPC] Socket file check #${index + 1} (${delay}ms): EXISTS - mode=${stat.mode.toString(8)}, size=${stat.size}, isSocket=${stat.isSocket()}`);
+                  } catch (error: any) {
+                    this.logger.warn(`[MCP IPC] Socket file check #${index + 1} (${delay}ms): EXISTS but stat failed`, error);
+                  }
+                } else {
+                  this.logger.error(`[MCP IPC] Socket file check #${index + 1} (${delay}ms): NOT FOUND at ${this.socketPath}`);
+                }
+              }, delay);
+            });
+          }
           
           // 注册到注册表
           // 将绝对路径转换为使用 ~ 占位符的路径，以便跨平台兼容
@@ -153,14 +226,42 @@ export class MCPIPCServer {
             ipcEndpoint: ipcEndpointForRegistry,
             lastActive: new Date().toISOString()
           };
-          this.registry.registerInstance(instanceInfo);
           
-          this.logger.info(`MCP IPC Server started at ${this.socketPath}`);
+          try {
+            this.registry.registerInstance(instanceInfo);
+            this.logger.info(`[MCP IPC] Registered instance in registry: ${this.workspaceHash}`);
+          } catch (error: any) {
+            this.logger.error(`[MCP IPC] Failed to register instance in registry`, error);
+          }
+          
+          this.logger.info(`[MCP IPC] MCP IPC Server started at ${this.socketPath}`);
           resolve();
         });
 
         this.server.on('error', (error) => {
-          this.logger.error('Failed to start MCP IPC Server', error);
+          this.logger.error(`[MCP IPC] Server error event: ${error.message}`, {
+            code: (error as any).code,
+            errno: (error as any).errno,
+            syscall: (error as any).syscall,
+            address: (error as any).address,
+            path: this.socketPath,
+            stack: error.stack
+          });
+          
+          // 如果是 Unix socket，检查文件状态
+          if (process.platform !== 'win32') {
+            const exists = fs.existsSync(this.socketPath);
+            this.logger.error(`[MCP IPC] Socket file exists after error: ${exists} at ${this.socketPath}`);
+            if (exists) {
+              try {
+                const stat = fs.statSync(this.socketPath);
+                this.logger.error(`[MCP IPC] Socket file stats after error: mode=${stat.mode.toString(8)}, size=${stat.size}`);
+              } catch (statError: any) {
+                this.logger.error(`[MCP IPC] Failed to stat socket file after error`, statError);
+              }
+            }
+          }
+          
           reject(error);
         });
       } catch (error: any) {

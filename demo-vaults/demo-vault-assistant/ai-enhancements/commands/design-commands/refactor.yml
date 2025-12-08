@@ -1,0 +1,28 @@
+name: 重构
+description: 重构设计图，提供重构建议和优化方案
+targetTypes:
+  - design
+enabled: true
+order: 2
+commandContent: |
+  请重构以下设计图：
+  
+  {% if fileName %}
+  设计图名称：{{ fileName }}
+  {% endif %}
+  
+  {% if diagramType %}
+  设计图类型：{{ diagramType }}
+  {% endif %}
+  
+  {% if selectedFiles %}
+  相关文件：
+  {% for file in selectedFiles %}
+  - {{ file.title or file.name }} ({{ file.path }})
+  {% endfor %}
+  {% endif %}
+  
+  请提供重构建议和优化方案。
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

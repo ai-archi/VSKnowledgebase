@@ -1,0 +1,60 @@
+@startuml
+!theme plain
+
+title State Diagram Demo - Order Lifecycle
+
+[*] --> Draft : Create order
+
+state Draft {
+  :Add items;
+  :Calculate total;
+}
+
+Draft --> PendingPayment : Submit order
+state PendingPayment {
+  :Wait for payment;
+}
+
+PendingPayment --> Paid : Payment received
+PendingPayment --> Cancelled : Payment timeout
+
+state Paid {
+  :Prepare shipment;
+}
+
+Paid --> Shipped : Ship order
+state Shipped {
+  :In transit;
+}
+
+Shipped --> Delivered : Delivery confirmed
+Shipped --> Returned : Customer returns
+
+state Delivered {
+  :Order complete;
+}
+
+state Cancelled {
+  :Order cancelled;
+}
+
+state Returned {
+  :Process return;
+}
+
+Delivered --> [*]
+Cancelled --> [*]
+Returned --> [*]
+
+note right of Paid
+  Order is confirmed
+  and ready to ship
+end note
+
+note left of Cancelled
+  Order can be cancelled
+  before payment
+end note
+
+@enduml
+

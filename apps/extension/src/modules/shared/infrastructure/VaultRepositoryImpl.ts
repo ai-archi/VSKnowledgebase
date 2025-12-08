@@ -1,11 +1,12 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
 import { VaultRepository } from './VaultRepository';
-import { Vault } from '../domain/entity/vault';
+import { Vault, VaultType } from '../domain/entity/vault';
 import { Result, VaultError, VaultErrorCode } from '../domain/errors';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 @injectable()
 export class VaultRepositoryImpl implements VaultRepository {
@@ -106,19 +107,63 @@ export class VaultRepositoryImpl implements VaultRepository {
         const artifactsPath = path.join(vaultPath, 'artifacts');
         
         if (fs.existsSync(artifactsPath)) {
-          // 这是一个有效的 vault
-          vaults.push({
-            id: entry.name,
-            name: entry.name,
-            description: undefined,
-            selfContained: true,
-            readOnly: false,
-          });
+          // 这是一个有效的 vault，尝试读取 vault.yaml
+          const vaultYamlPath = path.join(vaultPath, 'vault.yaml');
+          let vault: Vault;
+          
+          if (fs.existsSync(vaultYamlPath)) {
+            // 读取 vault.yaml 文件
+            try {
+              const yamlContent = fs.readFileSync(vaultYamlPath, 'utf-8');
+              const vaultData = yaml.load(yamlContent) as any;
+              
+              vault = {
+                id: vaultData.id || entry.name,
+                name: vaultData.name || entry.name,
+                type: this.validateVaultType(vaultData.type) || 'document',
+                description: vaultData.description,
+                selfContained: vaultData.selfContained !== undefined ? vaultData.selfContained : true,
+                readOnly: vaultData.readOnly !== undefined ? vaultData.readOnly : false,
+              };
+            } catch (error) {
+              // 如果解析失败，使用默认值
+              vault = {
+                id: entry.name,
+                name: entry.name,
+                type: 'document',
+                description: undefined,
+                selfContained: true,
+                readOnly: false,
+              };
+            }
+          } else {
+            // 没有 vault.yaml，使用默认值
+            vault = {
+              id: entry.name,
+              name: entry.name,
+              type: 'document',
+              description: undefined,
+              selfContained: true,
+              readOnly: false,
+            };
+          }
+          
+          vaults.push(vault);
         }
       }
     }
 
     return vaults;
+  }
+
+  /**
+   * 验证 Vault 类型
+   */
+  private validateVaultType(type: any): VaultType | null {
+    if (type === 'document' || type === 'assistant' || type === 'task') {
+      return type as VaultType;
+    }
+    return null;
   }
 
   async save(vault: Vault): Promise<Result<void, VaultError>> {

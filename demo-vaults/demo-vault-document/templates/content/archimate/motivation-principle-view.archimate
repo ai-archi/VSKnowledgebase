@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-principle-view-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统原则视图</archimate:name>
+  <archimate:documentation>原则视图展示ERP系统设计和实施遵循的原则</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-principle-1" type="Principle">
+      <archimate:name>数据一致性原则</archimate:name>
+      <archimate:documentation>确保ERP系统数据的一致性和准确性</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-principle-2" type="Principle">
+      <archimate:name>模块化设计原则</archimate:name>
+      <archimate:documentation>ERP系统采用模块化设计，便于扩展和维护</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-principle-3" type="Principle">
+      <archimate:name>安全性原则</archimate:name>
+      <archimate:documentation>ERP系统必须确保数据安全和访问控制</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-principle-diagram">
+        <archimate:name>原则视图 (Principle View)</archimate:name>
+        <archimate:documentation>ERP系统原则视图 - 展示设计和实施遵循的原则</archimate:documentation>
+        <archimate:node id="id-principle-node-1" type="Element" elementRef="id-principle-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-principle-node-2" type="Element" elementRef="id-principle-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-principle-node-3" type="Element" elementRef="id-principle-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-principle-rel-1" type="Association" source="id-principle-1" target="id-principle-2">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-principle-rel-2" type="Association" source="id-principle-2" target="id-principle-3">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

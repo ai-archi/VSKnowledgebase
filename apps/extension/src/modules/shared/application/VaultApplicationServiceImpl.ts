@@ -25,6 +25,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     const vault: Vault = {
       id: opts.name,
       name: opts.name,
+      type: opts.type || 'document',
       description: opts.description,
       selfContained: true,
       readOnly: false,
@@ -43,6 +44,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     const vault: Vault = {
       id: opts.name,
       name: opts.name,
+      type: opts.type || 'document',
       description: opts.description,
       remote: opts.remote,
       selfContained: false,
@@ -104,6 +106,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       const newVault: Vault = {
         id: newVaultName,
         name: newVaultName,
+        type: sourceVault.type || 'document',
         description: `Forked from ${sourceVault.name}`,
         selfContained: true,
         readOnly: false,

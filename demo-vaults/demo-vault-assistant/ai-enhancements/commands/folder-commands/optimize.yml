@@ -1,0 +1,28 @@
+name: 优化
+description: 优化文件夹或选中文件，提供性能优化和代码优化建议
+targetTypes:
+  - folder
+enabled: true
+order: 5
+commandContent: |
+  请优化以下内容：
+  
+  {% if fileName %}
+  文件夹名称：{{ fileName }}
+  {% endif %}
+  
+  {% if folderPath %}
+  文件夹路径：{{ folderPath }}
+  {% endif %}
+  
+  {% if selectedFiles %}
+  相关文件：
+  {% for file in selectedFiles %}
+  - {{ file.title or file.name }} ({{ file.path }})
+  {% endfor %}
+  {% endif %}
+  
+  请提供性能优化和代码优化建议。
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

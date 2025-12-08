@@ -1,17 +1,19 @@
 import { Result, VaultError } from '../domain/errors';
-import { Vault } from '../domain/entity/vault';
+import { Vault, VaultType } from '../domain/entity/vault';
 import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
 
 export interface AddLocalVaultOpts {
   name: string;
   fsPath: string;
   description?: string;
+  type?: VaultType; // Vault 类型，默认为 'document'
 }
 
 export interface AddVaultFromGitOpts {
   name: string;
   remote: RemoteEndpoint;
   description?: string;
+  type?: VaultType; // Vault 类型，默认为 'document'
 }
 
 export interface RemoveVaultOpts {

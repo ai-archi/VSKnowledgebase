@@ -312,8 +312,8 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
     const newJarPath = path.join(extensionPath, 'vendor', 'plantuml', 'plantuml-1.2025.10.jar');
     if (fs.existsSync(newJarPath)) {
       this.jarPath = newJarPath;
-      return this.jarPath;
-    }
+        return this.jarPath;
+      }
 
     // 备选：开发环境中的位置（项目根目录）
     const devJarPath = path.join(extensionPath, '..', '..', 'vendor', 'plantuml', 'plantuml-1.2025.10.jar');

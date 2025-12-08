@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-business-capability-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统业务能力图</archimate:name>
+  <archimate:documentation>业务能力图展示ERP系统在业务层面的能力</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-biz-capability-1" type="Capability">
+      <archimate:name>销售管理能力</archimate:name>
+      <archimate:documentation>ERP系统提供的销售管理业务能力</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-biz-capability-2" type="Capability">
+      <archimate:name>采购管理能力</archimate:name>
+      <archimate:documentation>ERP系统提供的采购管理业务能力</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-biz-capability-3" type="Capability">
+      <archimate:name>库存管理能力</archimate:name>
+      <archimate:documentation>ERP系统提供的库存管理业务能力</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-business-capability-diagram">
+        <archimate:name>业务能力图 (Business Capability View)</archimate:name>
+        <archimate:documentation>ERP系统业务能力图 - 展示业务层面的能力</archimate:documentation>
+        <archimate:node id="id-biz-capability-node-1" type="Element" elementRef="id-biz-capability-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-biz-capability-node-2" type="Element" elementRef="id-biz-capability-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-biz-capability-node-3" type="Element" elementRef="id-biz-capability-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-biz-capability-rel-1" type="Association" source="id-biz-capability-1" target="id-biz-capability-3">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-biz-capability-rel-2" type="Association" source="id-biz-capability-2" target="id-biz-capability-3">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

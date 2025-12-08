@@ -1,6 +1,11 @@
 import { RemoteEndpoint } from '../value_object/RemoteEndpoint';
 
 /**
+ * Vault 类型
+ */
+export type VaultType = 'document' | 'assistant' | 'task';
+
+/**
  * Vault 实体
  * 内容组织和隔离的逻辑概念
  */
@@ -9,7 +14,8 @@ export interface Vault {
   id: string; // Vault ID
   name: string; // Vault 名称
   
-  // 描述信息
+  // 类型与描述
+  type: VaultType; // Vault 类型：文档/助手/任务
   description?: string; // Vault 描述
   
   // Git 集成

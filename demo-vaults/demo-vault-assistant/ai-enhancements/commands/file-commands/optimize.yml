@@ -1,0 +1,25 @@
+name: 优化
+description: 优化文件，提供性能优化和代码优化建议
+targetTypes:
+  - file
+enabled: true
+order: 5
+commandContent: |
+  请优化以下文件：
+  
+  {% if selectedFiles %}
+  文件：
+  {% for file in selectedFiles %}
+  - {{ file.title or file.name }}
+  {% endfor %}
+  
+  路径：
+  {% for file in selectedFiles %}
+  {{ file.path }}
+  {% endfor %}
+  {% endif %}
+  
+  请提供性能优化和代码优化建议。
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

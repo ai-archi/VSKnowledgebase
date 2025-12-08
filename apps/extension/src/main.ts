@@ -36,6 +36,7 @@ import { MCPWindowActivationMonitor } from './modules/mcp/MCPWindowActivationMon
 import { calculateWorkspaceHash } from './modules/mcp/utils';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 
 export async function activate(context: vscode.ExtensionContext) {
   // 1. 初始化日志（需要在创建 ArchitoolDirectoryManager 之前）
@@ -647,8 +648,53 @@ export async function activate(context: vscode.ExtensionContext) {
       logger
     );
     
-    await mcpIPCServer.start();
-    logger.info(`MCP IPC Server started for workspace: ${workspaceRoot}`);
+    logger.info(`[MCP] Starting MCP IPC Server for workspace: ${workspaceRoot} (hash: ${workspaceHash})`);
+    const socketPath = mcpIPCServer.getSocketPath();
+    logger.info(`[MCP] Expected socket path: ${socketPath}`);
+    
+    try {
+      await mcpIPCServer.start();
+      logger.info(`[MCP] MCP IPC Server start() completed`);
+      
+      // 验证 socket 文件是否已创建（仅 Unix/Linux/macOS）
+      if (process.platform !== 'win32') {
+        // 多次检查，因为文件创建可能是异步的
+        const checkSocketFile = (attempt: number, maxAttempts: number = 5) => {
+          setTimeout(() => {
+            const exists = fs.existsSync(socketPath);
+            if (exists) {
+              try {
+                const stat = fs.statSync(socketPath);
+                logger.info(`[MCP] Socket file verification #${attempt}: EXISTS - ${socketPath} (mode=${stat.mode.toString(8)}, size=${stat.size}, isSocket=${stat.isSocket()})`);
+              } catch (error: any) {
+                logger.warn(`[MCP] Socket file verification #${attempt}: EXISTS but stat failed - ${socketPath}`, error);
+              }
+            } else {
+              if (attempt < maxAttempts) {
+                logger.warn(`[MCP] Socket file verification #${attempt}: NOT FOUND - ${socketPath}, will retry...`);
+                checkSocketFile(attempt + 1, maxAttempts);
+              } else {
+                logger.error(`[MCP] Socket file verification #${attempt}: NOT FOUND after ${maxAttempts} attempts - ${socketPath}`);
+                logger.error(`[MCP] Please check directory permissions and ensure the directory exists: ${path.dirname(socketPath)}`);
+              }
+            }
+          }, attempt * 200); // 递增延迟：200ms, 400ms, 600ms, 800ms, 1000ms
+        };
+        
+        checkSocketFile(1);
+      } else {
+        logger.info(`[MCP] MCP IPC Server started for workspace: ${workspaceRoot} (Windows named pipe)`);
+      }
+    } catch (error: any) {
+      logger.error(`[MCP] MCP IPC Server start() failed`, {
+        error: error.message,
+        stack: error.stack,
+        socketPath,
+        workspaceRoot,
+        workspaceHash
+      });
+      throw error;
+    }
     
     // 创建并启动窗口激活监控
     mcpWindowMonitor = new MCPWindowActivationMonitor(mcpIPCServer, logger);
@@ -667,7 +713,11 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     });
   } catch (error: any) {
-    logger.warn('Failed to start MCP IPC Server', error);
+    logger.error('Failed to start MCP IPC Server', {
+      error: error.message,
+      stack: error.stack,
+      workspaceRoot
+    });
   }
 
   logger.info('ArchiTool extension initialized');

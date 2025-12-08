@@ -74,7 +74,7 @@ function readRegistry(): MCPRegistryData {
     const content = fs.readFileSync(registryPath, 'utf-8');
     return JSON.parse(content) as MCPRegistryData;
   } catch (error) {
-    console.error('Failed to read registry:', error);
+    // 静默失败，返回空注册表
     return { instances: [] };
   }
 }
@@ -82,7 +82,7 @@ function readRegistry(): MCPRegistryData {
 /**
  * 获取最近激活的扩展实例（带重试机制）
  */
-function getMostRecentActiveInstance(maxRetries: number = 10, retryDelay: number = 1000): Promise<{ ipcEndpoint: string; workspacePath: string } | null> {
+function getMostRecentActiveInstance(maxRetries = 10, retryDelay = 1000): Promise<{ ipcEndpoint: string; workspacePath: string } | null> {
   return new Promise((resolve) => {
     let attempts = 0;
     
@@ -155,7 +155,7 @@ function getMostRecentActiveInstance(maxRetries: number = 10, retryDelay: number
 /**
  * 连接到扩展实例（带重试机制）
  */
-function connectToExtension(ipcEndpoint: string, maxRetries: number = 10, retryDelay: number = 1000): Promise<net.Socket> {
+function connectToExtension(ipcEndpoint: string, maxRetries = 10, retryDelay = 1000): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     let attempts = 0;
     
@@ -268,29 +268,52 @@ async function handleMCPToolCall(socket: net.Socket, method: string, params: any
 }
 
 /**
+ * 获取或创建扩展连接（懒加载）
+ */
+let extensionSocket: net.Socket | null = null;
+let extensionInstance: { ipcEndpoint: string; workspacePath: string } | null = null;
+
+async function getOrCreateExtensionConnection(): Promise<net.Socket> {
+  // 如果已有连接且有效，直接返回
+  if (extensionSocket && !extensionSocket.destroyed) {
+    return extensionSocket;
+  }
+
+  // 尝试获取扩展实例
+  if (!extensionInstance) {
+    extensionInstance = await getMostRecentActiveInstance(5, 500); // 减少重试次数和延迟，避免阻塞太久
+    
+    if (!extensionInstance) {
+      throw new Error('No active ArchiTool extension instance found. Please ensure the ArchiTool extension is running in VS Code.');
+    }
+  }
+
+  // 连接到扩展实例
+  try {
+    extensionSocket = await connectToExtension(extensionInstance.ipcEndpoint, 5, 500);
+    
+    // 设置连接断开和错误处理
+    extensionSocket.on('close', () => {
+      extensionSocket = null;
+      extensionInstance = null; // 重置实例，下次重新查找
+    });
+
+    extensionSocket.on('error', (error: Error) => {
+      extensionSocket = null;
+      extensionInstance = null; // 重置实例，下次重新查找
+    });
+
+    return extensionSocket;
+  } catch (error: any) {
+    extensionInstance = null; // 重置实例，下次重新查找
+    throw new Error(`Failed to connect to extension: ${error.message}`);
+  }
+  }
+
+/**
  * 主函数
  */
 async function main() {
-  // 查找并连接到扩展实例（带重试机制）
-  console.error('Waiting for ArchiTool extension to start...');
-  const instance = await getMostRecentActiveInstance(10, 1000); // 最多重试10次，每次间隔1秒
-  
-  if (!instance) {
-    console.error('No active ArchiTool extension instance found after retries');
-    process.exit(1);
-  }
-
-  let extensionSocket: net.Socket | null = null;
-
-  try {
-    console.error(`Found extension instance, connecting to ${instance.workspacePath}...`);
-    extensionSocket = await connectToExtension(instance.ipcEndpoint, 10, 1000); // 最多重试10次，每次间隔1秒
-    console.error(`Connected to ArchiTool extension at ${instance.workspacePath}`);
-  } catch (error: any) {
-    console.error('Failed to connect to extension after retries:', error.message);
-    process.exit(1);
-  }
-
   // 创建 readline 接口处理 stdio
   const rl = readline.createInterface({
     input: process.stdin,
@@ -309,9 +332,9 @@ async function main() {
 
       // 处理 initialize
       if (mcpMessage.method === 'initialize') {
-        const response: MCPMessage = {
+        // initialize 请求必须有 id，所以响应也必须有 id
+        const response: any = {
           jsonrpc: '2.0',
-          id: mcpMessage.id,
           result: {
             protocolVersion: '2024-11-05',
             capabilities: {
@@ -323,15 +346,26 @@ async function main() {
             }
           }
         };
+        
+        // 只有当请求有 id 时，才在响应中包含 id
+        if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
+          response.id = mcpMessage.id;
+        }
+        
         console.log(JSON.stringify(response));
+        return;
+      }
+
+      // 处理 initialized (MCP 协议要求)
+      if (mcpMessage.method === 'initialized') {
+        // 不需要响应
         return;
       }
 
       // 处理 tools/list
       if (mcpMessage.method === 'tools/list') {
-        const response: MCPMessage = {
+        const response: any = {
           jsonrpc: '2.0',
-          id: mcpMessage.id,
           result: {
             tools: [
               {
@@ -375,231 +409,193 @@ async function main() {
             ]
           }
         };
+        
+        // 只有当请求有 id 时，才在响应中包含 id
+        if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
+          response.id = mcpMessage.id;
+        }
+        
         console.log(JSON.stringify(response));
         return;
       }
 
-      // 处理 tools/call
-      if (mcpMessage.method === 'tools/call' && extensionSocket) {
+      // 处理 tools/call - 懒加载连接
+      if (mcpMessage.method === 'tools/call') {
         try {
-          const result = await handleMCPToolCall(extensionSocket, mcpMessage.method, mcpMessage.params);
-          const response: MCPMessage = {
-            jsonrpc: '2.0',
-            id: mcpMessage.id,
-            result: {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(result, null, 2)
+          // 获取或创建扩展连接
+          const socket = await getOrCreateExtensionConnection();
+          
+          const result = await handleMCPToolCall(socket, mcpMessage.method, mcpMessage.params);
+          
+          // 格式化响应内容，使其更易于 MCP Client 识别
+          const content: any[] = [];
+          
+          // 如果结果是数组（文档列表），格式化为更易读的格式
+          if (Array.isArray(result) && result.length > 0) {
+            // 检查是否是 Artifact 数组
+            const isArtifactArray = result.every((item: any) => 
+              item && typeof item === 'object' && ('id' in item || 'title' in item || 'name' in item)
+            );
+            
+            if (isArtifactArray) {
+              // 为每个文档创建资源引用和文本内容
+              const summaryLines: string[] = [];
+              summaryLines.push(`Found ${result.length} document(s) in knowledge base:\n`);
+              
+              result.forEach((artifact: any, index: number) => {
+                const title = artifact.title || artifact.name || artifact.id || 'Untitled';
+                const artifactId = artifact.id || `artifact-${index}`;
+                
+                // 添加资源引用（如果 artifact 有 id）
+                if (artifact.id) {
+                  content.push({
+                    type: 'resource',
+                    resource: {
+                      uri: `archi://artifact/${artifact.id}`,
+                      name: title,
+                      description: artifact.description || `Document from ${artifact.vault?.name || 'unknown vault'}`,
+                      mimeType: artifact.format === 'md' ? 'text/markdown' : 
+                               artifact.format === 'yml' || artifact.format === 'yaml' ? 'text/yaml' :
+                               'text/plain'
+                    }
+                  });
                 }
-              ]
+                
+                // 添加文档摘要信息
+                const docInfo: string[] = [];
+                docInfo.push(`### ${index + 1}. ${title}`);
+                if (artifact.id) docInfo.push(`- **ID**: ${artifact.id}`);
+                if (artifact.vault?.name) docInfo.push(`- **Vault**: ${artifact.vault.name}`);
+                if (artifact.path) docInfo.push(`- **Path**: ${artifact.path}`);
+                if (artifact.viewType) docInfo.push(`- **Type**: ${artifact.viewType}`);
+                if (artifact.description) docInfo.push(`- **Description**: ${artifact.description}`);
+                if (artifact.tags && artifact.tags.length > 0) {
+                  docInfo.push(`- **Tags**: ${artifact.tags.join(', ')}`);
+                }
+                summaryLines.push(docInfo.join('\n'));
+                
+                // 如果有关联的代码路径，也显示
+                if (artifact.codePaths && artifact.codePaths.length > 0) {
+                  summaryLines.push(`- **Related Code**: ${artifact.codePaths.join(', ')}`);
+                }
+              });
+              
+              // 添加汇总文本内容
+              content.push({
+                type: 'text',
+                text: summaryLines.join('\n\n') + '\n\n---\n\n' + 
+                      `**Full Data**:\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``
+              });
+            } else {
+              // 其他类型的数组，使用 JSON 格式
+              content.push({
+                type: 'text',
+                text: JSON.stringify(result, null, 2)
+              });
+            }
+          } else if (result && typeof result === 'object') {
+            // 单个对象，使用 JSON 格式
+            content.push({
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            });
+          } else {
+            // 其他类型，转换为字符串
+            content.push({
+              type: 'text',
+              text: String(result)
+            });
+          }
+          
+          const response: any = {
+            jsonrpc: '2.0',
+            result: {
+              content: content
             }
           };
+          
+          // 只有当请求有 id 时，才在响应中包含 id
+          if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
+            response.id = mcpMessage.id;
+          }
+          
           console.log(JSON.stringify(response));
         } catch (error: any) {
-          const errorResponse: MCPMessage = {
+          const errorResponse: any = {
             jsonrpc: '2.0',
-            id: mcpMessage.id,
             error: {
               code: -32603,
               message: error.message || 'Internal error'
             }
           };
+          
+          // 只有当请求有 id 时，才在错误响应中包含 id
+          if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
+            errorResponse.id = mcpMessage.id;
+          }
+          
           console.log(JSON.stringify(errorResponse));
         }
         return;
       }
 
       // 未知方法
-      const errorResponse: MCPMessage = {
+      // 如果请求有 id，错误响应必须包含相同的 id
+      // 如果请求没有 id（通知），错误响应不应该包含 id 字段
+      const errorResponse: any = {
         jsonrpc: '2.0',
-        id: mcpMessage.id,
         error: {
           code: -32601,
           message: `Method not found: ${mcpMessage.method}`
         }
       };
+      
+      // 只有当请求有 id 时，才在响应中包含 id
+      if (mcpMessage.id !== undefined && mcpMessage.id !== null) {
+        errorResponse.id = mcpMessage.id;
+      }
+      
       console.log(JSON.stringify(errorResponse));
 
     } catch (error: any) {
-      const errorResponse: MCPMessage = {
+      // 尝试从原始输入中提取 id（如果可能）
+      let requestId: string | number | null | undefined = undefined;
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
+          requestId = parsed.id;
+        }
+      } catch {
+        // 如果无法解析，requestId 保持为 undefined
+      }
+      
+      // 根据 JSON-RPC 2.0 规范：
+      // - 如果请求有 id，错误响应必须包含相同的 id
+      // - 如果请求没有 id（通知），错误响应不应该包含 id 字段
+      // MCP Client 的验证器不接受 null 作为 id 值，所以如果请求没有 id，我们就不包含 id 字段
+      const errorResponse: any = {
         jsonrpc: '2.0',
-        id: null,
         error: {
           code: -32700,
           message: 'Parse error',
           data: error.message
         }
       };
+      
+      // 只有当请求有 id 时，才在响应中包含 id
+      if (requestId !== undefined && requestId !== null) {
+        errorResponse.id = requestId;
+      }
+      
       console.log(JSON.stringify(errorResponse));
     }
   });
-
-  // 处理连接断开
-  // 注意：连接断开时，MCP Client 通常会重启 MCP Server 进程
-  // 因此这里记录错误信息即可，不需要复杂的重连逻辑
-  extensionSocket.on('close', () => {
-    console.error('Extension connection closed');
-    // 给一点时间让错误信息输出，然后退出
-    // MCP Client 会检测到进程退出并重启
-    setTimeout(() => {
-      process.exit(1);
-    }, 100);
-  });
-
-  extensionSocket.on('error', (error: Error) => {
-    console.error('Extension connection error:', error);
-    // 给一点时间让错误信息输出，然后退出
-    setTimeout(() => {
-      process.exit(1);
-    }, 100);
-  });
-}
-
-/**
- * 创建消息处理函数（用于重连时复用）
- */
-function createMessageHandler(extensionSocket: net.Socket) {
-  return async (line: string) => {
-    if (!line.trim()) {
-      return;
-    }
-
-    try {
-      const mcpMessage = JSON.parse(line) as MCPMessage;
-
-      // 处理 initialize
-      if (mcpMessage.method === 'initialize') {
-        const response: MCPMessage = {
-          jsonrpc: '2.0',
-          id: mcpMessage.id,
-          result: {
-            protocolVersion: '2024-11-05',
-            capabilities: {
-              tools: {}
-            },
-            serverInfo: {
-              name: 'architool',
-              version: '0.1.0'
-            }
-          }
-        };
-        console.log(JSON.stringify(response));
-        return;
-      }
-
-      // 处理 tools/list
-      if (mcpMessage.method === 'tools/list') {
-        const response: MCPMessage = {
-          jsonrpc: '2.0',
-          id: mcpMessage.id,
-          result: {
-            tools: [
-              {
-                name: 'search_knowledge_base',
-                description: 'Search the knowledge base',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    query: { type: 'string' },
-                    vaultName: { type: 'string' },
-                    tags: { type: 'array', items: { type: 'string' } },
-                    limit: { type: 'number' }
-                  },
-                  required: ['query']
-                }
-              },
-              {
-                name: 'get_documents_for_code',
-                description: 'Get documents associated with code path',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    codePath: { type: 'string' }
-                  },
-                  required: ['codePath']
-                }
-              },
-              {
-                name: 'list_entries',
-                description: 'List knowledge base entries',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    vaultName: { type: 'string' },
-                    viewType: { type: 'string' },
-                    category: { type: 'string' },
-                    limit: { type: 'number' }
-                  }
-                }
-              }
-            ]
-          }
-        };
-        console.log(JSON.stringify(response));
-        return;
-      }
-
-      // 处理 tools/call
-      if (mcpMessage.method === 'tools/call' && extensionSocket) {
-        try {
-          const result = await handleMCPToolCall(extensionSocket, mcpMessage.method, mcpMessage.params);
-          const response: MCPMessage = {
-            jsonrpc: '2.0',
-            id: mcpMessage.id,
-            result: {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(result, null, 2)
-                }
-              ]
-            }
-          };
-          console.log(JSON.stringify(response));
-        } catch (error: any) {
-          const errorResponse: MCPMessage = {
-            jsonrpc: '2.0',
-            id: mcpMessage.id,
-            error: {
-              code: -32603,
-              message: error.message || 'Internal error'
-            }
-          };
-          console.log(JSON.stringify(errorResponse));
-        }
-        return;
-      }
-
-      // 未知方法
-      const errorResponse: MCPMessage = {
-        jsonrpc: '2.0',
-        id: mcpMessage.id,
-        error: {
-          code: -32601,
-          message: `Method not found: ${mcpMessage.method}`
-        }
-      };
-      console.log(JSON.stringify(errorResponse));
-
-    } catch (error: any) {
-      const errorResponse: MCPMessage = {
-        jsonrpc: '2.0',
-        id: null,
-        error: {
-          code: -32700,
-          message: 'Parse error',
-          data: error.message
-        }
-      };
-      console.log(JSON.stringify(errorResponse));
-    }
-  };
 }
 
 // 启动
 main().catch((error: any) => {
-  console.error('Fatal error:', error);
+  // 静默退出，避免向 stderr 输出任何内容（MCP Client 会检测到进程退出）
+  // MCP 协议要求所有通信都通过 JSON-RPC 格式，stderr 输出会被误解析
   process.exit(1);
 });
 

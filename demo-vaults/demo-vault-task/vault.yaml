@@ -1,0 +1,15 @@
+id: demo-vault-task
+name: Demo Vault - Task
+type: task
+description: |
+  这是一个任务类型的演示 Vault，专注于任务管理。
+  
+  该 Vault 包含了以下内容：
+  - tasks/: 任务管理目录
+  
+  任务类型的 Vault 主要用于存储和管理项目任务、待办事项和任务跟踪信息。
+selfContained: true
+readOnly: false
+createdAt: 2025-11-22T00:00:00.000Z
+updatedAt: 2025-11-22T00:00:00.000Z
+

@@ -1,0 +1,23 @@
+id: requirement-template
+name: 需求文档模板
+description: 用于创建需求文档的标准目录结构
+category: requirement
+viewType: document
+structure:
+  - type: directory
+    name: requirements
+    description: 需求文档根目录
+    children:
+      - type: directory
+        name: functional
+        description: 功能需求
+      - type: directory
+        name: non-functional
+        description: 非功能需求
+      - type: file
+        name: overview.md
+        template: requirement-overview.md
+        description: 需求概览文档
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+
