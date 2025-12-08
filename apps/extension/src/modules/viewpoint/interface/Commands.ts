@@ -358,10 +358,39 @@ export class ViewpointCommands {
       ? filePath
       : path.join(workspaceFolder.uri.fsPath, filePath);
 
-    const document = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(fullPath)
-    );
-    await vscode.window.showTextDocument(document);
+    const fileUri = vscode.Uri.file(fullPath);
+    
+    // 根据文件扩展名确定使用哪个自定义编辑器
+    const ext = path.extname(fullPath).toLowerCase();
+    let viewType: string | undefined;
+    
+    switch (ext) {
+      case '.archimate':
+        viewType = 'architool.archimateEditor';
+        break;
+      case '.mmd':
+        viewType = 'architool.mermaidEditor';
+        break;
+      case '.puml':
+        viewType = 'architool.plantumlEditor';
+        break;
+      default:
+        // 其他文件类型使用默认文本编辑器
+        viewType = undefined;
+        break;
+    }
+    
+    if (viewType) {
+      // 使用自定义编辑器打开（会在新标签页中打开）
+      await vscode.commands.executeCommand('vscode.openWith', fileUri, viewType);
+    } else {
+      // 使用默认文本编辑器打开，在新标签页中打开（preview: false）
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(document, { 
+        preview: false,
+        viewColumn: vscode.ViewColumn.Active 
+      });
+    }
   }
 
   /**

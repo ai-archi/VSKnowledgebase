@@ -265,11 +265,21 @@ export class MetadataRepositoryImpl implements MetadataRepository {
 
       // 扫描所有 vault 的元数据文件
       for (const vault of vaultsResult.value) {
-        const vaultPath = path.join(architoolRoot, vault.name);
+        // 使用 vault.id（目录名）而不是 vault.name（显示名称）来构建路径
+        const vaultPath = path.join(architoolRoot, vault.id);
         const metadataDir = path.join(vaultPath, '.metadata');
         
+        this.logger?.info('[MetadataRepository] Checking vault', { 
+          vaultName: vault.name, 
+          vaultId: vault.id, 
+          vaultPath,
+          metadataDir,
+          vaultPathExists: fs.existsSync(vaultPath),
+          metadataDirExists: fs.existsSync(metadataDir)
+        });
+        
         if (!fs.existsSync(metadataDir)) {
-          this.logger?.debug('[MetadataRepository] Metadata dir not found', { vault: vault.name, metadataDir });
+          this.logger?.debug('[MetadataRepository] Metadata dir not found', { vault: vault.name, vaultId: vault.id, metadataDir });
           continue;
         }
 
@@ -287,13 +297,23 @@ export class MetadataRepositoryImpl implements MetadataRepository {
             const content = fs.readFileSync(metadataPath, 'utf-8');
             const metadata = yaml.load(content) as ArtifactMetadata;
             
+            this.logger?.info('[MetadataRepository] Loaded metadata', {
+              metadataId,
+              artifactId: metadata.artifactId,
+              hasRelatedCodePaths: !!metadata.relatedCodePaths,
+              relatedCodePathsCount: metadata.relatedCodePaths?.length || 0,
+              relatedCodePaths: metadata.relatedCodePaths,
+              codePath: codePath
+            });
+            
             // 检查 relatedCodePaths 是否匹配指定的代码路径（支持通配符匹配）
             if (metadata.relatedCodePaths && metadata.relatedCodePaths.length > 0) {
-              this.logger?.debug('[MetadataRepository] Checking metadata', {
+              this.logger?.info('[MetadataRepository] Checking metadata with relatedCodePaths', {
                 metadataId,
                 artifactId: metadata.artifactId,
                 relatedCodePathsCount: metadata.relatedCodePaths.length,
-                relatedCodePaths: metadata.relatedCodePaths
+                relatedCodePaths: metadata.relatedCodePaths,
+                codePath: codePath
               });
 
               const isMatched = metadata.relatedCodePaths.some(relatedCodePath => {
@@ -320,10 +340,22 @@ export class MetadataRepositoryImpl implements MetadataRepository {
                   artifactId: metadata.artifactId,
                   codePath
                 });
-              // 更新缓存
-              this.metadataCache.set(metadata.id, metadata);
-              matchingMetadata.push(metadata);
+                // 更新缓存
+                this.metadataCache.set(metadata.id, metadata);
+                matchingMetadata.push(metadata);
+              } else {
+                this.logger?.info('[MetadataRepository] Path not matched', {
+                  metadataId,
+                  artifactId: metadata.artifactId,
+                  codePath,
+                  relatedCodePaths: metadata.relatedCodePaths
+                });
               }
+            } else {
+              this.logger?.debug('[MetadataRepository] Metadata has no relatedCodePaths', {
+                metadataId,
+                artifactId: metadata.artifactId
+              });
             }
           } catch (error) {
             this.logger?.warn('[MetadataRepository] Error reading metadata file', { fileName, error });
@@ -461,15 +493,6 @@ export class MetadataRepositoryImpl implements MetadataRepository {
 
   async delete(metadataId: string, artifactId?: string): Promise<Result<void, ArtifactError>> {
     // 查找 metadata 所在的 vault
-    const vaultName = await this.findVaultForMetadata(metadataId);
-    if (!vaultName) {
-      return {
-        success: false,
-        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Metadata not found: ${metadataId}`),
-      };
-    }
-
-    // 从YAML文件删除（Infrastructure层职责）
     const vaultId = await this.findVaultForMetadata(metadataId);
     if (!vaultId) {
       return {
@@ -477,6 +500,8 @@ export class MetadataRepositoryImpl implements MetadataRepository {
         error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Metadata not found: ${metadataId}`),
       };
     }
+
+    // 从YAML文件删除（Infrastructure层职责）
     const yamlRepo = this.getYamlRepoForVault(vaultId);
     const deleteResult = await yamlRepo.deleteMetadata(metadataId);
     if (!deleteResult.success) {

@@ -151,7 +151,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
           break;
 
         case 'openFile':
-          await this.openFile(message.params.filePath);
+          await this.openFile(message.params);
           result = { success: true };
           break;
 
@@ -218,6 +218,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       id: artifact.id,
       name: path.basename(artifact.path),
       path: artifact.path,
+      contentLocation: artifact.contentLocation, // 添加完整文件路径
       type: artifact.viewType === 'design' ? 'design' : 'document',
       vault: {
         id: artifact.vault.id,
@@ -398,21 +399,113 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
 
   /**
    * 打开文件
+   * 支持两种方式：
+   * 1. 如果提供了 contentLocation（完整文件路径），直接使用（推荐）
+   * 2. 如果只提供了 filePath 和 vaultId，通过 artifactService 获取完整路径
+   * 3. 如果只提供了 filePath（无 vaultId），尝试作为工作区相对路径或绝对路径处理
    */
-  private async openFile(filePath: string): Promise<void> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-      throw new Error('No workspace folder found');
+  private async openFile(params: { filePath?: string; contentLocation?: string; vaultId?: string }): Promise<void> {
+    let fullPath: string;
+
+    // 优先使用 contentLocation（完整文件路径）
+    if (params.contentLocation) {
+      fullPath = params.contentLocation;
+    } else if (params.filePath && params.vaultId) {
+      // 如果有 vaultId 和 filePath，通过 artifactService 获取完整路径
+      const vaultResult = await this.vaultService.getVault(params.vaultId);
+      if (vaultResult.success && vaultResult.value) {
+        const vaultRef = { id: vaultResult.value.id, name: vaultResult.value.name };
+        // 使用 artifactService 获取 artifact，获取完整路径
+        const artifactResult = await this.artifactService.getArtifact(vaultRef.id, params.filePath);
+        if (artifactResult.success && artifactResult.value?.contentLocation) {
+          fullPath = artifactResult.value.contentLocation;
+        } else {
+          // 如果获取 artifact 失败，尝试通过 artifactService 的 getFullPath 方法
+          // 由于 getFullPath 是公共方法，我们可以通过读取文件来获取完整路径
+          const readResult = await this.artifactService.readFile(vaultRef, params.filePath);
+          if (readResult.success) {
+            // 如果文件存在，构建完整路径
+            // 使用 artifactService 的内部逻辑：vaultPath + filePath
+            const vaultPath = await this.getVaultPath(vaultRef.id);
+            fullPath = path.join(vaultPath, params.filePath);
+          } else {
+            throw new Error(`File not found: ${params.filePath} in vault ${params.vaultId}`);
+          }
+        }
+      } else {
+        throw new Error(`Vault not found: ${params.vaultId}`);
+      }
+    } else if (params.filePath) {
+      // 没有 vaultId，尝试作为工作区相对路径或绝对路径
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        throw new Error('No workspace folder found');
+      }
+      fullPath = path.isAbsolute(params.filePath)
+        ? params.filePath
+        : path.join(workspaceFolder.uri.fsPath, params.filePath);
+    } else {
+      throw new Error('Either filePath or contentLocation must be provided');
     }
 
-    const fullPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(workspaceFolder.uri.fsPath, filePath);
+    const fileUri = vscode.Uri.file(fullPath);
+    
+    // 根据文件扩展名确定使用哪个自定义编辑器
+    const ext = path.extname(fullPath).toLowerCase();
+    let viewType: string | undefined;
+    
+    switch (ext) {
+      case '.archimate':
+        viewType = 'architool.archimateEditor';
+        break;
+      case '.mmd':
+        viewType = 'architool.mermaidEditor';
+        break;
+      case '.puml':
+        viewType = 'architool.plantumlEditor';
+        break;
+      default:
+        // 其他文件类型使用默认文本编辑器
+        viewType = undefined;
+        break;
+    }
+    
+    if (viewType) {
+      // 使用自定义编辑器打开（会在新标签页中打开）
+      this.logger.info('Opening file with custom editor', { fullPath, viewType });
+      await vscode.commands.executeCommand('vscode.openWith', fileUri, viewType);
+    } else {
+      // 使用默认文本编辑器打开，在新标签页中打开（preview: false）
+      this.logger.info('Opening file with default text editor', { fullPath });
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(document, { 
+        preview: false,
+        viewColumn: vscode.ViewColumn.Active 
+      });
+    }
+  }
 
-    const document = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(fullPath)
-    );
-    await vscode.window.showTextDocument(document);
+  /**
+   * 获取 vault 路径（辅助方法）
+   */
+  private async getVaultPath(vaultId: string): Promise<string> {
+    // 通过读取任意文件来获取 vault 路径
+    // 或者通过 artifactService 的内部方法
+    // 这里使用一个简单的方法：通过读取一个已知文件来推断路径
+    const vaultResult = await this.vaultService.getVault(vaultId);
+    if (vaultResult.success && vaultResult.value) {
+      // 尝试读取 vault 的 .metadata/vault.yaml 文件来获取路径
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (workspaceFolder) {
+        // 假设 .architool 在工作区根目录下
+        const architoolRoot = path.join(workspaceFolder.uri.fsPath, '.architool');
+        const vaultPath = path.join(architoolRoot, vaultId);
+        if (fs.existsSync(vaultPath)) {
+          return vaultPath;
+        }
+      }
+    }
+    throw new Error(`Cannot determine vault path for vault: ${vaultId}`);
   }
 
   /**

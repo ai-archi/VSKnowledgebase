@@ -12,7 +12,8 @@ export class YamlMetadataRepository {
   }
 
   private getMetadataFilePath(metadataId: string): string {
-    return path.join(this.vaultPath, 'metadata', `${metadataId}.metadata.yml`);
+    // 新结构：metadata 文件存放在 .metadata 目录下
+    return path.join(this.vaultPath, '.metadata', `${metadataId}.metadata.yml`);
   }
 
   async writeMetadata(metadata: ArtifactMetadata): Promise<Result<void, ArtifactError>> {
@@ -23,7 +24,14 @@ export class YamlMetadataRepository {
         fs.mkdirSync(dir, { recursive: true });
       }
 
-      const content = yaml.dump(metadata);
+      // 使用 yaml.dump 选项确保所有字段都被序列化，包括 undefined 值（会被跳过，但空数组会被保留）
+      const content = yaml.dump(metadata, {
+        indent: 2,
+        lineWidth: -1,
+        noRefs: true,
+        skipInvalid: false,
+        sortKeys: false,
+      });
       const tempPath = `${filePath}.tmp`;
       fs.writeFileSync(tempPath, content, 'utf-8');
       fs.renameSync(tempPath, filePath);
@@ -77,7 +85,8 @@ export class YamlMetadataRepository {
    * 列出所有元数据文件路径
    */
   async listMetadataFiles(): Promise<string[]> {
-    const metadataDir = path.join(this.vaultPath, 'metadata');
+    // 新结构：metadata 文件存放在 .metadata 目录下
+    const metadataDir = path.join(this.vaultPath, '.metadata');
     
     if (!fs.existsSync(metadataDir)) {
       return [];

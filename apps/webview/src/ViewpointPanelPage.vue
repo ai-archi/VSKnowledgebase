@@ -106,8 +106,11 @@ async function handleCreateTask() {
 }
 
 function handleOpenFile(file: RelatedFile) {
+  // 优先使用 contentLocation（完整文件路径），如果没有则使用 path 和 vaultId
   extensionService.call('openFile', {
+    contentLocation: file.contentLocation,
     filePath: file.path,
+    vaultId: file.vault?.id,
   });
 }
 
