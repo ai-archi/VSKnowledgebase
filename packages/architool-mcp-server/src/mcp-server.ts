@@ -7,6 +7,14 @@
  * 1. 通过 stdio 与外部 MCP Client（如 Cursor）通信
  * 2. 通过 IPC（Unix Socket/命名管道）与 VS Code 扩展通信
  * 3. 转发 MCP 协议请求到扩展，并将响应返回给客户端
+ * 
+ * MCP Server 用途：
+ * 在代码生成时提供代码相关的设计文档、设计图、规范、最佳实践、要求等知识库内容。
+ * 知识库包含：
+ * - 治理日志（GovernanceLog）：架构决策和合规性检查记录
+ * - 微服务架构（MicroServiceArchitecture）：基于 C4 模型和微服务设计要素的架构文档
+ * - 参考库（ReferenceLibrary）：行业模型、可复用资产、最佳实践、示例代码等
+ * - 标准信息库（StandardsInformationBase）：企业技术标准和规范（具有强制性）
  */
 
 import * as net from 'net';
@@ -334,8 +342,7 @@ async function handleMCPToolCall(socket: net.Socket, method: string, params: any
 
     // 映射 MCP 工具名到 IPC 方法
     const ipcMethod = toolName === 'search_knowledge_base' ? 'search' :
-                     toolName === 'get_documents_for_code' ? 'getDocumentsForCode' :
-                     toolName === 'list_entries' ? 'listEntries' : null;
+                     toolName === 'get_documents_for_code' ? 'getDocumentsForCode' : null;
 
     if (!ipcMethod) {
       throw new Error(`Unknown tool: ${toolName}`);
@@ -443,7 +450,8 @@ async function main() {
             },
             serverInfo: {
               name: 'architool',
-              version: '0.1.0'
+              version: '0.1.0',
+              description: 'Provides architecture knowledge base for code generation, including design documents, diagrams, standards, best practices, and requirements. Covers governance logs, microservice architecture (C4 model), reference library, and standards information base.'
             }
           }
         };
@@ -466,7 +474,7 @@ async function main() {
             tools: [
               {
                 name: 'search_knowledge_base',
-                description: 'Search the knowledge base for documents, designs, and artifacts. Use this tool when you need to find information, documentation, design diagrams, or any content stored in the knowledge base. This is the primary tool for most knowledge base queries (covers ~90% of use cases). Supports full-text search across titles, descriptions, and content. You can filter by tags, vault name, and limit results.',
+                description: 'Search the architecture knowledge base for design documents, design diagrams, standards, best practices, requirements, and other architecture-related content. Use this tool during code generation when you need to find relevant architecture guidance, including: governance logs (architecture decisions and compliance checks), microservice architecture documents (C4 model views and design elements), reference library (industry models, reusable assets, best practices, example code), and standards information base (mandatory technical standards and specifications). This is the primary tool for most knowledge base queries (covers ~90% of use cases). Supports full-text search across titles, descriptions, and content.',
                 inputSchema: {
                   type: 'object',
                   properties: {
@@ -493,7 +501,7 @@ async function main() {
               },
               {
                 name: 'get_documents_for_code',
-                description: 'Get documents and design diagrams associated with a specific code file or directory path. Use this tool when analyzing code and need to find related documentation, design diagrams, or specifications. Supports wildcard matching (e.g., "src/auth/*" matches "src/auth/login.ts"). This tool is essential when you need to understand the design context or documentation for specific code paths.',
+                description: 'Get architecture documents, design diagrams, standards, best practices, and requirements associated with a specific code file or directory path. Use this tool during code generation when you need to find related architecture guidance for the code you are working on, including: design documents, C4 architecture diagrams, API specifications, domain models, technical standards, deployment configurations, integration patterns, testing guidelines, monitoring requirements, and other architecture artifacts. Supports wildcard matching (e.g., "src/auth/*" matches "src/auth/login.ts"). This tool is essential when generating code to ensure compliance with architecture standards and design patterns.',
                 inputSchema: {
                   type: 'object',
                   properties: {
@@ -503,31 +511,6 @@ async function main() {
                     }
                   },
                   required: ['codePath']
-                }
-              },
-              {
-                name: 'list_entries',
-                description: 'List knowledge base entries by type and category. Use this tool when you need to browse entries by type (document/design/development/test) or category, or when you need to get a list of all entries in a vault. Less frequently used (~2% of use cases).',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    vaultName: { 
-                      type: 'string',
-                      description: 'Optional: Filter entries to a specific vault by name.'
-                    },
-                    viewType: { 
-                      type: 'string',
-                      description: 'Optional: Filter by view type (document/design/development/test).'
-                    },
-                    category: { 
-                      type: 'string',
-                      description: 'Optional: Filter by category.'
-                    },
-                    limit: { 
-                      type: 'number',
-                      description: 'Optional: Maximum number of results to return (default: 20).'
-                    }
-                  }
                 }
               }
             ]
