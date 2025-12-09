@@ -38,7 +38,7 @@ structure:
             name: decisions
       - type: file
         name: README.md
-        template: demo-vault/templates/content/project-readme.md
+        template: archi-templates/content/markdown/project-readme.md
         description: 项目说明文档
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z

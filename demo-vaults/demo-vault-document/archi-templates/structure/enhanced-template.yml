@@ -19,7 +19,6 @@ structure:
               - type: file
                 name: module.ts
                 fileType: ts
-                template: demo-vault/templates/content/module-template.ts
                 description: TypeScript 模块文件
               - type: file
                 name: module.test.ts
@@ -36,12 +35,11 @@ structure:
           - type: file
             name: README.md
             fileType: md
-            template: demo-vault/templates/content/project-readme.md
+            template: archi-templates/content/markdown/project-readme.md
             description: 项目说明文档
           - type: file
             name: CHANGELOG.md
             fileType: md
-            template: demo-vault/templates/content/changelog-template.md
             description: 变更日志
       - type: directory
         name: config
@@ -50,7 +48,6 @@ structure:
           - type: file
             name: "{{folderName}}.config.json"
             fileType: json
-            template: demo-vault/templates/content/config-template.json
             description: 项目配置文件
           - type: file
             name: .env.example
@@ -59,7 +56,6 @@ structure:
       - type: file
         name: package.json
         fileType: json
-        template: demo-vault/templates/content/package-template.json
         description: Node.js 包配置文件
 createdAt: 2024-01-01T00:00:00Z
 updatedAt: 2024-01-01T00:00:00Z

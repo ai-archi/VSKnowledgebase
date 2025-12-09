@@ -76,93 +76,93 @@
       <!-- 否则使用硬编码的默认渲染（向后兼容） -->
       <div v-else class="step-content">
         <div v-if="stepType === 'draft-proposal'">
-          <h4>起草提案 - 明确需求</h4>
-          <p class="description">AI 将询问关键问题以明确需求</p>
-          <div v-if="step?.questions" class="questions">
-            <div
-              v-for="(question, index) in step.questions"
-              :key="index"
-              class="question-item"
-            >
-              <p class="question-text">{{ question.text }}</p>
-              <el-input
-                v-model="stepData.questions[index].answer"
-                type="textarea"
-                :rows="3"
-                placeholder="请输入回答"
-              />
-            </div>
-          </div>
-          <div v-if="step?.proposal" class="proposal">
-            <h5>生成的提案：</h5>
+        <h4>起草提案 - 明确需求</h4>
+        <p class="description">AI 将询问关键问题以明确需求</p>
+        <div v-if="step?.questions" class="questions">
+          <div
+            v-for="(question, index) in step.questions"
+            :key="index"
+            class="question-item"
+          >
+            <p class="question-text">{{ question.text }}</p>
             <el-input
-              v-model="stepData.proposal"
+                v-model="stepData.questions[index].answer"
               type="textarea"
-              :rows="10"
-              readonly
+              :rows="3"
+              placeholder="请输入回答"
             />
           </div>
         </div>
+        <div v-if="step?.proposal" class="proposal">
+          <h5>生成的提案：</h5>
+          <el-input
+              v-model="stepData.proposal"
+            type="textarea"
+            :rows="10"
+            readonly
+          />
+        </div>
+      </div>
 
         <div v-else-if="stepType === 'review-alignment'">
-          <h4>审查对齐 - 人和 AI 共同审查</h4>
-          <p class="description">展示提案并收集反馈，反复迭代</p>
-          <div v-if="step?.proposal" class="proposal">
-            <h5>提案内容：</h5>
-            <el-input
+        <h4>审查对齐 - 人和 AI 共同审查</h4>
+        <p class="description">展示提案并收集反馈，反复迭代</p>
+        <div v-if="step?.proposal" class="proposal">
+          <h5>提案内容：</h5>
+          <el-input
               v-model="stepData.proposal"
-              type="textarea"
-              :rows="8"
-              readonly
-            />
-          </div>
-          <div class="feedback">
-            <h5>反馈意见：</h5>
-            <el-input
-              v-model="stepData.feedback"
-              type="textarea"
-              :rows="4"
-              placeholder="请输入反馈意见"
-            />
-          </div>
+            type="textarea"
+            :rows="8"
+            readonly
+          />
         </div>
+        <div class="feedback">
+          <h5>反馈意见：</h5>
+          <el-input
+              v-model="stepData.feedback"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入反馈意见"
+          />
+        </div>
+      </div>
 
         <div v-else-if="stepType === 'implementation'">
-          <h4>实现任务 - AI 按规范写代码</h4>
-          <p class="description">根据批准的规范生成代码</p>
-          <div v-if="step?.specification" class="specification">
-            <h5>规范内容：</h5>
-            <el-input
+        <h4>实现任务 - AI 按规范写代码</h4>
+        <p class="description">根据批准的规范生成代码</p>
+        <div v-if="step?.specification" class="specification">
+          <h5>规范内容：</h5>
+          <el-input
               v-model="stepData.specification"
-              type="textarea"
-              :rows="8"
-              readonly
-            />
-          </div>
-          <div v-if="step?.codeFiles" class="code-files">
-            <h5>生成的代码文件：</h5>
-            <el-tag
-              v-for="file in stepData.codeFiles"
-              :key="file"
-              class="file-tag"
-            >
-              {{ file }}
-            </el-tag>
-          </div>
+            type="textarea"
+            :rows="8"
+            readonly
+          />
         </div>
+        <div v-if="step?.codeFiles" class="code-files">
+          <h5>生成的代码文件：</h5>
+          <el-tag
+              v-for="file in stepData.codeFiles"
+            :key="file"
+            class="file-tag"
+          >
+            {{ file }}
+          </el-tag>
+        </div>
+      </div>
 
         <div v-else-if="stepType === 'archive-update'">
-          <h4>归档更新 - 变更归档，规范文档自动更新</h4>
-          <p class="description">更新相关文档和规范</p>
-          <div v-if="step?.updatedDocuments" class="documents">
-            <h5>已更新的文档：</h5>
-            <el-tag
+        <h4>归档更新 - 变更归档，规范文档自动更新</h4>
+        <p class="description">更新相关文档和规范</p>
+        <div v-if="step?.updatedDocuments" class="documents">
+          <h5>已更新的文档：</h5>
+          <el-tag
               v-for="doc in stepData.updatedDocuments"
-              :key="doc"
-              class="doc-tag"
-            >
-              {{ doc }}
-            </el-tag>
+            :key="doc"
+            class="doc-tag"
+          >
+            {{ doc }}
+          </el-tag>
           </div>
         </div>
 

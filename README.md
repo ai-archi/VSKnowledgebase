@@ -95,7 +95,7 @@ ArchiTool 通过 MCP 提供以下 3 个核心功能：
 **使用示例**：
 - 基本搜索：`search({ query: "用户登录", limit: 10 })`
 - 按标签过滤：`search({ query: "", tags: ["requirement"] })`
-- 指定 vault：`search({ query: "架构", vaultName: "demo-vault" })`
+- 指定 vault：`search({ query: "架构", vaultName: "demo-vault-document" })`
 
 **返回**：完整的 Artifact 数组，包含基本信息、完整内容（`body` 字段）和元数据。
 
@@ -236,10 +236,10 @@ VSKnowledgebase/
 ├── packages/
 │   ├── archimate-js/       # ArchiMate 编辑器（基于 archimate-diagram-engine）
 │   └── (已迁移到 apps/webview/src/lib/plantuml-editor/)
-├── demo-vault/             # 示例知识库
-│   ├── artifacts/          # 文档和设计图
-│   ├── metadata/           # 元数据
-│   └── templates/          # 模板
+├── demo-vaults/            # 示例知识库集合
+│   ├── demo-vault-document/    # 文档类型示例
+│   ├── demo-vault-assistant/   # AI 助手类型示例
+│   └── demo-vault-task/        # 任务类型示例
 ├── MCP_FEATURES_PLAN.md    # MCP 功能方案文档
 └── README.md               # 本文档
 ```

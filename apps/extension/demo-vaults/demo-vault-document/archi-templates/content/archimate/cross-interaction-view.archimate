@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-cross-interaction-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统交互视图</archimate:name>
+  <archimate:documentation>交互视图展示ERP系统跨层的交互关系</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-business-role-1" type="BusinessRole">
+      <archimate:name>销售员</archimate:name>
+      <archimate:documentation>业务层的销售员角色</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-application-service-1" type="ApplicationService">
+      <archimate:name>订单服务</archimate:name>
+      <archimate:documentation>应用层的订单服务</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-technology-service-1" type="TechnologyService">
+      <archimate:name>数据服务</archimate:name>
+      <archimate:documentation>技术层的数据服务</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-interaction-diagram">
+        <archimate:name>交互视图 (Interaction View)</archimate:name>
+        <archimate:documentation>ERP系统交互视图 - 展示跨层的交互关系</archimate:documentation>
+        <archimate:node id="id-business-role-node-1" type="Element" elementRef="id-business-role-1" x="100" y="50" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-application-service-node-1" type="Element" elementRef="id-application-service-1" x="300" y="150" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="173" g="216" b="230" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-technology-service-node-1" type="Element" elementRef="id-technology-service-1" x="500" y="250" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="221" g="235" b="247" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-interaction-rel-1" type="Serving" source="id-application-service-1" target="id-business-role-1">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-interaction-rel-2" type="Serving" source="id-technology-service-1" target="id-application-service-1">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

@@ -338,10 +338,6 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
             path.join(architoolRoot, 'demo-vault-document', 'archi-templates', 'content', 'archimate', templateFileName),
             // 从项目根目录的 demo-vaults/demo-vault-document 加载（开发环境）
             path.join(__dirname, '../../../../../../demo-vaults/demo-vault-document/archi-templates/content/archimate', templateFileName),
-            // 兼容旧格式：从 .architool/demo-vault/templates/content/archimate/ 加载
-            path.join(architoolRoot, 'demo-vault', 'templates', 'content', 'archimate', templateFileName),
-            // 兼容旧格式：从项目根目录的 demo-vault 加载（开发环境）
-            path.join(__dirname, '../../../../../../demo-vault/templates/content/archimate', templateFileName),
           ];
 
           for (const templatePath of possiblePaths) {

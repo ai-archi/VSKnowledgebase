@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-resource-view-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统资源视图</archimate:name>
+  <archimate:documentation>资源视图展示ERP系统拥有的关键资源</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-resource-1" type="Resource">
+      <archimate:name>ERP软件资源</archimate:name>
+      <archimate:documentation>ERP系统软件资源</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-resource-2" type="Resource">
+      <archimate:name>数据资源</archimate:name>
+      <archimate:documentation>ERP系统的核心数据资源</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-resource-3" type="Resource">
+      <archimate:name>人力资源</archimate:name>
+      <archimate:documentation>ERP系统运营所需的人力资源</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-resource-diagram">
+        <archimate:name>资源视图 (Resource View)</archimate:name>
+        <archimate:documentation>ERP系统资源视图 - 展示组织拥有的资源</archimate:documentation>
+        <archimate:node id="id-resource-node-1" type="Element" elementRef="id-resource-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-resource-node-2" type="Element" elementRef="id-resource-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-resource-node-3" type="Element" elementRef="id-resource-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-resource-rel-1" type="Association" source="id-resource-1" target="id-resource-2">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-resource-rel-2" type="Assignment" source="id-resource-3" target="id-resource-1">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

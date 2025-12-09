@@ -49,16 +49,6 @@
     },
     "customEditors": [
       {
-        "viewType": "architool.archimateEditor",
-        "displayName": "ArchiMate Diagram",
-        "selector": [
-          {
-            "filenamePattern": "*.archimate"
-          }
-        ],
-        "priority": "default"
-      },
-      {
         "viewType": "architool.mermaidEditor",
         "displayName": "Mermaid Diagram",
         "selector": [
@@ -90,16 +80,6 @@
           "mermaid"
         ]
       },
-      {
-        "id": "archimate",
-        "extensions": [
-          ".archimate"
-        ],
-        "aliases": [
-          "ArchiMate",
-          "archimate"
-        ]
-      }
     ],
     "commands": [
       {
@@ -517,12 +497,13 @@
   "scripts": {
     "compile": "tsc -p tsconfig.json && npm run copy:resources",
     "copy:resources": "mkdir -p dist/extension/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml dist/extension/resources/templates/ 2>/dev/null || true",
+    "copy:demo-vaults": "mkdir -p demo-vaults && rm -rf demo-vaults/* && cp -r ../../demo-vaults/* demo-vaults/ 2>/dev/null || true",
     "watch": "tsc -p tsconfig.json --watch",
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",
     "install:electron": "pnpm install && pnpm run rebuild:electron",
     "postinstall": "echo 'Note: better-sqlite3 will be compiled for development Node.js version. For Electron runtime, run: pnpm run rebuild:electron'",
-    "package": "pnpm run rebuild:electron && vsce package --no-dependencies",
+    "package": "pnpm run copy:demo-vaults && pnpm run rebuild:electron && vsce package --no-dependencies",
     "package:no-rebuild": "vsce package --no-dependencies"
   },
   "dependencies": {

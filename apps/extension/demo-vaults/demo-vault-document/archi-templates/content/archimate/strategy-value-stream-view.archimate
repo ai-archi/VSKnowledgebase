@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-value-stream-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统价值流图</archimate:name>
+  <archimate:documentation>价值流图展示ERP系统的价值创造和交付过程</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-value-stream-1" type="ValueStream">
+      <archimate:name>订单到收款价值流</archimate:name>
+      <archimate:documentation>从订单接收到收款完成的价值流</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-value-1" type="Value">
+      <archimate:name>客户价值</archimate:name>
+      <archimate:documentation>为客户创造的价值</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-value-2" type="Value">
+      <archimate:name>企业价值</archimate:name>
+      <archimate:documentation>为企业创造的价值</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-value-stream-diagram">
+        <archimate:name>价值流图 (Value Stream View)</archimate:name>
+        <archimate:documentation>ERP系统价值流图 - 展示价值创造和交付过程</archimate:documentation>
+        <archimate:node id="id-value-stream-node-1" type="Element" elementRef="id-value-stream-1" x="200" y="150" w="200" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="245" g="222" b="170" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-value-node-1" type="Element" elementRef="id-value-1" x="100" y="50" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-value-node-2" type="Element" elementRef="id-value-2" x="350" y="50" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-value-stream-rel-1" type="Realization" source="id-value-stream-1" target="id-value-1">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-value-stream-rel-2" type="Realization" source="id-value-stream-1" target="id-value-2">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+

@@ -35,7 +35,6 @@
     "format:pkg": "prettier --write",
     "lint": "eslint . --ext ts,tsx",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "build:archimate-js": "mkdir -p apps/extension/dist/archimate-js && rm -rf apps/extension/dist/archimate-js/* && cd packages/archimate-js && OUTPUT_PATH=../../apps/extension/dist/archimate-js npm run build",
     "build:mcp-server": "cd packages/architool-mcp-server && pnpm run build && mkdir -p ../../apps/extension/dist/mcp-server && rm -rf ../../apps/extension/dist/mcp-server/* && cp dist/mcp-server.js ../../apps/extension/dist/mcp-server/",
     "build:webview": "cd apps/webview && pnpm run build && mkdir -p ../extension/dist/webview && rm -rf ../extension/dist/webview/* && cp -r dist/* ../extension/dist/webview/",
     "build:extension": "cd apps/extension && pnpm run compile",
@@ -52,8 +51,8 @@
     "test": "cross-env LOG_LEVEL=error pnpm jest",
     "test:cli": "cross-env LOG_LEVEL=error pnpm jest --forceExit",
     "test:update-snapshots": "pnpm test:cli -u",
-    "package": "pnpm run build && cd apps/extension && pnpm run package",
-    "package:quick": "cd apps/extension && pnpm run package"
+    "package": "pnpm run build && cd apps/extension && pnpm run copy:demo-vaults && pnpm run package",
+    "package:quick": "cd apps/extension && pnpm run copy:demo-vaults && pnpm run package"
   },
   "husky": {
     "hooks": {

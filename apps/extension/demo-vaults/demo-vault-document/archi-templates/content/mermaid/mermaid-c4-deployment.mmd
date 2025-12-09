@@ -1,0 +1,20 @@
+C4Deployment
+    title 部署图
+    
+    Deployment_Node(docker, "Docker容器", "运行应用服务") {
+        Container(web, "Web服务", "Node.js", "处理HTTP请求")
+        Container(api, "API服务", "Java", "业务逻辑处理")
+    }
+    
+    Deployment_Node(db, "数据库服务器", "PostgreSQL") {
+        ContainerDb(database, "主数据库", "PostgreSQL", "数据存储")
+    }
+    
+    Deployment_Node(cache, "缓存服务器", "Redis") {
+        ContainerDb(redis, "缓存", "Redis", "缓存数据")
+    }
+    
+    Rel(web, api, "调用")
+    Rel(api, database, "读写")
+    Rel(api, redis, "读写")
+

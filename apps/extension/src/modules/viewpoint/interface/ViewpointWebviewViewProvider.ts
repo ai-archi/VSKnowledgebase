@@ -298,19 +298,19 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
         }
 
         // 如果读取失败，返回基本信息
-        return {
-          id: task.id,
-          title: task.title,
-          status: task.status,
-          priority: task.priority,
-          dueDate: task.dueDate,
-          artifactId: task.artifactId,
-          artifactPath: task.artifactPath,
-          vaultId: task.vaultId,
+      return {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        artifactId: task.artifactId,
+        artifactPath: task.artifactPath,
+        vaultId: task.vaultId,
           workflowStep: 'draft-proposal',
           workflowData: {},
           templateId: undefined,
-        };
+      };
       })
     );
 

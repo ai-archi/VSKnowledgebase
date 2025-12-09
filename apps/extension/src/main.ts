@@ -28,7 +28,6 @@ import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { RemoteEndpoint } from './modules/shared/domain/value_object/RemoteEndpoint';
 import { GitVaultAdapter } from './modules/shared/infrastructure/storage/git/GitVaultAdapter';
-import { ArchimateEditorProvider } from './modules/editor/archimate/ArchimateEditorProvider';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
 import { PlantUMLEditorProvider } from './modules/editor/plantuml/PlantUMLEditorProvider';
 import { MCPIPCServer } from './modules/mcp/MCPIPCServer';
@@ -63,18 +62,24 @@ export async function activate(context: vscode.ExtensionContext) {
   await architoolManager.initialize();
 
   // 2.1. 如果 .architool 目录没有 vault，则初始化 demo-vaults
-  // 获取扩展根目录（通常是项目根目录，demo-vaults 在项目根目录下）
-  // 注意：在开发环境中，context.extensionPath 指向 apps/extension
-  // 我们需要找到项目根目录（包含 demo-vaults 的目录）
+  // 获取扩展根目录
+  // 注意：
+  // - 在开发环境中，context.extensionPath 指向 apps/extension，demo-vaults 在项目根目录
+  // - 在打包后的扩展中，context.extensionPath 指向扩展安装目录，demo-vaults 在扩展目录下
   const extensionPath = context.extensionPath;
-  // 从 apps/extension 向上两级到项目根目录
+  
+  // 优先从扩展目录查找 demo-vaults（打包后的扩展）
+  let demoVaultsSourcePath = path.join(extensionPath, 'demo-vaults');
+  
+  // 如果扩展目录下不存在，尝试从项目根目录查找（开发环境）
+  if (!require('fs').existsSync(demoVaultsSourcePath)) {
   const projectRoot = path.resolve(extensionPath, '..', '..');
-  const demoVaultsSourcePath = path.join(projectRoot, 'demo-vaults');
+    demoVaultsSourcePath = path.join(projectRoot, 'demo-vaults');
+  }
   
   logger.info(`Workspace root: ${workspaceRoot}`);
   logger.info(`Architool root: ${architoolRoot}`);
   logger.info(`Extension path: ${extensionPath}`);
-  logger.info(`Project root: ${projectRoot}`);
   logger.info(`Demo vaults source path: ${demoVaultsSourcePath}`);
   logger.info(`Demo vaults source exists: ${require('fs').existsSync(demoVaultsSourcePath)}`);
   
@@ -210,10 +215,6 @@ export async function activate(context: vscode.ExtensionContext) {
   aiCommands.registerCommands(context);
 
   // 12. 注册自定义编辑器
-  const archimateEditorDisposable = ArchimateEditorProvider.register(context);
-  context.subscriptions.push(archimateEditorDisposable);
-  logger.info('ArchiMate editor provider registered');
-
   const mermaidEditorDisposable = MermaidEditorProvider.register(context);
   context.subscriptions.push(mermaidEditorDisposable);
   logger.info('Mermaid editor provider registered');

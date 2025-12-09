@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archimate:model xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:archimate="http://www.opengroup.org/xsd/archimate/3.0/" id="id-requirement-view-model" xsi:schemaLocation="http://www.opengroup.org/xsd/archimate/3.0/ http://www.opengroup.org/xsd/archimate/3.1/archimate3_Diagram.xsd">
+  <archimate:name>ERP系统需求视图</archimate:name>
+  <archimate:documentation>需求视图展示ERP系统的功能需求和非功能需求</archimate:documentation>
+  <archimate:elements>
+    <archimate:baseElement id="id-requirement-1" type="Requirement">
+      <archimate:name>财务模块需求</archimate:name>
+      <archimate:documentation>ERP系统财务模块的功能需求</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-requirement-2" type="Requirement">
+      <archimate:name>供应链模块需求</archimate:name>
+      <archimate:documentation>ERP系统供应链模块的功能需求</archimate:documentation>
+    </archimate:baseElement>
+    <archimate:baseElement id="id-requirement-3" type="Requirement">
+      <archimate:name>性能需求</archimate:name>
+      <archimate:documentation>ERP系统的性能需求（响应时间、并发用户数等）</archimate:documentation>
+    </archimate:baseElement>
+  </archimate:elements>
+  <archimate:views>
+    <archimate:diagrams>
+      <archimate:view id="id-requirement-diagram">
+        <archimate:name>需求视图 (Requirement View)</archimate:name>
+        <archimate:documentation>ERP系统需求视图 - 展示功能需求和非功能需求</archimate:documentation>
+        <archimate:node id="id-requirement-node-1" type="Element" elementRef="id-requirement-1" x="100" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-requirement-node-2" type="Element" elementRef="id-requirement-2" x="300" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+        <archimate:node id="id-requirement-node-3" type="Element" elementRef="id-requirement-3" x="500" y="100" w="150" h="60">
+          <archimate:style textAlign="center-middle">
+            <archimate:font />
+            <archimate:fillColor r="255" g="255" b="181" a="100" />
+            <archimate:lineColor r="0" g="0" b="0" a="40" />
+          </archimate:style>
+        </archimate:node>
+      </archimate:view>
+    </archimate:diagrams>
+  </archimate:views>
+  <archimate:relationships>
+    <archimate:relationship id="id-requirement-rel-1" type="Association" source="id-requirement-1" target="id-requirement-2">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+    <archimate:relationship id="id-requirement-rel-2" type="Association" source="id-requirement-2" target="id-requirement-3">
+      <archimate:name></archimate:name>
+    </archimate:relationship>
+  </archimate:relationships>
+</archimate:model>
+
