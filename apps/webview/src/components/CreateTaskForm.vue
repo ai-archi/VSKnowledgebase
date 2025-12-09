@@ -209,6 +209,7 @@ interface Vault {
   name: string;
   description?: string;
   readOnly?: boolean;
+  type?: 'document' | 'ai-enhancement' | 'template' | 'task';
 }
 
 interface WorkflowTemplate {
@@ -339,7 +340,13 @@ const loadVaults = async () => {
       });
     });
 
-    vaults.value = result || [];
+    // 过滤 vaults，只显示 task 或 document 类型的 vault
+    const allVaults = result || [];
+    vaults.value = allVaults.filter(vault => vault.type === 'task' || vault.type === 'document');
+    
+    if (vaults.value.length === 0 && allVaults.length > 0) {
+      console.warn('No task or document type vaults found. Available vaults:', allVaults.map(v => `${v.name} (${v.type || 'unknown'})`));
+    }
   } catch (err: any) {
     console.error('Failed to load vaults', err);
     vaults.value = [];

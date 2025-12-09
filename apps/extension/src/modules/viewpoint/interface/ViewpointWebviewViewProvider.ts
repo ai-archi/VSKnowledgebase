@@ -326,6 +326,17 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       throw new Error('Vault ID is required');
     }
 
+    // 验证 vault 类型，只能创建到 task 或 document 类型的 vault
+    const vaultResult = await this.vaultService.getVault(vaultId);
+    if (!vaultResult.success || !vaultResult.value) {
+      throw new Error(`Vault not found: ${vaultId}`);
+    }
+
+    const vault = vaultResult.value;
+    if (vault.type !== 'task' && vault.type !== 'document') {
+      throw new Error(`Cannot create task in vault of type '${vault.type}'. Only 'task' or 'document' type vaults are allowed.`);
+    }
+
     // 构建任务路径（使用 archi-tasks/ 目录，YAML 格式）
     const artifactPath = params.artifactPath || `archi-tasks/${params.title || '新任务'}.yml`;
 
@@ -405,6 +416,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       id: vault.id,
       name: vault.name,
       description: vault.description,
+      type: vault.type,
     }));
   }
 
