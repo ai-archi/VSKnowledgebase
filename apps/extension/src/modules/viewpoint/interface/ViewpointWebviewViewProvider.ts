@@ -528,9 +528,6 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     let viewType: string | undefined;
     
     switch (ext) {
-      case '.archimate':
-        viewType = 'architool.archimateEditor';
-        break;
       case '.mmd':
         viewType = 'architool.mermaidEditor';
         break;

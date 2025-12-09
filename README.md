@@ -234,7 +234,6 @@ VSKnowledgebase/
 │   │   └── package.json
 │   └── webview/            # Webview 前端
 ├── packages/
-│   ├── archimate-js/       # ArchiMate 编辑器（基于 archimate-diagram-engine）
 │   └── (已迁移到 apps/webview/src/lib/plantuml-editor/)
 ├── demo-vaults/            # 示例知识库集合
 │   ├── demo-vault-document/    # 文档类型示例
@@ -333,7 +332,7 @@ pnpm run package:quick
 ```
 
 **打包流程**：
-1. 构建所有子包（archimate-js, webview）
+1. 构建所有子包（webview）
 2. 编译 TypeScript 代码
 3. 重新编译 `better-sqlite3`（为 Electron 环境，可能需要 2-5 分钟）
 4. 使用 `vsce` 打包生成 `.vsix` 文件

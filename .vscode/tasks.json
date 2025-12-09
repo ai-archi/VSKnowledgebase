@@ -5,7 +5,6 @@
       "label": "Build All",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Build Archimate JS",
         "Compile Extension",
         "Build Webview",
         "Copy Webview Assets"
@@ -19,28 +18,6 @@
         "reveal": "always",
         "panel": "shared"
       }
-    },
-    {
-      "label": "Build Archimate JS",
-      "type": "shell",
-      "command": "npm",
-      "args": [
-        "run",
-        "build"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}/packages/archimate-js",
-        "env": {
-          "OUTPUT_PATH": "../../apps/extension/dist/archimate-js"
-        }
-      },
-      "problemMatcher": [],
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "preLaunchTask": null
     },
     {
       "label": "Compile Extension",
