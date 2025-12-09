@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as yaml from 'js-yaml';
 import { ViewpointApplicationService } from '../application/ViewpointApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
@@ -135,6 +136,14 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
           result = await this.createTask(message.params);
           break;
 
+        case 'getTaskTemplates':
+          result = await this.getTaskTemplates(message.params?.vaultId);
+          break;
+
+        case 'vault.list':
+          result = await this.listVaults();
+          break;
+
         case 'updateTask':
           result = await this.updateTask(
             message.params.taskId,
@@ -236,23 +245,76 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       throw new Error(result.error.message);
     }
 
-    // 从 metadata 中读取 workflowData（如果存在）
-    return result.value.map(task => {
-      const metadata = (task as any).metadata || {};
-      return {
-        id: task.id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        dueDate: task.dueDate,
-        artifactId: task.artifactId,
-        artifactPath: task.artifactPath,
-        vaultId: task.vaultId,
-        workflowStep: metadata.workflowStep || 'draft-proposal',
-        workflowData: metadata.workflowData || {},
-        createdAt: (task as any).createdAt,
-      };
-    });
+    // 读取每个任务的完整信息，包括 workflow
+    const tasksWithWorkflow = await Promise.all(
+      result.value.map(async (task) => {
+        try {
+          // 获取 vault 信息
+          const vaultResult = await this.vaultService.getVault(task.vaultId);
+          if (!vaultResult.success || !vaultResult.value) {
+            return {
+              id: task.id,
+              title: task.title,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              artifactId: task.artifactId,
+              artifactPath: task.artifactPath,
+              vaultId: task.vaultId,
+              workflowStep: 'draft-proposal',
+              workflowData: {},
+              templateId: undefined,
+            };
+          }
+
+          // 读取任务文件内容
+          const readResult = await this.artifactService.readFile(
+            { id: vaultResult.value.id, name: vaultResult.value.name },
+            task.artifactPath
+          );
+
+          if (readResult.success) {
+            const taskData = yaml.load(readResult.value) as any;
+            
+            if (taskData && taskData.workflow) {
+              return {
+                id: task.id,
+                title: task.title,
+                status: task.status,
+                priority: task.priority,
+                dueDate: task.dueDate,
+                artifactId: task.artifactId,
+                artifactPath: task.artifactPath,
+                vaultId: task.vaultId,
+                workflowStep: taskData.workflow.step || 'draft-proposal',
+                workflowData: taskData.workflow.data || {},
+                templateId: taskData.workflow.templateId,
+                createdAt: taskData.createdAt,
+              };
+            }
+          }
+        } catch (error: any) {
+          this.logger.warn(`Failed to read workflow for task ${task.id}`, error);
+        }
+
+        // 如果读取失败，返回基本信息
+        return {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.dueDate,
+          artifactId: task.artifactId,
+          artifactPath: task.artifactPath,
+          vaultId: task.vaultId,
+          workflowStep: 'draft-proposal',
+          workflowData: {},
+          templateId: undefined,
+        };
+      })
+    );
+
+    return tasksWithWorkflow;
   }
 
   /**
@@ -267,7 +329,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     // 构建任务路径（使用 archi-tasks/ 目录，YAML 格式）
     const artifactPath = params.artifactPath || `archi-tasks/${params.title || '新任务'}.yml`;
 
-    // 创建任务
+    // 创建任务，支持模板ID
     const result = await this.taskService.createTask({
       vaultId,
       artifactPath,
@@ -275,6 +337,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       status: params.status || 'pending',
       priority: params.priority || 'medium',
       dueDate: params.dueDate,
+      templateId: params.workflowTemplate || params.templateId,
     });
 
     if (!result.success) {
@@ -292,28 +355,6 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       });
     }
 
-    // 如果有流程模板，初始化流程数据
-    if (params.workflowTemplate) {
-      const workflowData = this.getWorkflowTemplateData(params.workflowTemplate);
-      // 更新任务的 workflowData（存储在 metadata 中）
-      const updateResult = await this.taskService.updateTask(task.id, {
-        metadata: {
-          workflowStep: workflowData.initialStep || 'draft-proposal',
-          workflowData: workflowData.data || {},
-        },
-      } as any);
-      
-      if (updateResult.success) {
-        // 刷新任务树视图
-        try {
-          await vscode.commands.executeCommand('archi.task.refresh');
-        } catch (error) {
-          this.logger.warn('[ViewpointWebviewViewProvider] Failed to refresh task tree view', error);
-        }
-        return updateResult.value;
-      }
-    }
-
     // 刷新任务树视图
     try {
       await vscode.commands.executeCommand('archi.task.refresh');
@@ -325,39 +366,46 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
   }
 
   /**
-   * 获取流程模板数据
+   * 获取任务模板列表
    */
-  private getWorkflowTemplateData(templateId: string): { initialStep: string; data: any } {
-    const templates: Record<string, { initialStep: string; data: any }> = {
-      default: {
-        initialStep: 'draft-proposal',
-        data: {
-          'draft-proposal': {},
-          'review-alignment': {},
-          'implementation': {},
-          'archive-update': {},
-        },
-      },
-      simple: {
-        initialStep: 'implementation',
-        data: {
-          'implementation': {},
-          'archive-update': {},
-        },
-      },
-      detailed: {
-        initialStep: 'draft-proposal',
-        data: {
-          'draft-proposal': {},
-          'review-alignment': {},
-          'implementation': {},
-          'test-verification': {},
-          'archive-update': {},
-        },
-      },
-    };
+  private async getTaskTemplates(vaultId?: string): Promise<any[]> {
+    this.logger.info(`[ViewpointWebviewViewProvider] getTaskTemplates called with vaultId: ${vaultId || 'undefined (all vaults)'}`);
+    
+    const result = await this.taskService.getTaskTemplates(vaultId);
+    
+    if (!result.success) {
+      this.logger.error('[ViewpointWebviewViewProvider] Failed to get task templates', result.error);
+      return [];
+    }
 
-    return templates[templateId] || templates.default;
+    this.logger.info(`[ViewpointWebviewViewProvider] getTaskTemplates returned ${result.value.length} templates`);
+    
+    const mappedTemplates = result.value.map(template => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+    }));
+    
+    this.logger.info(`[ViewpointWebviewViewProvider] Mapped templates:`, mappedTemplates.map(t => `${t.id} (${t.name})`).join(', '));
+    
+    return mappedTemplates;
+  }
+
+  /**
+   * 获取 Vault 列表
+   */
+  private async listVaults(): Promise<any[]> {
+    const result = await this.vaultService.listVaults();
+    if (!result.success) {
+      this.logger.warn('[ViewpointWebviewViewProvider] Failed to list vaults', result.error);
+      return [];
+    }
+
+    return result.value.map(vault => ({
+      id: vault.id,
+      name: vault.name,
+      description: vault.description,
+    }));
   }
 
   /**
@@ -692,6 +740,26 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
             method: message.method,
             result: [],
           });
+        } else if (message.method === 'getTaskTemplates') {
+          // 获取任务模板列表
+          try {
+            const templates = await this.getTaskTemplates(message.params?.vaultId);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: templates,
+            });
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error getting task templates in dialog', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
         } else if (message.method === 'createTask') {
           // 创建任务
           try {
@@ -711,6 +779,17 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
               },
             });
           }
+        } else {
+          // 未处理的消息
+          this.logger.warn(`[ViewpointWebviewViewProvider] Unhandled message in create task dialog: ${message.method}`);
+          panel.webview.postMessage({
+            id: message.id,
+            method: message.method,
+            error: {
+              code: -1,
+              message: `Unhandled method: ${message.method}`,
+            },
+          });
         }
       },
       null,

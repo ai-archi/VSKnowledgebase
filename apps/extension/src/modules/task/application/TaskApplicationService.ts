@@ -20,6 +20,30 @@ export interface CreateTaskOptions {
   status?: Task['status'];
   priority?: Task['priority'];
   dueDate?: Date;
+  templateId?: string;
+}
+
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  workflow: {
+    steps: Array<{
+      key: string;
+      label: string;
+      description?: string;
+      order: number;
+      fields?: Array<{
+        key: string;
+        type: string;
+        label: string;
+        readonly?: boolean;
+        items?: any;
+      }>;
+    }>;
+    initialStep: string;
+  };
 }
 
 export interface TaskApplicationService {
@@ -27,5 +51,7 @@ export interface TaskApplicationService {
   createTask(options: CreateTaskOptions): Promise<Result<Task, ArtifactError>>;
   updateTask(taskId: string, updates: Partial<Task>): Promise<Result<Task, ArtifactError>>;
   deleteTask(taskId: string): Promise<Result<void, ArtifactError>>;
+  getTaskTemplates(vaultId?: string): Promise<Result<TaskTemplate[], ArtifactError>>;
+  getTaskTemplate(templateId: string, vaultId?: string): Promise<Result<TaskTemplate, ArtifactError>>;
 }
 

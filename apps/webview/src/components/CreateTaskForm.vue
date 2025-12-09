@@ -70,6 +70,7 @@
                 placeholder="选择流程模板（可选）"
                 clearable
                 style="width: 100%"
+                :loading="loadingTemplates"
               >
                 <el-option
                   v-for="template in workflowTemplates"
@@ -85,6 +86,9 @@
                   </div>
                 </el-option>
               </el-select>
+              <div v-if="workflowTemplates.length === 0 && !loadingTemplates" class="template-hint">
+                未找到任务模板，请检查 archi-templates/task 目录
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -246,15 +250,12 @@ const formData = ref<FormData>({
 });
 
 const vaults = ref<Vault[]>([]);
-const workflowTemplates = ref<WorkflowTemplate[]>([
-  { id: 'default', name: '默认流程', description: '起草提案 → 审查对齐 → 实现任务 → 归档更新' },
-  { id: 'simple', name: '简化流程', description: '实现任务 → 归档更新' },
-  { id: 'detailed', name: '详细流程', description: '起草提案 → 审查对齐 → 实现任务 → 测试验证 → 归档更新' },
-]);
+const workflowTemplates = ref<WorkflowTemplate[]>([]);
 const commands = ref<Array<{ id: string; name: string; description?: string }>>([]);
 const selectedFiles = ref<FileItem[]>([]);
 const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
+const loadingTemplates = ref(false);
 const creating = ref(false);
 const searchDebounceTimer = ref<number | null>(null);
 
@@ -288,7 +289,7 @@ watch(
   { deep: true }
 );
 
-onMounted(() => {
+onMounted(async () => {
   // 从 window.initialData 获取初始数据
   if ((window as any).initialData) {
     const initialData = (window as any).initialData;
@@ -296,10 +297,12 @@ onMounted(() => {
       formData.value.vaultId = initialData.vaultId;
     }
   }
-  loadVaults();
+  await loadVaults();
   // 加载所有文件（不传查询条件）
   loadFiles();
   loadCommands();
+  // 加载所有模板（明确传 null，确保从所有 vault 加载）
+  loadTaskTemplates(null);
 });
 
 const loadVaults = async () => {
@@ -344,7 +347,9 @@ const loadVaults = async () => {
 };
 
 const handleVaultChange = () => {
-  // Vault 变更时可以重新加载相关数据
+  // Vault 变更时重新加载所有模板（展示所有 vault 的模板，不限制为当前选择的 vault）
+  // 这样用户可以看到所有可用的模板，即使选择了某个 vault
+  loadTaskTemplates(null);
 };
 
 const loadFiles = async (query?: string) => {
@@ -472,6 +477,65 @@ const loadCommands = async () => {
   } catch (err: any) {
     console.error('Failed to load commands', err);
     commands.value = [];
+  }
+};
+
+const loadTaskTemplates = async (vaultId?: string | null) => {
+  loadingTemplates.value = true;
+  try {
+    const vscode = (window as any).acquireVsCodeApi?.();
+    if (!vscode) {
+      console.warn('VSCode API not available');
+      workflowTemplates.value = [];
+      return;
+    }
+
+    const requestId = Date.now();
+    // 如果明确传入了 null 或 undefined，或者没有传入参数，则加载所有 vault 的模板
+    // 如果传入了具体的 vaultId，则只加载该 vault 的模板
+    const targetVaultId = vaultId === null ? undefined : (vaultId || undefined);
+    console.log('Loading task templates, requestId:', requestId, 'vaultId:', targetVaultId || 'all vaults');
+    
+    const result = await new Promise<WorkflowTemplate[]>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', messageHandler);
+        reject(new Error('Request timeout'));
+      }, 10000);
+
+      const messageHandler = (event: MessageEvent) => {
+        const message = event.data;
+        console.log('Received message:', message.method, 'id:', message.id, 'requestId:', requestId);
+        
+        if (message.id === requestId && message.method === 'getTaskTemplates') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', messageHandler);
+          if (message.error) {
+            console.error('Error loading task templates:', message.error);
+            reject(new Error(message.error.message || 'Failed to load task templates'));
+          } else {
+            console.log('Task templates loaded:', message.result);
+            resolve(message.result || []);
+          }
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
+      vscode.postMessage({
+        method: 'getTaskTemplates',
+        id: requestId,
+        params: {
+          vaultId: targetVaultId,
+        },
+      });
+    });
+
+    workflowTemplates.value = result || [];
+    console.log('Loaded task templates:', workflowTemplates.value.length, 'templates');
+  } catch (err: any) {
+    console.error('Failed to load task templates', err);
+    workflowTemplates.value = [];
+  } finally {
+    loadingTemplates.value = false;
   }
 };
 
@@ -748,6 +812,13 @@ const handleCreate = async () => {
   font-size: 11px;
   color: var(--vscode-descriptionForeground, #999999);
   margin-left: 8px;
+}
+
+.template-hint {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin-top: 4px;
+  font-style: italic;
 }
 </style>
 
