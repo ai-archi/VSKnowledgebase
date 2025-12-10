@@ -92,14 +92,21 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   // 2.2. 复制 MCP Server 到固定位置
+  // 只在打包后的扩展中复制（开发环境不需要）
   // 获取 MCP Server 源路径（从扩展安装目录）
   const mcpServerSourcePath = path.join(extensionPath, 'dist', 'mcp-server', 'mcp-server.js');
+  
+  // 只在源文件存在时复制（打包后的扩展）
+  if (require('fs').existsSync(mcpServerSourcePath)) {
   try {
     await architoolManager.copyMCPServer(mcpServerSourcePath);
     logger.info('MCP Server copied to fixed location');
   } catch (error: any) {
     // 如果复制失败，记录错误但不阻止激活
     logger.warn('Failed to copy MCP Server:', error);
+    }
+  } else {
+    logger.debug('MCP Server source not found (development mode, skipping copy)');
   }
 
   // 3. 初始化 SQLite

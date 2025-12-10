@@ -1302,6 +1302,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       });
 
       // 递归创建结构项（变量已在 ArtifactTemplate 中应用）
+      // 完全按照模板设计进行目录结构的创建，不跳过任何层级
       for (const item of structureItems) {
         const itemResult = await this.createStructureItem(vault, basePath, item, artifactTemplate.variables);
         if (!itemResult.success) {
@@ -1889,6 +1890,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
 
   /**
    * 创建结构项（目录或文件）
+   * 完全按照模板结构创建，不做任何智能处理
    */
   private async createStructureItem(
     vault: VaultReference,
@@ -1900,7 +1902,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     const itemPath = path.join(basePath, itemName);
 
     if (item.type === 'directory') {
-      // 创建目录
+      // 创建目录（完全按照模板结构，不做任何特殊处理）
       const createDirResult = await this.createDirectory(vault, itemPath);
       if (!createDirResult.success) {
         return createDirResult;
@@ -1968,7 +1970,10 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   /**
    * 获取模板内容并进行Jinja2渲染
    * 直接读取模板文件，不依赖TemplateApplicationService，避免循环依赖
-   * templateId格式：<vault名称>/templates/content/my-template.md 或 templates/content/my-template.md
+   * templateId格式可能是：
+   * 1. my-template.md (只有模板名称，从当前 vault 查找)
+   * 2. Demo Vault - AI Enhancement/archi-templates/content/markdown/my-template.md (完整路径，包含 vault 名称)
+   * 3. archi-templates/content/markdown/my-template.md (相对路径，从当前 vault 查找)
    */
   private async getTemplateContentAndRender(
     vault: VaultReference,
@@ -1979,32 +1984,85 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     try {
       let templateContent: string | null = null;
       let templatePath: string | null = null;
+      let templateVault: VaultReference = vault; // 默认使用目标 vault
 
-      // templateId应该是路径格式：<vault名称>/templates/content/my-template.md 或 templates/content/my-template.md
-      let actualPath = templateId;
-      
-      // 如果包含vault名称前缀，提取路径部分
-      if (templateId.startsWith(`${vault.name}/`)) {
-        actualPath = templateId.substring(vault.name.length + 1);
+      // 从模板ID中提取 vault 名称和文件路径
+      if (templateId.includes('/')) {
+        const parts = templateId.split('/');
+        // 检查第一部分是否是 vault 名称（不是 "archi-templates"）
+        if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+          // 第一部分可能是 vault 名称，尝试查找该 vault
+          const vaultName = parts[0];
+          const vaultsResult = await this.vaultService.listVaults();
+          if (vaultsResult.success) {
+            const templateVaultFound = vaultsResult.value.find(v => v.name === vaultName);
+            if (templateVaultFound) {
+              templateVault = { id: templateVaultFound.id, name: templateVaultFound.name };
+              // 去掉 vault 名称前缀，获取相对路径
+              templatePath = parts.slice(1).join('/');
+              this.logger.info('[ArtifactApplicationService] Template found in different vault', {
+                templateId,
+                templateVaultId: templateVault.id,
+                templateVaultName: templateVault.name,
+                templatePath,
+                targetVaultId: vault.id
+              });
+            } else {
+              // 如果找不到 vault，假设第一部分不是 vault 名称，使用当前 vault
+              templatePath = templateId;
+              this.logger.warn('[ArtifactApplicationService] Vault not found in templateId, using target vault', {
+                vaultName,
+                templateId,
+                targetVaultId: vault.id
+              });
+            }
+          } else {
+            // 如果获取 vault 列表失败，使用当前 vault
+            templatePath = templateId;
+          }
+        } else if (templateId.startsWith('archi-templates/')) {
+          // 已经是相对路径格式：archi-templates/content/markdown/my-template.md
+          templatePath = templateId;
+        } else {
+          // 其他格式，直接使用
+          templatePath = templateId;
+        }
+      } else {
+        // 如果只是模板名称，尝试构建路径（假设是 content 模板）
+        templatePath = `archi-templates/content/markdown/${templateId}`;
+        // 如果模板名称不包含扩展名，添加 .md
+        if (!templateId.includes('.')) {
+          templatePath = `${templatePath}.md`;
+        }
       }
+
+      this.logger.info('[ArtifactApplicationService] Reading template file', {
+        templateId,
+        templateVaultId: templateVault.id,
+        templateVaultName: templateVault.name,
+        templatePath,
+        targetVaultId: vault.id
+      });
       
-      // 直接读取模板文件
-      const readResult = await this.readFile(vault, actualPath);
+      // 从模板所在的 vault 读取模板文件
+      const readResult = await this.readFile(templateVault, templatePath);
       if (readResult.success) {
         templateContent = readResult.value;
-        templatePath = actualPath;
         this.logger.info('[ArtifactApplicationService] Template found by path', {
           templateId,
-          actualPath,
-          templatePath
+          templatePath,
+          contentLength: templateContent.length
         });
       } else {
         // 如果读取失败，记录错误
         this.logger.warn('[ArtifactApplicationService] Template file not found', {
           templateId,
-          actualPath,
+          templatePath,
+          templateVaultId: templateVault.id,
+          templateVaultName: templateVault.name,
           vaultId: vault.id,
-          vaultName: vault.name
+          vaultName: vault.name,
+          error: readResult.error?.message
         });
       }
 
@@ -2012,6 +2070,7 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         // 如果所有方法都失败，返回错误
         this.logger.warn('[ArtifactApplicationService] Template not found', {
           templateId,
+          templatePath,
           vaultId: vault.id,
           viewType
         });

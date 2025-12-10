@@ -296,54 +296,12 @@ export class WebviewRPC {
     });
 
     // Template 相关方法
-    // 注意：只处理 template 类型的 vault
+    // 从所有 vault 加载模板（不限制 vault 类型，因为任何 vault 都可以包含模板）
     this.webviewAdapter.registerMethod('template.list', async (params: { vaultId?: string }) => {
-      // 如果指定了 vaultId，验证 vault 类型
-      if (params.vaultId) {
-        const vaultResult = await this.vaultService.getVault(params.vaultId);
-        if (vaultResult.success && vaultResult.value) {
-          // 只处理 template 类型的 vault
-          if (vaultResult.value.type !== 'template') {
-            this.logger.debug(`Skipping non-template vault: ${vaultResult.value.name} (type: ${vaultResult.value.type})`);
-            return [];
-          }
-        }
-      } else {
-        // 如果没有指定 vaultId，只返回 template 类型的 vault 的模板
-        const vaultsResult = await this.vaultService.listVaults();
-        if (vaultsResult.success) {
-          const templateVaults = vaultsResult.value.filter(v => v.type === 'template');
-          if (templateVaults.length === 0) {
-            return [];
-          }
-          
-          // 合并所有 template vault 的模板
-          const allTemplates: any[] = [];
-          for (const vault of templateVaults) {
-            try {
-              const result = await this.templateService.getTemplates(vault.id);
-              if (result.success) {
-                const templates = result.value.map(template => ({
-                  id: template.id,
-                  name: template.name,
-                  description: template.description,
-                  type: template.type,
-                  category: template.category,
-                  viewType: template.viewType,
-                }));
-                allTemplates.push(...templates);
-              }
-            } catch (error: any) {
-              this.logger.error(`Failed to get templates from vault ${vault.name}:`, error);
-            }
-          }
-          return allTemplates;
-        }
-        return [];
-      }
-      
+      // 直接调用 templateService.getTemplates，它会从所有 vault 或指定 vault 加载模板
       const result = await this.templateService.getTemplates(params.vaultId);
       if (!result.success) {
+        this.logger.error(`Failed to get templates: ${result.error.message}`);
         throw new Error(result.error.message);
       }
       return result.value.map(template => ({

@@ -10,14 +10,14 @@
 - ✅ 返回本地文件路径（便于 AI 工具引用）
 - ✅ 高亮片段返回（snippet 功能）
 - ✅ 无需外部服务（纯本地实现）
-- ✅ 与现有 IPC 桥接架构兼容
+- ✅ 完全独立运行（不依赖 VS Code 扩展或任何插件）
 
 ### 1.2 设计原则
 
-1. **独立性**：MCP Server 拥有独立的 SQLite 数据库，不依赖 VS Code 扩展的数据库
+1. **完全独立性**：MCP Server 是完全独立的进程，不依赖 VS Code 扩展、插件或任何外部服务
 2. **轻量级**：使用 SQLite FTS5，无需向量库或外部服务
-3. **可扩展**：未来可升级为混合搜索（FTS5 + 向量检索）
-4. **兼容性**：保留现有 IPC 桥接功能，新增本地搜索作为补充
+3. **自包含**：直接访问文件系统，自主管理索引和搜索
+4. **可扩展**：未来可升级为混合搜索（FTS5 + 向量检索）
 
 ---
 
@@ -38,20 +38,20 @@
 │   └──────────┬───────────────────┘  │
 │              │                       │
 │   ┌──────────▼───────────────────┐  │
-│   │  工具路由层                    │  │
-│   │  - IPC 桥接工具 (现有)        │  │
-│   │  - 本地 FTS5 搜索工具 (新增)  │  │
+│   │  MCP 工具层                   │  │
+│   │  - search_knowledge_base      │  │
+│   │  - get_documents_for_code     │  │
 │   └──────────┬───────────────────┘  │
 │              │                       │
 │   ┌──────────▼───────────────────┐  │
-│   │  KnowledgeBaseDB (新增)       │  │
+│   │  KnowledgeBaseDB              │  │
 │   │  - SQLite + FTS5              │  │
 │   │  - 文档索引管理               │  │
 │   │  - 全文搜索                   │  │
 │   └──────────┬───────────────────┘  │
 │              │                       │
 │   ┌──────────▼───────────────────┐  │
-│   │  DocumentIndexer (新增)       │  │
+│   │  DocumentIndexer              │  │
 │   │  - 扫描 .architool 目录       │  │
 │   │  - 解析文档内容               │  │
 │   │  - 同步索引                   │  │
@@ -73,16 +73,21 @@
 ### 2.2 数据流
 
 **搜索流程**：
-1. MCP Client 发送 `tools/call` 请求（`search_knowledge_base_fts5`）
-2. MCP Server 路由到本地 FTS5 搜索工具
+1. MCP Client 发送 `tools/call` 请求（`search_knowledge_base` 或 `get_documents_for_code`）
+2. MCP Server 直接使用本地 FTS5 搜索
 3. KnowledgeBaseDB 执行 FTS5 查询
 4. 返回搜索结果（包含路径、片段、元数据）
 
 **索引同步流程**：
 1. MCP Server 启动时检查索引是否需要更新
-2. DocumentIndexer 扫描 `.architool/` 目录
+2. DocumentIndexer 扫描 `.architool/` 目录（直接访问文件系统）
 3. 解析文档内容和元数据
 4. 批量更新 SQLite 数据库
+
+**关键特性**：
+- MCP Server 完全独立运行，不依赖任何插件或外部服务
+- 直接访问文件系统，自主管理索引
+- 无需 IPC 通信，响应速度更快
 
 ---
 
@@ -95,9 +100,9 @@
 ```
 
 **选择理由**：
-- 与 VS Code 扩展的 SQLite 数据库分离（避免冲突）
 - 使用系统级缓存目录（跨工作区共享）
 - 便于清理和重建
+- MCP Server 独立管理，不与其他组件共享数据库
 
 ### 3.2 表结构
 
@@ -106,7 +111,8 @@
 ```sql
 CREATE TABLE documents (
   id TEXT PRIMARY KEY,                    -- 文档唯一 ID（基于文件路径的 hash）
-  path TEXT NOT NULL,                     -- 文档完整路径（相对于工作区根目录）
+  path TEXT NOT NULL,                     -- 文档绝对路径（完整文件系统路径）
+  workspace_root TEXT,                    -- 工作区根目录（用于相对路径计算）
   vault_name TEXT,                        -- Vault 名称
   content TEXT NOT NULL,                  -- 文档全文内容
   metadata TEXT,                          -- JSON 格式的元数据
@@ -116,6 +122,7 @@ CREATE TABLE documents (
 );
 
 CREATE INDEX documents_path_index ON documents (path);
+CREATE INDEX documents_workspace_index ON documents (workspace_root);
 CREATE INDEX documents_vault_index ON documents (vault_name);
 ```
 
@@ -204,7 +211,10 @@ interface SearchOptions {
 }
 
 interface SearchResult {
-  path: string;                     // 文档路径（相对路径）
+  path: string;                     // 文档绝对路径
+  relativePath?: string;            // 文档相对路径（相对于工作区根目录）
+  workspaceRoot?: string;           // 工作区根目录
+  vaultName?: string;               // Vault 名称
   title?: string;                   // 文档标题
   snippet: string;                  // 高亮片段
   score?: number;                   // 相关性评分（FTS5 rank）
@@ -214,27 +224,51 @@ interface SearchResult {
 
 ### 4.3 MCP 工具定义
 
+**search_knowledge_base**：
 ```typescript
 {
-  name: 'search_knowledge_base_fts5',
-  description: '使用 SQLite FTS5 全文搜索本地知识库。支持中文搜索，返回文档路径和高亮片段。',
+  name: 'search_knowledge_base',
+  description: 'Search the architecture knowledge base for design documents, design diagrams, standards, best practices, requirements, and other architecture-related content. Uses SQLite FTS5 for fast local search. Supports Chinese and full-text search with snippet highlighting.',
   inputSchema: {
     type: 'object',
     properties: {
       query: {
         type: 'string',
-        description: '搜索查询（支持 FTS5 语法：短语、AND、OR、NOT、前缀匹配）'
+        description: 'Search query string (supports FTS5 syntax: phrases, AND, OR, NOT, prefix matching)'
       },
       vaultName: {
         type: 'string',
-        description: '可选：过滤特定 vault'
+        description: 'Optional: Filter results to a specific vault by name'
+      },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional: Filter by tags (AND relationship)'
       },
       limit: {
         type: 'number',
-        description: '结果数量限制（默认 20）'
+        description: 'Optional: Maximum number of results to return (default: 50)'
       }
     },
     required: ['query']
+  }
+}
+```
+
+**get_documents_for_code**：
+```typescript
+{
+  name: 'get_documents_for_code',
+  description: 'Get architecture documents, design diagrams, standards, best practices, and requirements associated with a specific code file or directory path. Uses local FTS5 search to find related documents.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      codePath: {
+        type: 'string',
+        description: 'Code file or directory path (relative to workspace root). Supports wildcards like "src/auth/*"'
+      }
+    },
+    required: ['codePath']
   }
 }
 ```
@@ -245,14 +279,22 @@ interface SearchResult {
 
 ### 5.1 索引策略
 
+**工作区发现**：
+- 默认扫描 `~/.architool/` 目录下的所有 vault
+- 支持通过环境变量 `ARCHITOOL_WORKSPACES` 指定额外工作区路径（逗号分隔）
+- 支持通过配置文件 `~/.architool/mcp-server-config.json` 指定工作区列表
+- 自动识别包含 `.architool/` 子目录的路径
+
 **全量索引**：
 - MCP Server 启动时执行（如果数据库不存在或需要重建）
-- 扫描所有 `.architool/{vault-name}/` 目录
+- 扫描所有发现的 `.architool/{vault-name}/` 目录
 - 排除 `.metadata/` 和系统目录
+- 支持多工作区统一索引
 
 **增量索引**：
 - 定期检查文件修改时间（可选）
 - 仅更新变更的文件
+- 自动删除已不存在文件的索引
 
 **索引文件类型**：
 - `.md` - Markdown 文档
@@ -307,34 +349,30 @@ class DocumentIndexer {
 
 ## 🔌 六、MCP Server 集成
 
-### 6.1 工具路由策略
+### 6.1 工具实现策略
 
-**双模式支持**：
+**完全本地实现**：
 
-1. **IPC 桥接模式**（现有）：
-   - `search_knowledge_base` → 通过 IPC 调用 VS Code 扩展
-   - `get_documents_for_code` → 通过 IPC 调用 VS Code 扩展
-
-2. **本地 FTS5 模式**（新增）：
-   - `search_knowledge_base_fts5` → 直接使用 SQLite FTS5
-   - 不依赖 VS Code 扩展运行
+- `search_knowledge_base` → 直接使用 SQLite FTS5 本地搜索
+- `get_documents_for_code` → 基于代码路径的本地 FTS5 搜索
 
 **优势**：
-- 即使 VS Code 扩展未运行，MCP Server 仍可提供搜索功能
-- 响应速度更快（无需 IPC 通信）
-- 降低对扩展的依赖
+- 完全独立运行，不依赖任何插件或外部服务
+- 响应速度更快（无需 IPC 通信，直接访问数据库）
+- 可靠性更高（无外部依赖，减少故障点）
+- 可随时使用（无需等待插件启动）
 
 ### 6.2 代码结构
 
 ```
 packages/architool-mcp-server/
 ├── src/
-│   ├── mcp-server.ts              # 主入口（现有）
-│   ├── knowledge-base-db.ts       # SQLite FTS5 数据库模块（新增）
-│   ├── document-indexer.ts       # 文档索引器（新增）
+│   ├── mcp-server.ts              # 主入口
+│   ├── knowledge-base-db.ts       # SQLite FTS5 数据库模块
+│   ├── document-indexer.ts       # 文档索引器
 │   └── tools/
-│       ├── ipc-tools.ts          # IPC 桥接工具（现有）
-│       └── fts5-search-tool.ts   # FTS5 搜索工具（新增）
+│       ├── search-tool.ts        # 搜索工具实现
+│       └── code-documents-tool.ts # 代码关联文档工具
 ├── package.json
 └── tsconfig.json
 ```
@@ -344,26 +382,30 @@ packages/architool-mcp-server/
 ```typescript
 async function initializeMCPServer() {
   // 1. 初始化知识库数据库
-  const db = new KnowledgeBaseDB('~/.architool/cache/knowledge.db');
-  db.initialize();
+  const dbPath = path.join(os.homedir(), '.architool', 'cache', 'knowledge.db');
+  const db = new KnowledgeBaseDB(dbPath);
+  await db.initialize();
   
   // 2. 检查并重建索引（如果需要）
-  const indexer = new DocumentIndexer(db);
+  const architoolRoot = path.join(os.homedir(), '.architool');
+  const indexer = new DocumentIndexer(db, architoolRoot);
   if (await indexer.needsRebuild()) {
     await indexer.rebuildIndex();
   }
   
   // 3. 注册 MCP 工具
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: [
-        // IPC 桥接工具（现有）
-        { name: 'search_knowledge_base', ... },
-        { name: 'get_documents_for_code', ... },
-        // FTS5 本地搜索工具（新增）
-        { name: 'search_knowledge_base_fts5', ... }
-      ]
-    };
+  mcpServer.registerTool('search_knowledge_base', {
+    description: '...',
+    inputSchema: { ... }
+  }, async (params) => {
+    return await db.search(params);
+  });
+  
+  mcpServer.registerTool('get_documents_for_code', {
+    description: '...',
+    inputSchema: { ... }
+  }, async (params) => {
+    return await db.searchByCodePath(params.codePath);
   });
 }
 ```
@@ -400,15 +442,17 @@ async function initializeMCPServer() {
 
 ### 阶段 3：MCP 工具集成（优先级：中）
 
-5. ✅ 创建 FTS5 搜索工具
-   - 实现工具处理函数
-   - 参数验证
-   - 错误处理
+5. ✅ 创建搜索工具
+   - 实现 `search_knowledge_base` 工具处理函数
+   - 实现 `get_documents_for_code` 工具处理函数
+   - 参数验证和错误处理
+   - 结果格式化（符合 MCP 协议）
 
 6. ✅ 集成到 MCP Server
-   - 注册新工具
-   - 初始化流程
+   - 使用 `McpServer.registerTool` 注册工具
+   - 初始化流程（数据库 + 索引）
    - 生命周期管理
+   - 错误处理和日志记录
 
 ### 阶段 4：优化和测试（优先级：低）
 
@@ -499,23 +543,51 @@ async function initializeMCPServer() {
 
 ## ⚠️ 十一、注意事项
 
-### 11.1 数据一致性
+### 11.1 索引同步策略
 
-**问题**：MCP Server 的索引可能与 VS Code 扩展的数据不同步
+**全量索引**：
+- MCP Server 启动时检查索引是否需要重建
+- 扫描 `~/.architool/` 目录下的所有 vault
+- 自动检测文件变更（基于修改时间）
+
+**增量更新**：
+- 定期检查文件修改时间（可选）
+- 仅更新变更的文件
+- 删除已不存在的文件索引
+
+**索引重建触发条件**：
+1. 数据库不存在
+2. 数据库版本不匹配
+3. 索引时间戳过期（超过配置的阈值）
+
+### 11.2 工作区发现和索引
+
+**工作区发现策略**：
+1. **主目录扫描**：扫描 `~/.architool/` 下的所有 vault 目录
+2. **环境变量**：支持 `ARCHITOOL_WORKSPACES` 环境变量指定额外工作区路径
+3. **配置文件**：可选配置文件 `~/.architool/mcp-server-config.json` 指定工作区列表
+
+**多工作区支持**：
+- MCP Server 是全局进程，索引所有发现的 `.architool/` 目录
+- 统一索引到 `~/.architool/cache/knowledge.db`
+- 在搜索结果中标识 vault 名称和工作区路径
+- 支持按 vault 名称过滤
+
+**路径处理**：
+- 存储完整路径（包含工作区根目录）
+- 在搜索结果中返回相对路径和绝对路径
+- 使用 `path.posix` 标准化路径（跨平台兼容）
+- 支持跨工作区搜索
+
+### 11.3 文件路径处理
+
+**问题**：不同操作系统的路径格式不同，需要跨平台支持
 
 **解决方案**：
-1. MCP Server 启动时检查索引时间戳
-2. 如果索引过期，自动重建
-3. 提供手动重建索引的命令（可选）
-
-### 11.2 多工作区支持
-
-**问题**：MCP Server 是全局的，但知识库是工作区级别的
-
-**解决方案**：
-1. 索引所有工作区的 `.architool/` 目录
-2. 在搜索结果中标识 vault 名称
-3. 支持按 vault 过滤
+1. 存储时使用绝对路径（便于跨工作区搜索）
+2. 使用 `path.posix` 标准化路径（统一使用 `/` 分隔符）
+3. 在搜索结果中返回标准化路径（相对路径和绝对路径）
+4. 支持路径通配符匹配（用于 `get_documents_for_code`）
 
 ### 11.3 文件路径处理
 
@@ -563,12 +635,18 @@ async function initializeMCPServer() {
 
 ## 🎯 总结
 
-本方案提供了一个**轻量级、高性能、易扩展**的本地知识库搜索解决方案：
+本方案提供了一个**轻量级、高性能、完全独立**的本地知识库搜索解决方案：
 
-1. **独立性**：MCP Server 拥有独立的 SQLite 数据库，不依赖 VS Code 扩展
-2. **性能**：使用 FTS5 实现毫秒级搜索响应
-3. **兼容性**：保留现有 IPC 桥接功能，新增本地搜索作为补充
+1. **完全独立性**：MCP Server 是完全独立的进程，不依赖 VS Code 扩展、插件或任何外部服务
+2. **高性能**：使用 FTS5 实现毫秒级搜索响应，直接访问本地数据库
+3. **自包含**：直接访问文件系统，自主管理索引和搜索，无需 IPC 通信
 4. **可扩展性**：未来可升级为混合搜索（FTS5 + 向量检索）
+
+**核心优势**：
+- ✅ 无需等待插件启动，随时可用
+- ✅ 响应速度快（无 IPC 通信开销）
+- ✅ 可靠性高（无外部依赖）
+- ✅ 易于部署（单个可执行文件）
 
 **下一步**：按照实现步骤，从阶段 1 开始逐步实现。
 

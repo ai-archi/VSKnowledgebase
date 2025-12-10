@@ -134,10 +134,10 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       name: vaultResult.value.name,
     };
 
-    // 构建目标文件夹路径（相对于 artifacts 目录）
+    // 构建目标文件夹路径（新结构：直接放在 vault 根目录，不再使用 artifacts 子目录）
     const targetFolderPath = folderPath === '' 
-      ? `artifacts/${folderName}`
-      : `artifacts/${folderPath}/${folderName}`;
+      ? folderName
+      : `${folderPath}/${folderName}`;
 
     // 创建文件夹
     const createResult = await this.artifactService.createDirectory(vault, targetFolderPath);
@@ -147,90 +147,194 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
 
     // 如果有模板 ID，读取模板文件并根据模板创建目录结构
     if (templateId) {
-      // 读取模板
-      const templateResult = await this.templateService.getTemplate(templateId, vaultId);
-      if (!templateResult.success || templateResult.value.type !== 'structure') {
-        this.logger.warn(`Template not found or not a structure template: ${templateId}`);
-      } else {
-        const template = templateResult.value;
-        
-        // 准备变量映射（支持 folderName 变量）
-        const variables = {
-          folderName: folderName,
-        };
+      // 准备变量映射（支持 folderName 变量）
+      const variables = {
+        folderName: folderName,
+      };
 
-        // 读取模板文件内容（YAML 格式）
-        const templatePath = `templates/structure/${templateId}.yml`;
-        const templateContentResult = await this.artifactService.readFile(vault, templatePath);
+      // 从模板ID中提取 vault 名称和文件路径
+      // 模板ID格式可能是：
+      // 1. microservice-template (只有模板名称，从当前 vault 查找)
+      // 2. Demo Vault - AI Enhancement/archi-templates/structure/microservice-template.yml (完整路径，包含 vault 名称)
+      // 3. archi-templates/structure/microservice-template.yml (相对路径，从当前 vault 查找)
+      let templateVault: VaultReference = vault; // 默认使用目标 vault
+      let templateFilePath: string;
+      
+      if (templateId.includes('/')) {
+        const parts = templateId.split('/');
+        // 检查第一部分是否是 vault 名称（不是 "archi-templates"）
+        if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+          // 第一部分可能是 vault 名称，尝试查找该 vault
+          const vaultName = parts[0];
+          const vaultsResult = await this.vaultService.listVaults();
+          if (vaultsResult.success) {
+            const templateVaultFound = vaultsResult.value.find(v => v.name === vaultName);
+            if (templateVaultFound) {
+              templateVault = { id: templateVaultFound.id, name: templateVaultFound.name };
+              // 去掉 vault 名称前缀，获取相对路径
+              templateFilePath = parts.slice(1).join('/');
+              this.logger.info('Template found in different vault', {
+                templateVaultId: templateVault.id,
+                templateVaultName: templateVault.name,
+                templateFilePath,
+                targetVaultId: vault.id
+              });
+            } else {
+              // 如果找不到 vault，假设第一部分不是 vault 名称，使用当前 vault
+              templateFilePath = templateId;
+              this.logger.warn('Vault not found in templateId, using target vault', {
+                vaultName,
+                templateId,
+                targetVaultId: vault.id
+              });
+            }
+          } else {
+            // 如果获取 vault 列表失败，使用当前 vault
+            templateFilePath = templateId;
+          }
+        } else if (templateId.startsWith('archi-templates/')) {
+          // 已经是相对路径格式：archi-templates/structure/microservice-template.yml
+          templateFilePath = templateId;
+        } else {
+          // 其他格式，尝试构建路径
+          const fileName = parts[parts.length - 1];
+          if (fileName.includes('.')) {
+            templateFilePath = `archi-templates/structure/${fileName}`;
+          } else {
+            templateFilePath = `archi-templates/structure/${fileName}.yml`;
+          }
+        }
+      } else {
+        // 如果只是模板名称，构建完整路径
+        templateFilePath = `archi-templates/structure/${templateId}.yml`;
+      }
+
+      this.logger.info('Reading template file', {
+        templateId,
+        templateVaultId: templateVault.id,
+        templateVaultName: templateVault.name,
+        templateFilePath,
+        targetVaultId: vault.id
+      });
+
+      // 从模板所在的 vault 读取模板文件内容（YAML 格式）
+      const templateContentResult = await this.artifactService.readFile(templateVault, templateFilePath);
+      
+      if (templateContentResult.success) {
+        this.logger.info('Template file read successfully, rendering and parsing', {
+          templateId,
+          templateFilePath,
+          contentLength: templateContentResult.value.length
+        });
+
+        // 使用 jinja2 模板语言替换变量（处理 YAML 中的 {{variable}}）
+        const templateStructureService = new TemplateStructureDomainServiceImpl();
+        const renderedYaml = templateStructureService.renderTemplate(templateContentResult.value, variables);
         
-        if (templateContentResult.success) {
-          // 使用 jinja2 模板语言替换变量（处理 YAML 中的 {{variable}}）
-          const templateStructureService = new TemplateStructureDomainServiceImpl();
-          const renderedYaml = templateStructureService.renderTemplate(templateContentResult.value, variables);
+        this.logger.debug('Template rendered with variables', {
+          templateId,
+          variables,
+          renderedLength: renderedYaml.length
+        });
+        
+        // 解析 YAML 为对象
+        try {
+          const yamlData = yaml.load(renderedYaml) as any;
+          const structureArray = yamlData?.structure || (Array.isArray(yamlData) ? yamlData : null);
           
-          // 解析 YAML 为对象
-          try {
-            const yamlData = yaml.load(renderedYaml) as any;
-            const structureArray = yamlData?.structure || (Array.isArray(yamlData) ? yamlData : null);
+          if (structureArray && Array.isArray(structureArray)) {
+            this.logger.info('Template structure parsed successfully', {
+              templateId,
+              structureItemCount: structureArray.length,
+              firstItem: structureArray[0] ? {
+                type: structureArray[0].type,
+                name: structureArray[0].name,
+                hasChildren: !!(structureArray[0].children && structureArray[0].children.length > 0)
+              } : null
+            });
+
+            // 直接使用解析后的 YAML 数据创建 ArtifactTemplate 对象
+            // 变量已经在 YAML 渲染时替换过了
+            const artifactTemplate = new ArtifactTemplate(
+              structureArray as any,
+              variables,
+              templateContentResult.value
+            );
             
-            if (structureArray && Array.isArray(structureArray)) {
-              // 直接使用解析后的 YAML 数据创建 ArtifactTemplate 对象
-              // 变量已经在 YAML 渲染时替换过了
-              const artifactTemplate = new ArtifactTemplate(
-                structureArray as any,
-                variables,
-                templateContentResult.value
+            if (artifactTemplate.isValid()) {
+              this.logger.info('ArtifactTemplate is valid, creating folder structure', {
+                templateId,
+                targetVaultId: vault.id,
+                targetFolderPath: targetFolderPath,
+                structureItemCount: artifactTemplate.structure.length
+              });
+
+              // 使用 ArtifactTemplate 创建文件夹结构
+              // targetFolderPath 是相对于 vault 根目录的路径（不包含 artifacts/ 前缀）
+              const structureResult = await this.artifactService.createFolderStructureFromTemplate(
+                vault,
+                targetFolderPath,
+                artifactTemplate
               );
               
-              if (artifactTemplate.isValid()) {
-                // 使用 ArtifactTemplate 创建文件夹结构
-                const structureResult = await this.artifactService.createFolderStructureFromTemplate(
-                  vault,
-                  targetFolderPath,
-                  artifactTemplate
-                );
-                
-                if (!structureResult.success) {
-                  this.logger.error(`Failed to create structure from template: ${structureResult.error?.message}`, {
-                    vaultId: vault.id,
-                    folderName,
-                    templateId,
-                    error: structureResult.error
-                  });
-                }
-              } else {
-                this.logger.error('Failed to parse template structure', {
+              if (!structureResult.success) {
+                this.logger.error(`Failed to create structure from template: ${structureResult.error?.message}`, {
                   vaultId: vault.id,
                   folderName,
-                  templateId
+                  templateId,
+                  templateFilePath,
+                  targetFolderPath,
+                  error: structureResult.error
+                });
+              } else {
+                this.logger.info('Folder structure created successfully from template', {
+                  vaultId: vault.id,
+                  folderName,
+                  templateId,
+                  targetFolderPath
                 });
               }
             } else {
-              this.logger.error('Template structure is not an array', {
+              this.logger.error('Failed to parse template structure - ArtifactTemplate is invalid', {
                 vaultId: vault.id,
                 folderName,
-                templateId
+                templateId,
+                templateFilePath,
+                structureArray
               });
             }
-          } catch (yamlError: any) {
-            this.logger.error(`Failed to parse rendered YAML: ${yamlError.message}`, {
+          } else {
+            this.logger.error('Template structure is not an array', {
               vaultId: vault.id,
               folderName,
               templateId,
-              error: yamlError
+              templateFilePath,
+              yamlData
             });
           }
-        } else {
-          this.logger.warn(`Failed to read template file: ${templatePath}`, {
+        } catch (yamlError: any) {
+          this.logger.error(`Failed to parse rendered YAML: ${yamlError.message}`, {
             vaultId: vault.id,
+            folderName,
             templateId,
-            error: templateContentResult.error
+            templateFilePath,
+            error: yamlError,
+            stack: yamlError.stack
           });
         }
+      } else {
+        this.logger.error(`Failed to read template file: ${templateFilePath}`, {
+          vaultId: vault.id,
+          templateVaultId: templateVault.id,
+          templateVaultName: templateVault.name,
+          templateId,
+          templateFilePath,
+          error: templateContentResult.error
+        });
       }
     }
 
-    // 返回创建的文件夹路径（相对于 artifacts 目录）
+    // 返回创建的文件夹路径（相对于 vault 根目录）
     const relativePath = folderPath === '' 
       ? folderName
       : `${folderPath}/${folderName}`;

@@ -38,23 +38,6 @@
             :prefix-icon="Document"
           />
         </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="文件类型">
-              <el-select
-                v-model="formData.fileType"
-                placeholder="选择文件类型"
-                clearable
-                style="width: 100%"
-              >
-                <el-option label="文档 (Markdown)" value="document" />
-                <el-option label="任务 (Task)" value="task" />
-                <el-option label="设计图 (Diagram)" value="diagram" />
-                <el-option label="模板 (Template)" value="template" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="文件模板">
               <el-select
                 v-model="formData.templateId"
@@ -62,10 +45,10 @@
                 filterable
                 clearable
                 style="width: 100%"
-                :disabled="!formData.vaultId || templates.length === 0"
+                :disabled="!formData.vaultId || markdownTemplates.length === 0"
               >
                 <el-option
-                  v-for="template in templates"
+                  v-for="template in markdownTemplates"
                   :key="template.id"
                   :label="template.name"
                   :value="template.id"
@@ -80,8 +63,6 @@
                 </el-option>
               </el-select>
             </el-form-item>
-          </el-col>
-        </el-row>
       </el-form>
     </div>
 
@@ -185,8 +166,6 @@ import {
   ElOption,
   ElForm,
   ElFormItem,
-  ElRow,
-  ElCol,
   ElIcon,
   ElEmpty,
   ElTag,
@@ -215,6 +194,7 @@ interface Template {
   name: string;
   description?: string;
   type: 'structure' | 'content';
+  category?: string;
 }
 
 interface FileItem {
@@ -231,7 +211,6 @@ interface FileItem {
 
 interface FormData {
   fileName: string;
-  fileType: string;
   vaultId: string;
   templateId: string;
 }
@@ -245,7 +224,6 @@ const emit = defineEmits<Emits>();
 
 const formData = ref<FormData>({
   fileName: '',
-  fileType: 'document', // 默认值为文档
   vaultId: '',
   templateId: '',
 });
@@ -258,6 +236,32 @@ const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
 const creating = ref(false);
 const searchDebounceTimer = ref<number | null>(null);
+
+// 过滤模板：只显示 markdown 模板，排除 mermaid、plantuml、archimate 和任务模板
+const markdownTemplates = computed(() => {
+  return templates.value.filter((template) => {
+    const templateId = template.id.toLowerCase();
+    // 排除任务模板（路径包含 /task/ 或 category 为 task）
+    // 任务模板是 yaml 类型，属性 category: task
+    if (templateId.includes('/task/') || template.category === 'task') {
+      return false;
+    }
+    // 排除 mermaid 模板（路径包含 mermaid 或扩展名为 .mmd）
+    if (templateId.includes('/mermaid/') || templateId.endsWith('.mmd')) {
+      return false;
+    }
+    // 排除 plantuml 模板（路径包含 plantuml 或扩展名为 .puml）
+    if (templateId.includes('/plantuml/') || templateId.endsWith('.puml')) {
+      return false;
+    }
+    // 排除 archimate 模板（扩展名为 .archimate）
+    if (templateId.endsWith('.archimate')) {
+      return false;
+    }
+    // 只保留 markdown 模板（路径包含 markdown 或扩展名为 .md，或者没有明确类型的内容模板）
+    return true;
+  });
+});
 
 const filteredFiles = computed(() => {
   if (!formData.value.fileName.trim()) {
@@ -275,7 +279,6 @@ const filteredFiles = computed(() => {
 const canCreate = computed(() => {
   return (
     formData.value.fileName.trim() !== '' &&
-    formData.value.fileType !== '' &&
     formData.value.vaultId !== ''
   );
 });
@@ -314,9 +317,10 @@ onMounted(() => {
   }
   loadVaults();
   loadCommands(); // 加载所有 vault 的命令
-  // 如果有初始 vaultId，加载模板和文件
+  // 加载所有模板（不传 vaultId，从所有 vault 加载）
+  loadTemplates(undefined);
+  // 如果有初始 vaultId，加载文件
   if (formData.value.vaultId) {
-    loadTemplates(formData.value.vaultId);
     loadFiles();
   }
 });
@@ -333,9 +337,9 @@ const loadVaults = async () => {
 
 // 移除 handleVaultChange，不再需要
 
-const loadTemplates = async (vaultId: string) => {
+const loadTemplates = async (vaultId?: string) => {
   try {
-    const templatesList = await extensionService.call<any[]>('template.list', { vaultId });
+    const templatesList = await extensionService.call<any[]>('template.list', vaultId ? { vaultId } : {});
     templates.value = templatesList || [];
   } catch (err: any) {
     console.error('Failed to load templates', err);
@@ -458,21 +462,8 @@ const handleCreate = async () => {
 
   try {
     creating.value = true;
-    // 根据文件类型确定扩展名
-    const getExtension = (fileType: string): string => {
-      switch (fileType) {
-        case 'document':
-          return 'md';
-        case 'diagram':
-          return 'mmd';
-        case 'design':
-          return 'md';
-        default:
-          return 'md';
-      }
-    };
-    
-    const extension = getExtension(formData.value.fileType);
+    // 固定为 md 文件
+    const extension = 'md';
     const fileName = formData.value.fileName.trim();
     
     // 构建文件路径：如果有初始文件夹路径，在文件夹下创建；否则在根目录创建

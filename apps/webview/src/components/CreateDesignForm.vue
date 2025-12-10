@@ -390,17 +390,18 @@ onMounted(() => {
       designType: initialData.designType
     });
   }
-  // 如果有初始 vaultId，加载模板和文件
+  // 加载所有模板（不传 vaultId，从所有 vault 加载）
+  loadTemplates(undefined);
+  // 如果有初始 vaultId，加载文件
   if (initialVaultId.value) {
-    loadTemplates(initialVaultId.value);
     loadFiles();
   }
   loadCommands();
 });
 
-const loadTemplates = async (vaultId: string) => {
+const loadTemplates = async (vaultId?: string) => {
   try {
-    const templatesList = await extensionService.call<any[]>('template.list', { vaultId });
+    const templatesList = await extensionService.call<any[]>('template.list', vaultId ? { vaultId } : {});
     // 只加载内容类型的模板（设计图使用内容模板）
     templates.value = (templatesList || []).filter(t => t.type === 'content');
   } catch (err: any) {

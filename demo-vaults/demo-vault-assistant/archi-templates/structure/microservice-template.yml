@@ -1,0 +1,152 @@
+name: microservice-template
+description: 单微服务标准知识库目录结构
+type: dir-structure
+structure:
+  # 1. 服务概览
+  - type: directory
+    name: overview
+    description: 微服务整体概览
+    children:
+      - type: file
+        name: service-overview.md
+        description: 服务简介、定位、上下文
+      - type: file
+        name: context-diagram.md
+        description: 上下文图（C4 Model L1/L2）
+      - type: file
+        name: architecture.md
+        description: 架构概览（C4 L3、分层结构）
+
+  # 2. DDD 领域文档
+  - type: directory
+    name: domain
+    description: 领域模型（DDD）
+    children:
+      - type: file
+        name: domain-model.md
+        description: 聚合、实体、值对象、领域事件
+      - type: file
+        name: use-cases.md
+        description: 主要业务用例
+      - type: file
+        name: glossary.md
+        description: 领域术语表
+
+  # 3. API 文档
+  - type: directory
+    name: apis
+    description: 服务接口文档（REST/GraphQL/Event）
+    children:
+      - type: file
+        name: rest-api.md
+        description: HTTP API 定义
+      - type: file
+        name: event-api.md
+        description: 事件接口（事件驱动架构）
+      - type: directory
+        name: contracts
+        description: OpenAPI/JSON Schema 合同文件
+
+  # 4. 数据存储
+  - type: directory
+    name: storage
+    description: 数据库与数据流
+    children:
+      - type: file
+        name: schema.md
+        description: 数据库结构文档
+      - type: directory
+        name: ddl
+        description: 数据库 DDL 版本文件
+      - type: file
+        name: migration-history.md
+        description: 迁移历史（适配 Anchor Model）
+      - type: file
+        name: dataflow.md
+        description: 数据流、事件流说明
+
+  # 5. 运维 & SRE
+  - type: directory
+    name: operations
+    description: 运维、部署、可观测性
+    children:
+      - type: file
+        name: deployment.md
+        description: 部署架构（K8s/Mesh）
+      - type: file
+        name: runbook.md
+        description: 故障处理手册
+      - type: file
+        name: sre.md
+        description: SLA/SLO/SLI 设计
+      - type: file
+        name: observability.md
+        description: Metrics/Logs/Tracing
+      - type: file
+        name: dependencies.md
+        description: 外部依赖清单
+
+  # 6. 测试
+  - type: directory
+    name: testing
+    description: 测试策略与记录
+    children:
+      - type: file
+        name: test-strategy.md
+        description: 单测、集测、契约测试策略
+      - type: file
+        name: performance-test.md
+        description: 性能/压力测试
+      - type: directory
+        name: test-cases
+        description: 测试用例集
+
+  # 7. 安全
+  - type: directory
+    name: security
+    description: 安全策略
+    children:
+      - type: file
+        name: threat-model.md
+        description: 威胁建模（STRIDE）
+      - type: file
+        name: authz-authn.md
+        description: 鉴权认证策略
+      - type: file
+        name: data-protection.md
+        description: 数据保护、加密、脱敏
+      - type: file
+        name: audit.md
+        description: 审计日志规范
+
+  # 8. 交付 & CI/CD
+  - type: directory
+    name: delivery
+    description: 交付、版本管理、CI-CD
+    children:
+      - type: file
+        name: ci.md
+        description: CI 流水线配置
+      - type: file
+        name: cd.md
+        description: CD / 灰度 / 蓝绿发布
+      - type: file
+        name: environments.md
+        description: 环境说明（dev/stage/prod）
+      - type: directory
+        name: release-notes
+        description: 发布说明记录
+
+  # 9. 架构决策 ADR
+  - type: directory
+    name: decisions
+    description: 架构决策记录（ADR）
+    children:
+      - type: file
+        name: ADR-0001-template.md
+        description: ADR 模板文件/示例
+
+  # 根 README
+  - type: file
+    name: README.md
+    description: 微服务文档入口说明

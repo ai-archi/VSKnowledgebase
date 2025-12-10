@@ -2,7 +2,8 @@
   <div class="create-folder-form">
     <!-- 头部：操作按钮和创建按钮 -->
     <div class="header-section">
-      <div class="action-buttons-section">
+      <!-- 暂时隐藏AI按钮 -->
+      <!-- <div class="action-buttons-section">
         <el-button-group>
           <el-button
             v-for="cmd in commands"
@@ -13,7 +14,7 @@
             {{ cmd.name }}
           </el-button>
         </el-button-group>
-      </div>
+      </div> -->
       <div class="create-button-section">
         <el-button
           type="primary"
@@ -70,7 +71,7 @@
           </el-select>
           <div v-if="formData.vaultId && folderTemplates.length === 0" class="template-hint">
             <span style="font-size: 12px; color: var(--vscode-descriptionForeground, #999999);">
-              当前 Vault 没有可用的文件夹模板（structure 类型）
+              所有 Vault 都没有可用的文件夹模板（structure 类型）
             </span>
           </div>
         </el-form-item>
@@ -318,9 +319,10 @@ onMounted(() => {
   }
   loadVaults();
   loadCommands();
-  // 加载模板和文件
+  // 加载所有模板（不传 vaultId，从所有 vault 加载）
+  loadTemplates(undefined);
+  // 如果有初始 vaultId，加载文件
   if (formData.value.vaultId) {
-    loadTemplates(formData.value.vaultId);
     loadFiles();
   }
 });
@@ -335,9 +337,9 @@ const loadVaults = async () => {
   }
 };
 
-const loadTemplates = async (vaultId: string) => {
+const loadTemplates = async (vaultId?: string) => {
   try {
-    const templates = await extensionService.call<any[]>('template.list', { vaultId });
+    const templates = await extensionService.call<any[]>('template.list', vaultId ? { vaultId } : {});
     allTemplates.value = templates || [];
   } catch (err: any) {
     console.error('Failed to load templates', err);
