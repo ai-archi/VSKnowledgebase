@@ -151,6 +151,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         status: options.status || 'pending',
         priority: options.priority,
         dueDate: options.dueDate ? new Date(options.dueDate).toISOString() : undefined,
+        category: options.category || 'task', // 默认分类为 'task'
         createdAt: now,
         updatedAt: now,
         // 流程定义
@@ -186,6 +187,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         status: options.status || 'pending',
         priority: options.priority,
         dueDate: options.dueDate,
+        category: options.category || 'task',
         artifactId: taskId,
         artifactPath: artifactPath,
         vaultId: options.vaultId,
@@ -227,6 +229,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
             status: taskData.status || 'pending',
             priority: taskData.priority,
             dueDate: taskData.dueDate ? new Date(taskData.dueDate) : undefined,
+            category: taskData.category || 'task', // 默认分类为 'task'
             artifactId: taskData.id,
             artifactPath: filePath,
             vaultId: vaultId,
@@ -249,6 +252,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
             status: frontMatter.status || 'pending',
             priority: frontMatter.priority,
             dueDate: frontMatter.dueDate ? new Date(frontMatter.dueDate) : undefined,
+            category: frontMatter.category || 'task', // 默认分类为 'task'
             artifactId: frontMatter.id,
             artifactPath: filePath,
             vaultId: vaultId,
@@ -262,6 +266,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         id: uuidv4(), // 临时 ID
         title: fileName,
         status: 'pending',
+        category: 'task', // 默认分类为 'task'
         artifactId: '',
         artifactPath: filePath,
         vaultId: vaultId,

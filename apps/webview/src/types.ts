@@ -38,6 +38,8 @@ export interface Task {
   vaultId: string;
   workflowStep?: string;
   workflowData?: any;
+  description?: string;
+  category?: 'task' | 'issue' | 'story'; // 任务分类：任务/问题/故事
   createdAt?: Date | string;
 }
 

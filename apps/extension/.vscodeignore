@@ -47,7 +47,9 @@ node_modules/
 ../../packages/**
 # 但允许 dist/mcp-server（已复制的构建产物）
 !dist/mcp-server/**
-# 明确包含 demo-vaults 目录（打包时需要包含）
+# 明确包含 dist/demo-vaults 目录（打包时需要包含）
+!dist/demo-vaults/**
+# 向后兼容：也包含 demo-vaults 目录（如果存在）
 !demo-vaults/**
 
 # 注意：dist/ 目录必须包含（不要在这里排除）

@@ -497,7 +497,7 @@
   "scripts": {
     "compile": "tsc -p tsconfig.json && npm run copy:resources",
     "copy:resources": "mkdir -p dist/extension/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml dist/extension/resources/templates/ 2>/dev/null || true",
-    "copy:demo-vaults": "rm -rf demo-vaults && mkdir -p demo-vaults && cp -r ../../demo-vaults/* demo-vaults/ 2>/dev/null || true",
+    "copy:demo-vaults": "rm -rf dist/demo-vaults && mkdir -p dist/demo-vaults && cp -r ../../demo-vaults/* dist/demo-vaults/ 2>/dev/null || true",
     "watch": "tsc -p tsconfig.json --watch",
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",

@@ -11,6 +11,7 @@ export interface Task {
   artifactId: string;
   artifactPath: string;
   vaultId: string;
+  category?: 'task' | 'issue' | 'story'; // 任务分类：任务/问题/故事
 }
 
 export interface CreateTaskOptions {
@@ -21,6 +22,7 @@ export interface CreateTaskOptions {
   priority?: Task['priority'];
   dueDate?: Date;
   templateId?: string;
+  category?: 'task' | 'issue' | 'story'; // 任务分类，默认为 'task'
 }
 
 export interface TaskTemplate {

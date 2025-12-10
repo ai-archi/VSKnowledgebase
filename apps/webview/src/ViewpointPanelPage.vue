@@ -20,17 +20,17 @@
         />
       </div>
 
-      <!-- 右侧：任务流程可视化 -->
+      <!-- 右侧：任务详情 -->
       <div class="workflow-container">
-        <TaskWorkflowDiagram
+        <TaskDetail
           v-if="selectedTask"
           :task="selectedTask"
-          :workflow-data="selectedTask.workflowData || {}"
+          @edit="handleEditTask"
+          @delete="handleDeleteTask"
           @step-click="handleStepClick"
-          @step-update="handleStepUpdate"
         />
         <div v-else class="empty-workflow">
-          <el-empty description="请选择一个任务查看流程" :image-size="100" />
+          <el-empty description="请选择一个任务查看详情" :image-size="100" />
         </div>
       </div>
     </div>
@@ -51,7 +51,7 @@ import { ref, onMounted, watch } from 'vue';
 import { extensionService } from './services/ExtensionService';
 import RelatedFiles from './components/RelatedFiles.vue';
 import TaskList from './components/TaskList.vue';
-import TaskWorkflowDiagram from './components/TaskWorkflowDiagram.vue';
+import TaskDetail from './components/TaskDetail.vue';
 import TaskStepDetail from './components/TaskStepDetail.vue';
 import type { RelatedFile, Task } from './types';
 
@@ -143,6 +143,30 @@ async function handleStepUpdate(stepType: string, data: any) {
 function handleStepSave(stepData: any) {
   handleStepUpdate(currentStepType.value, stepData);
   showStepDetail.value = false;
+}
+
+async function handleEditTask(task: Task) {
+  try {
+    // 打开编辑任务弹窗或直接打开任务文件
+    await extensionService.call('openFile', {
+      filePath: task.artifactPath,
+      vaultId: task.vaultId,
+    });
+  } catch (error) {
+    console.error('Failed to edit task:', error);
+  }
+}
+
+async function handleDeleteTask(task: Task) {
+  try {
+    // 直接打开任务文件，让用户手动删除
+    await extensionService.call('openFile', {
+      filePath: task.artifactPath,
+      vaultId: task.vaultId,
+    });
+  } catch (error) {
+    console.error('Failed to open task file for deletion:', error);
+  }
 }
 
 // 监听选中任务变化

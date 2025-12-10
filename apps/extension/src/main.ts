@@ -65,15 +65,20 @@ export async function activate(context: vscode.ExtensionContext) {
   // 获取扩展根目录
   // 注意：
   // - 在开发环境中，context.extensionPath 指向 apps/extension，demo-vaults 在项目根目录
-  // - 在打包后的扩展中，context.extensionPath 指向扩展安装目录，demo-vaults 在扩展目录下
+  // - 在打包后的扩展中，context.extensionPath 指向扩展安装目录，demo-vaults 在 dist/demo-vaults 或 demo-vaults 目录下
   const extensionPath = context.extensionPath;
   
-  // 优先从扩展目录查找 demo-vaults（打包后的扩展）
-  let demoVaultsSourcePath = path.join(extensionPath, 'demo-vaults');
+  // 优先从 dist/demo-vaults 查找（打包后的扩展，新位置）
+  let demoVaultsSourcePath = path.join(extensionPath, 'dist', 'demo-vaults');
   
-  // 如果扩展目录下不存在，尝试从项目根目录查找（开发环境）
+  // 如果 dist/demo-vaults 不存在，尝试从 demo-vaults 查找（向后兼容）
   if (!require('fs').existsSync(demoVaultsSourcePath)) {
-  const projectRoot = path.resolve(extensionPath, '..', '..');
+    demoVaultsSourcePath = path.join(extensionPath, 'demo-vaults');
+  }
+  
+  // 如果扩展目录下都不存在，尝试从项目根目录查找（开发环境）
+  if (!require('fs').existsSync(demoVaultsSourcePath)) {
+    const projectRoot = path.resolve(extensionPath, '..', '..');
     demoVaultsSourcePath = path.join(projectRoot, 'demo-vaults');
   }
   
@@ -234,7 +239,9 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.info('Webview RPC service initialized');
 
   // 14. 注册所有命令
-  commandAdapter.registerCommands([
+  try {
+    logger.info('Registering commands...');
+    commandAdapter.registerCommands([
     // Lookup 命令
     {
       command: 'archi.lookup',
@@ -733,6 +740,11 @@ export async function activate(context: vscode.ExtensionContext) {
       },
     },
   ]);
+    logger.info('Commands registered successfully');
+  } catch (error: any) {
+    logger.error('Failed to register commands', error);
+    // 即使命令注册失败，也继续激活扩展
+  }
 
   // 15. 启动 MCP Server（可选）
   try {

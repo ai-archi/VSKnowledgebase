@@ -14,14 +14,24 @@ export class CommandAdapter {
   }
 
   registerCommand(command: string, callback: (...args: any[]) => any): void {
-    const disposable = vscode.commands.registerCommand(command, callback);
-    this.commands.set(command, disposable);
-    this.context.subscriptions.push(disposable);
+    try {
+      const disposable = vscode.commands.registerCommand(command, callback);
+      this.commands.set(command, disposable);
+      this.context.subscriptions.push(disposable);
+    } catch (error: any) {
+      console.error(`Failed to register command: ${command}`, error);
+      throw error;
+    }
   }
 
   registerCommands(commandDefs: CommandDefinition[]): void {
     commandDefs.forEach(def => {
-      this.registerCommand(def.command, def.callback);
+      try {
+        this.registerCommand(def.command, def.callback);
+      } catch (error: any) {
+        console.error(`Failed to register command: ${def.command}`, error);
+        // 继续注册其他命令，不中断整个流程
+      }
     });
   }
 

@@ -286,9 +286,11 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
                 artifactId: task.artifactId,
                 artifactPath: task.artifactPath,
                 vaultId: task.vaultId,
+                category: task.category || taskData.category || 'task', // 默认分类为 'task'
                 workflowStep: taskData.workflow.step || 'draft-proposal',
                 workflowData: taskData.workflow.data || {},
                 templateId: taskData.workflow.templateId,
+                description: taskData.description || '',
                 createdAt: taskData.createdAt,
               };
             }
@@ -307,9 +309,10 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
         artifactId: task.artifactId,
         artifactPath: task.artifactPath,
         vaultId: task.vaultId,
-          workflowStep: 'draft-proposal',
-          workflowData: {},
-          templateId: undefined,
+        category: task.category || 'task', // 默认分类为 'task'
+        workflowStep: 'draft-proposal',
+        workflowData: {},
+        templateId: undefined,
       };
       })
     );
@@ -349,6 +352,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       priority: params.priority || 'medium',
       dueDate: params.dueDate,
       templateId: params.workflowTemplate || params.templateId,
+      category: params.category || 'task', // 默认分类为 'task'
     });
 
     if (!result.success) {
