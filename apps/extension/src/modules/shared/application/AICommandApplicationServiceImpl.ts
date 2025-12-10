@@ -6,7 +6,8 @@ import { Result, ArtifactError, ArtifactErrorCode } from '../domain/errors';
 import { AICommandRepository } from '../infrastructure/AICommandRepository';
 import { VaultApplicationService } from './VaultApplicationService';
 import { CommandExecutionContext } from '../domain/value_object/CommandExecutionContext';
-import { CommandTemplateDomainService } from '../domain/services/CommandTemplateDomainService';
+import { FileOperationDomainService } from '../domain/services/FileOperationDomainService';
+import { Artifact } from '../domain/entity/artifact';
 import { Logger } from '../../../core/logger/Logger';
 import * as path from 'path';
 
@@ -20,7 +21,7 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
   constructor(
     @inject(TYPES.AICommandRepository) private commandRepository: AICommandRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,
-    @inject(TYPES.CommandTemplateDomainService) private templateService: CommandTemplateDomainService,
+    @inject(TYPES.FileOperationDomainService) private fileOperationService: FileOperationDomainService,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
@@ -225,8 +226,29 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
         };
       }
 
+      // 将 AICommand 转换为 Artifact 对象以使用通用的 renderTemplate 方法
+      const artifact: Artifact = {
+        id: command.id,
+        vault: {
+          id: command.vaultId,
+          name: command.vaultName,
+        },
+        nodeType: 'FILE',
+        path: command.filePath,
+        name: command.name,
+        format: 'md',
+        contentLocation: '',
+        viewType: 'document',
+        title: command.name,
+        description: command.description,
+        body: command.template, // 模板内容放在 body 字段中
+        createdAt: command.createdAt || new Date().toISOString(),
+        updatedAt: command.updatedAt || new Date().toISOString(),
+        status: 'draft',
+      };
+
       // 渲染模板
-      const rendered = this.templateService.renderTemplate(command, context);
+      const rendered = this.fileOperationService.renderTemplate(artifact, context);
 
       return { success: true, value: rendered };
     } catch (error: any) {

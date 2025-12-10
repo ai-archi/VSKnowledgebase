@@ -1,4 +1,7 @@
 import { Vault } from '../entity/vault';
+import { Artifact } from '../entity/artifact';
+import { CommandExecutionContext } from '../value_object/CommandExecutionContext';
+import { Template } from '@huggingface/jinja';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -46,6 +49,15 @@ export interface FileOperationDomainService {
    * @returns PlantUML 内容
    */
   generateDefaultPlantUMLContent(fileName: string): string;
+
+  /**
+   * 渲染模板（通用模板逻辑）
+   * 所有AI命令、基于模板生成文件等都通过这个方法实现
+   * @param artifact Artifact对象，包含模板内容（通常在body字段中）
+   * @param context 执行上下文
+   * @returns 渲染后的内容
+   */
+  renderTemplate(artifact: Artifact, context: CommandExecutionContext): string;
 }
 
 /**
@@ -189,6 +201,118 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
       // 如果加载失败，返回 null，将使用硬编码的默认内容
       return null;
     }
+  }
+
+  /**
+   * 渲染模板（通用模板逻辑）
+   * 所有AI命令、基于模板生成文件等都通过这个方法实现
+   */
+  renderTemplate(artifact: Artifact, context: CommandExecutionContext): string {
+    // 从 Artifact 获取模板内容（优先使用 body，如果没有则尝试从其他字段获取）
+    const templateString = artifact.body || (artifact as any).template || (artifact as any).commandContent;
+    
+    if (!templateString) {
+      return '';
+    }
+
+    try {
+      // 使用 Jinja2 模板引擎
+      const template = new Template(templateString);
+      
+      // 构建变量映射（支持嵌套对象结构）
+      const variables = this.buildVariableMap(context, artifact);
+      
+      // 渲染模板
+      const rendered = template.render(variables);
+      
+      return rendered.trim();
+    } catch (error: any) {
+      // 如果 Jinja2 渲染失败，返回原始模板（向后兼容）
+      console.error('Jinja2 template rendering failed:', error);
+      return templateString.trim();
+    }
+  }
+
+  /**
+   * 构建变量映射（支持嵌套对象结构，用于 Jinja2 模板引擎）
+   */
+  private buildVariableMap(context: CommandExecutionContext, artifact: Artifact): Record<string, any> {
+    const variables: Record<string, any> = {};
+
+    // 基础变量
+    variables['fileName'] = context.fileName || artifact.name || '';
+    variables['folderPath'] = context.folderPath || '';
+    variables['vaultName'] = context.vaultName || artifact.vault.name || '';
+    variables['vaultId'] = context.vaultId || artifact.vault.id || '';
+    variables['diagramType'] = context.diagramType || '';
+
+    // Artifact 相关变量
+    variables['artifact'] = {
+      id: artifact.id,
+      name: artifact.name,
+      title: artifact.title,
+      path: artifact.path,
+      format: artifact.format,
+      viewType: artifact.viewType,
+      category: artifact.category,
+    };
+
+    // 选中的文件列表 - 提供多种格式以支持不同的模板需求
+    if (context.selectedFiles && context.selectedFiles.length > 0) {
+      // 字符串格式（向后兼容）
+      const fileNames = context.selectedFiles.map(f => f.title || f.name).join('、');
+      const filePaths = context.selectedFiles.map(f => {
+        const vaultPrefix = f.vault ? `${f.vault.name}(vault): ` : '';
+        return `${vaultPrefix}${f.path}`;
+      }).join('\n');
+      
+      variables['selectedFiles'] = fileNames;
+      variables['selectedFilePaths'] = filePaths;
+      variables['selectedFilesCount'] = context.selectedFiles.length.toString();
+      
+      // 数组格式（支持 {% for file in selectedFilesList %}）
+      variables['selectedFilesList'] = context.selectedFiles.map(f => ({
+        id: f.id || '',
+        path: f.path,
+        name: f.name,
+        title: f.title || f.name,
+        vault: f.vault ? {
+          id: f.vault.id,
+          name: f.vault.name
+        } : null
+      }));
+      
+      // 第一个文件对象（支持 {{ file.title or file.name }}）
+      if (context.selectedFiles.length > 0) {
+        const firstFile = context.selectedFiles[0];
+        variables['file'] = {
+          id: firstFile.id || '',
+          path: firstFile.path,
+          name: firstFile.name,
+          title: firstFile.title || firstFile.name,
+          vault: firstFile.vault ? {
+            id: firstFile.vault.id,
+            name: firstFile.vault.name
+          } : null
+        };
+      }
+    } else {
+      variables['selectedFiles'] = '';
+      variables['selectedFilePaths'] = '';
+      variables['selectedFilesCount'] = '0';
+      variables['selectedFilesList'] = [];
+      variables['file'] = null;
+    }
+
+    // 其他自定义变量
+    for (const [key, value] of Object.entries(context)) {
+      if (!['vaultId', 'vaultName', 'fileName', 'folderPath', 'diagramType', 'selectedFiles'].includes(key)) {
+        // 保持原始类型，让 Jinja2 处理
+        variables[key] = value !== undefined && value !== null ? value : '';
+      }
+    }
+
+    return variables;
   }
 }
 

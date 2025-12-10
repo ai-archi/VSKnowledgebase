@@ -7,15 +7,10 @@ order: 4
 commandContent: |
   请分析以下文件：
   
-  {% if selectedFiles %}
+  {% if selectedFilesList %}
   文件：
-  {% for file in selectedFiles %}
-  - {{ file.title or file.name }}
-  {% endfor %}
-  
-  路径：
-  {% for file in selectedFiles %}
-  {{ file.path }}
+  {% for file in selectedFilesList %}
+  - {{ file.title or file.name }} ({{ file.path }})
   {% endfor %}
   {% endif %}
   

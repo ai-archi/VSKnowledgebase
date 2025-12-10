@@ -15,9 +15,9 @@ commandContent: |
   文件夹路径：{{ folderPath }}
   {% endif %}
   
-  {% if selectedFiles %}
+  {% if selectedFilesList %}
   相关文件：
-  {% for file in selectedFiles %}
+  {% for file in selectedFilesList %}
   - {{ file.title or file.name }} ({{ file.path }})
   {% endfor %}
   {% endif %}

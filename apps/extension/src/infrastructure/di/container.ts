@@ -53,7 +53,6 @@ import { MCPResources, MCPResourcesImpl } from '../../modules/mcp/MCPResources';
 // Domain Services
 import { FileTreeDomainService, FileTreeDomainServiceImpl } from '../../modules/shared/domain/services/FileTreeDomainService';
 import { FileOperationDomainService, FileOperationDomainServiceImpl } from '../../modules/shared/domain/services/FileOperationDomainService';
-import { CommandTemplateDomainService, CommandTemplateDomainServiceImpl } from '../../modules/shared/domain/services/CommandTemplateDomainService';
 
 // Secret Storage
 import { SecretStorageService } from '../../core/secret/SecretStorageService';
@@ -161,9 +160,6 @@ export function createContainer(
     .inSingletonScope();
   container.bind<FileOperationDomainService>(TYPES.FileOperationDomainService)
     .to(FileOperationDomainServiceImpl)
-    .inSingletonScope();
-  container.bind<CommandTemplateDomainService>(TYPES.CommandTemplateDomainService)
-    .to(CommandTemplateDomainServiceImpl)
     .inSingletonScope();
 
   return container;

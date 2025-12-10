@@ -56,6 +56,5 @@ export const TYPES = {
   // Domain Services
   FileTreeDomainService: Symbol.for('FileTreeDomainService'),
   FileOperationDomainService: Symbol.for('FileOperationDomainService'),
-  CommandTemplateDomainService: Symbol.for('CommandTemplateDomainService'),
 };
 
