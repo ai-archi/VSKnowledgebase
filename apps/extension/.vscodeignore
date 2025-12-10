@@ -4,7 +4,7 @@ src/
 # 排除开发文件
 tsconfig.json
 *.ts
-!dist/extension/**/*.d.ts
+!dist/**/*.d.ts
 
 # 排除测试文件
 **/*.test.ts

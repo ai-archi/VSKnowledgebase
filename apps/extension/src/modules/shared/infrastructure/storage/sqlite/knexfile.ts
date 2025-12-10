@@ -40,7 +40,7 @@ const config: { [key: string]: Knex.Config } = {
  */
 export function getKnexConfig(dbPath: string): Knex.Config {
   // 在运行时，迁移文件应该指向编译后的 JavaScript 文件
-  // __dirname 在编译后会指向 dist/extension/.../sqlite
+  // __dirname 在编译后会指向 dist/.../sqlite
   const migrationsDir = path.join(__dirname, 'migrations');
   
   return {

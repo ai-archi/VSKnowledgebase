@@ -225,19 +225,6 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
         };
       }
 
-      // 验证变量
-      const missingVars = this.templateService.validateVariables(command, context);
-      if (missingVars.length > 0) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.OPERATION_FAILED,
-            `Missing required variables: ${missingVars.join(', ')}`,
-            { commandId, missingVars }
-          ),
-        };
-      }
-
       // 渲染模板
       const rendered = this.templateService.renderTemplate(command, context);
 
