@@ -63,24 +63,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 2.1. 如果 .architool 目录没有 vault，则初始化 demo-vaults
   // 获取扩展根目录
-  // 注意：
-  // - 在开发环境中，context.extensionPath 指向 apps/extension，demo-vaults 在项目根目录
-  // - 在打包后的扩展中，context.extensionPath 指向扩展安装目录，demo-vaults 在 dist/demo-vaults 或 demo-vaults 目录下
+  // 注意：构建或打包时，demo-vaults 会被复制到 apps/extension/dist/demo-vaults
   const extensionPath = context.extensionPath;
   
-  // 优先从 dist/demo-vaults 查找（打包后的扩展，新位置）
-  let demoVaultsSourcePath = path.join(extensionPath, 'dist', 'demo-vaults');
-  
-  // 如果 dist/demo-vaults 不存在，尝试从 demo-vaults 查找（向后兼容）
-  if (!require('fs').existsSync(demoVaultsSourcePath)) {
-    demoVaultsSourcePath = path.join(extensionPath, 'demo-vaults');
-  }
-  
-  // 如果扩展目录下都不存在，尝试从项目根目录查找（开发环境）
-  if (!require('fs').existsSync(demoVaultsSourcePath)) {
-    const projectRoot = path.resolve(extensionPath, '..', '..');
-    demoVaultsSourcePath = path.join(projectRoot, 'demo-vaults');
-  }
+  // 从 dist/demo-vaults 查找（打包后的扩展）
+  const demoVaultsSourcePath = path.join(extensionPath, 'dist', 'demo-vaults');
   
   logger.info(`Workspace root: ${workspaceRoot}`);
   logger.info(`Architool root: ${architoolRoot}`);
