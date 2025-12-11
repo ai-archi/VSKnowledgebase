@@ -176,3 +176,4 @@ export class WebviewAdapter {
     return htmlContent;
   }
 }
+
