@@ -15,8 +15,124 @@
   "contributes": {
     "commands": [
       {
-        "command": "architool.helloWorld",
-        "title": "Hello World"
+        "command": "archi.vault.add",
+        "title": "Add Vault"
+      },
+      {
+        "command": "archi.vault.addFromGit",
+        "title": "Add Vault from Git"
+      },
+      {
+        "command": "archi.vault.list",
+        "title": "List Vaults"
+      },
+      {
+        "command": "archi.vault.fork",
+        "title": "Fork Vault"
+      },
+      {
+        "command": "archi.vault.sync",
+        "title": "Sync Vault"
+      },
+      {
+        "command": "archi.vault.remove",
+        "title": "Remove Vault"
+      },
+      {
+        "command": "archi.document.refresh",
+        "title": "Refresh Document View"
+      },
+      {
+        "command": "archi.document.expandAll",
+        "title": "Expand All"
+      },
+      {
+        "command": "archi.document.collapseAll",
+        "title": "Collapse All"
+      },
+      {
+        "command": "archi.document.addFile",
+        "title": "Add File"
+      },
+      {
+        "command": "archi.document.addFolder",
+        "title": "Add Folder"
+      },
+      {
+        "command": "archi.document.delete",
+        "title": "Delete"
+      },
+      {
+        "command": "archi.document.create",
+        "title": "Create Document"
+      },
+      {
+        "command": "archi.document.addPlantUMLDesign",
+        "title": "Add PlantUML Design"
+      },
+      {
+        "command": "archi.document.addMermaidDesign",
+        "title": "Add Mermaid Design"
+      },
+      {
+        "command": "archi.document.editRelations",
+        "title": "Edit Relations"
+      },
+      {
+        "command": "archi.viewpoint.create",
+        "title": "Create Viewpoint"
+      },
+      {
+        "command": "archi.template.refresh",
+        "title": "Refresh Template View"
+      },
+      {
+        "command": "archi.template.expandAll",
+        "title": "Expand All"
+      },
+      {
+        "command": "archi.template.collapseAll",
+        "title": "Collapse All"
+      },
+      {
+        "command": "archi.template.addFile",
+        "title": "Add Template File"
+      },
+      {
+        "command": "archi.template.addFolder",
+        "title": "Add Template Folder"
+      },
+      {
+        "command": "archi.template.delete",
+        "title": "Delete Template"
+      },
+      {
+        "command": "archi.template.addPlantUMLDesign",
+        "title": "Add PlantUML Design Template"
+      },
+      {
+        "command": "archi.template.addMermaidDesign",
+        "title": "Add Mermaid Design Template"
+      },
+      {
+        "command": "archi.template.createFromTemplate",
+        "title": "Create from Template"
+      },
+      {
+        "command": "archi.ai.analyzeImpact",
+        "title": "Analyze Impact"
+      },
+      {
+        "command": "archi.ai.generatePrompt",
+        "title": "Generate Prompt"
+      },
+      {
+        "command": "archi.lookup",
+        "title": "Lookup"
+      },
+      {
+        "command": "archi.artifact.list",
+        "title": "List Artifacts"
       }
     ]
   },

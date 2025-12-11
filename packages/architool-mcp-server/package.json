@@ -5,7 +5,7 @@
   "main": "mcp-server.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc && npm run bundle",
+    "build": "tsc && pnpm run bundle",
     "bundle": "esbuild dist/mcp-server.js --bundle --platform=node --target=node18 --outfile=dist/mcp-server.bundle.js --format=cjs --external:fsevents && mv dist/mcp-server.bundle.js dist/mcp-server.js"
   },
   "dependencies": {

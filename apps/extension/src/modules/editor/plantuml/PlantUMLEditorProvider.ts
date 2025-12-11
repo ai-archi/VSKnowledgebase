@@ -47,7 +47,7 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'out'),
+        vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
         webviewUri,
       ],
       enableCommandUris: false,

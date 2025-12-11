@@ -20,20 +20,20 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:archi.lookup",
-    "onCommand:archi.vault.add",
-    "onCommand:archi.vault.addFromGit",
-    "onCommand:archi.vault.list",
-    "onCommand:archi.viewpoint.create",
-    "onCommand:archi.viewpoint.openPanel",
-    "onView:architool.documentView",
-    "onView:architool.assistantsView",
-    "onView:architool.viewpointView"
+    "onStartupFinished"
+    
+    
+    
+    
+    
+    
+    
+    
+    
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "files": [
-    "out/**",
+    "dist/**",
     "language-configuration.json",
     "README.md"
   ],
@@ -516,11 +516,16 @@
       ]
     }
   },
+  "sideEffects": [
+    "src/**/*.ts",
+    "src/commands.ts"
+  ],
   "scripts": {
-    "compile": "tsc -p tsconfig.json && npm run copy:resources",
-    "copy:resources": "mkdir -p out/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml out/resources/templates/ 2>/dev/null || true",
-    "copy:demo-vaults": "rm -rf out/demo-vaults && mkdir -p out/demo-vaults && cp -r ../../packages/demo-vaults/* out/demo-vaults/ 2>/dev/null || true",
-    "watch": "tsc -p tsconfig.json --watch",
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "webpack --mode production --devtool hidden-source-map && pnpm run copy:resources",
+    "copy:resources": "mkdir -p dist/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml dist/resources/templates/ 2>/dev/null || true",
+    "copy:demo-vaults": "rm -rf dist/demo-vaults && mkdir -p dist/demo-vaults && cp -r ../../packages/demo-vaults/* dist/demo-vaults/ 2>/dev/null || true",
+    "watch": "webpack --watch",
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",
     "install:electron": "pnpm install && pnpm run rebuild:electron",
@@ -544,6 +549,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
+    "@huggingface/hub": "^2.7.1",
+    "@huggingface/transformers": "^3.0.0",
     "@types/better-sqlite3": "^7.6.0",
     "@types/js-yaml": "^4.0.9",
     "@types/minimatch": "^6.0.0",
@@ -551,6 +558,9 @@
     "@types/uuid": "^9.0.6",
     "@types/vscode": "^1.80.0",
     "systemjs": "^6.15.1",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "ts-loader": "^9.5.4",
+    "webpack": "^5.103.0",
+    "webpack-cli": "^6.0.1"
   }
 }

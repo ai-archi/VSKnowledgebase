@@ -24,7 +24,7 @@
     {
       "label": "Compile Extension",
       "type": "shell",
-      "command": "npm",
+      "command": "pnpm",
       "args": [
         "run",
         "compile"
@@ -97,7 +97,7 @@
     {
       "label": "Copy Demo Vaults",
       "type": "shell",
-      "command": "npm",
+      "command": "pnpm",
       "args": [
         "run",
         "copy:demo-vaults"
@@ -115,7 +115,7 @@
     {
       "label": "Watch Extension",
       "type": "shell",
-      "command": "npm",
+      "command": "pnpm",
       "args": [
         "run",
         "watch"

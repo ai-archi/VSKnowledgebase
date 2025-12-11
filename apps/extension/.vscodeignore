@@ -6,6 +6,9 @@ tsconfig.json
 *.ts
 !dist/**/*.d.ts
 
+# 排除旧的构建输出目录
+out/
+
 # 排除测试文件
 **/*.test.ts
 **/*.spec.ts
