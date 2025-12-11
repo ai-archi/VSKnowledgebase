@@ -4,11 +4,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "workspaces": {
-    "packages": [
-      "apps/*"
-    ]
-  },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.39.0",
     "@typescript-eslint/parser": "^5.39.0",
@@ -52,7 +47,9 @@
     "test:cli": "cross-env LOG_LEVEL=error pnpm jest --forceExit",
     "test:update-snapshots": "pnpm test:cli -u",
     "package": "pnpm run build && cd apps/extension && pnpm run copy:demo-vaults && pnpm run package",
-    "package:quick": "cd apps/extension && pnpm run copy:demo-vaults && pnpm run package"
+    "package:quick": "cd apps/extension && pnpm run copy:demo-vaults && pnpm run package",
+    "package:architool": "cd extension/architool && pnpm run package",
+    "package:architool:quick": "cd extension/architool && pnpm run package"
   },
   "husky": {
     "hooks": {
