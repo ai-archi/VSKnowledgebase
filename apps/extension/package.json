@@ -1,22 +1,39 @@
 {
   "name": "architool",
-  "displayName": "ArchiTool",
   "description": "Architecture Management Tool for VSCode",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "publisher": "architool",
-  "engines": {
-    "vscode": "^1.80.0"
-  },
+	"private": true,  
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Microsoft/vscode-extension-samples"
+	},  
+	"engines": {
+		"vscode": "^1.100.0"
+	},  
+	"extensionKind": [
+		"ui",
+		"workspace"
+	],  
   "categories": [
     "Other"
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:archi.lookup",
+    "onCommand:archi.vault.add",
+    "onCommand:archi.vault.addFromGit",
+    "onCommand:archi.vault.list",
+    "onCommand:archi.viewpoint.create",
+    "onCommand:archi.viewpoint.openPanel",
+    "onView:architool.documentView",
+    "onView:architool.assistantsView",
     "onView:architool.viewpointView"
   ],
-  "main": "./dist/extension.js",
+  "main": "./out/extension.js",
   "files": [
-    "dist/**",
+    "out/**",
     "language-configuration.json",
     "README.md"
   ],
@@ -501,8 +518,8 @@
   },
   "scripts": {
     "compile": "tsc -p tsconfig.json && npm run copy:resources",
-    "copy:resources": "mkdir -p dist/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml dist/resources/templates/ 2>/dev/null || true",
-    "copy:demo-vaults": "rm -rf dist/demo-vaults && mkdir -p dist/demo-vaults && cp -r ../../packages/demo-vaults/* dist/demo-vaults/ 2>/dev/null || true",
+    "copy:resources": "mkdir -p out/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml out/resources/templates/ 2>/dev/null || true",
+    "copy:demo-vaults": "rm -rf out/demo-vaults && mkdir -p out/demo-vaults && cp -r ../../packages/demo-vaults/* out/demo-vaults/ 2>/dev/null || true",
     "watch": "tsc -p tsconfig.json --watch",
     "test": "jest",
     "rebuild:electron": "node scripts/rebuild-electron.js",

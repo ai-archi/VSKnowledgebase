@@ -1926,12 +1926,75 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       // 如果有模板文件，读取模板内容
       if (item.template) {
         const templatePath = item.template;
-        // 模板路径可能是相对路径（相对于 vault 根目录）或绝对路径
-        const templateFullPath = templatePath.startsWith('/') || templatePath.startsWith('templates/')
-          ? templatePath
-          : `templates/content/${templatePath}`;
+        let templateVault: VaultReference = vault; // 默认使用目标 vault
+        let templateFullPath: string;
 
-        const readResult = await this.readFile(vault, templateFullPath);
+        // 处理模板路径，支持包含 vault 名称的路径
+        // 例如：demo-vault-assistant/archi-templates/content/markdown/service-overview-template.md
+        if (templatePath.includes('/')) {
+          const parts = templatePath.split('/');
+          // 检查第一部分是否是 vault 名称（不是 "archi-templates" 或 "templates"）
+          if (!templatePath.startsWith('archi-templates/') && 
+              !templatePath.startsWith('templates/') && 
+              parts.length > 1) {
+            // 第一部分可能是 vault 名称，尝试查找该 vault
+            const vaultName = parts[0];
+            const vaultsResult = await this.vaultService.listVaults();
+            if (vaultsResult.success) {
+              const templateVaultFound = vaultsResult.value.find(v => v.name === vaultName);
+              if (templateVaultFound) {
+                templateVault = { id: templateVaultFound.id, name: templateVaultFound.name };
+                // 去掉 vault 名称前缀，获取相对路径
+                templateFullPath = parts.slice(1).join('/');
+                this.logger.info('Template found in different vault', {
+                  templateVaultId: templateVault.id,
+                  templateVaultName: templateVault.name,
+                  templateFullPath,
+                  targetVaultId: vault.id
+                });
+              } else {
+                // 如果找不到 vault，假设第一部分不是 vault 名称，使用当前 vault
+                // 处理路径：如果以 / 开头，去掉开头的 /
+                if (templatePath.startsWith('/')) {
+                  templateFullPath = templatePath.substring(1);
+                } else {
+                  templateFullPath = templatePath;
+                }
+                this.logger.warn('Vault not found in template path, using target vault', {
+                  vaultName,
+                  templatePath,
+                  targetVaultId: vault.id
+                });
+              }
+            } else {
+              // 如果获取 vault 列表失败，使用当前 vault
+              if (templatePath.startsWith('/')) {
+                templateFullPath = templatePath.substring(1);
+              } else {
+                templateFullPath = templatePath;
+              }
+            }
+          } else if (templatePath.startsWith('archi-templates/') || templatePath.startsWith('templates/')) {
+            // 已经是相对路径格式：archi-templates/... 或 templates/...
+            templateFullPath = templatePath;
+          } else {
+            // 其他情况，如果以 / 开头，去掉开头的 /
+            if (templatePath.startsWith('/')) {
+              templateFullPath = templatePath.substring(1);
+            } else {
+              templateFullPath = templatePath;
+            }
+          }
+        } else {
+          // 如果路径不包含 /，直接使用（可能是文件名）
+          if (templatePath.startsWith('/')) {
+            templateFullPath = templatePath.substring(1);
+          } else {
+            templateFullPath = templatePath;
+          }
+        }
+
+        const readResult = await this.readFile(templateVault, templateFullPath);
         if (readResult.success) {
           fileContent = readResult.value;
           // 在文件内容中也替换变量（使用类似 Jinja2 的模板语法）
@@ -1942,13 +2005,23 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         } else {
           // 如果读取模板失败，记录错误并返回失败
           const errorMessage = `Failed to read template file: ${templateFullPath}`;
-          this.logger.error(errorMessage, { vaultId: vault.id, templatePath: item.template });
+          this.logger.error(errorMessage, { 
+            templateVaultId: templateVault.id, 
+            templateVaultName: templateVault.name,
+            templatePath: item.template,
+            targetVaultId: vault.id 
+          });
           return {
             success: false,
             error: new ArtifactError(
               ArtifactErrorCode.OPERATION_FAILED,
               errorMessage,
-              { vaultId: vault.id, templatePath: item.template }
+              { 
+                templateVaultId: templateVault.id, 
+                templateVaultName: templateVault.name,
+                templatePath: item.template,
+                targetVaultId: vault.id 
+              }
             ),
           };
         }

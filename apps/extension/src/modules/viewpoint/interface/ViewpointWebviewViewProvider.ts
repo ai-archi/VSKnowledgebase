@@ -32,39 +32,136 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     context: vscode.WebviewViewResolveContext,
     token: vscode.CancellationToken
   ): void | Thenable<void> {
-    this.logger.info('[ViewpointWebviewViewProvider] Resolving webview view');
-    
-    this.webviewView = webviewView;
-    
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [vscode.Uri.file(this.getWebviewDistPath())],
-    };
+    try {
+      this.logger.info('[ViewpointWebviewViewProvider] Resolving webview view');
+      this.logger.info(`[ViewpointWebviewViewProvider] Extension path: ${this.context.extensionPath}`);
+      
+      this.webviewView = webviewView;
+      
+      // 获取 webview 构建路径
+      const webviewDistPath = this.getWebviewDistPath();
+      this.logger.info(`[ViewpointWebviewViewProvider] Webview dist path: ${webviewDistPath}`);
+      this.logger.info(`[ViewpointWebviewViewProvider] Webview dist exists: ${fs.existsSync(webviewDistPath)}`);
+      
+      // 检查关键文件
+      const htmlPath = path.join(webviewDistPath, 'viewpoint-panel.html');
+      this.logger.info(`[ViewpointWebviewViewProvider] HTML path: ${htmlPath}`);
+      this.logger.info(`[ViewpointWebviewViewProvider] HTML file exists: ${fs.existsSync(htmlPath)}`);
+      
+      webviewView.webview.options = {
+        enableScripts: true,
+        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+      };
 
-    // 加载 HTML
-    const html = this.getWebviewContent(webviewView.webview);
-    webviewView.webview.html = html;
-    this.logger.info('[ViewpointWebviewViewProvider] Webview HTML loaded');
+      // 加载 HTML
+      this.logger.info('[ViewpointWebviewViewProvider] Loading webview HTML content...');
+      const html = this.getWebviewContent(webviewView.webview);
+      webviewView.webview.html = html;
+      this.logger.info('[ViewpointWebviewViewProvider] Webview HTML loaded successfully');
 
-    // 设置消息处理器
-    webviewView.webview.onDidReceiveMessage(
-      async (message) => {
-        await this.handleWebviewMessage(webviewView.webview, message);
-      },
-      null,
-      this.context.subscriptions
-    );
+      // 监听 webview 错误
+      webviewView.webview.onDidReceiveMessage(
+        async (message) => {
+          try {
+            await this.handleWebviewMessage(webviewView.webview, message);
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error in message handler', error);
+          }
+        },
+        null,
+        this.context.subscriptions
+      );
 
-    // 监听编辑器切换事件
-    this.setupFileWatcher();
+      // 监听编辑器切换事件
+      this.setupFileWatcher();
 
-    // 当 webview 被销毁时清理
-    webviewView.onDidChangeVisibility(() => {
-      if (webviewView.visible) {
-        // 当视图变为可见时，重新加载关联文件
-        this.notifyFileChanged();
+      // 当 webview 被销毁时清理
+      webviewView.onDidChangeVisibility(() => {
+        this.logger.info(`[ViewpointWebviewViewProvider] Webview visibility changed: ${webviewView.visible}`);
+        if (webviewView.visible) {
+          // 当视图变为可见时，重新加载关联文件
+          this.notifyFileChanged();
+        }
+      });
+      
+      this.logger.info('[ViewpointWebviewViewProvider] Webview view resolved successfully');
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      const errorStack = error?.stack || '';
+      this.logger.error('[ViewpointWebviewViewProvider] Failed to resolve webview view', {
+        message: errorMessage,
+        stack: errorStack,
+        error
+      });
+      
+      // 显示错误信息给用户
+      const errorHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Viewpoints - Error</title>
+            <style>
+              body {
+                font-family: var(--vscode-font-family);
+                padding: 20px;
+                color: var(--vscode-foreground);
+                background-color: var(--vscode-editor-background);
+              }
+              .error-container {
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 4px;
+                background-color: var(--vscode-input-background);
+              }
+              h2 {
+                color: var(--vscode-errorForeground);
+                margin-top: 0;
+              }
+              pre {
+                background-color: var(--vscode-textBlockQuote-background);
+                padding: 10px;
+                border-radius: 4px;
+                overflow-x: auto;
+                font-size: 12px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="error-container">
+              <h2>加载 ArchiTool 面板时出错</h2>
+              <p>请检查输出面板中的 ArchiTool 通道以获取详细错误信息。</p>
+              <details>
+                <summary>错误详情</summary>
+                <pre>${this.escapeHtml(errorMessage)}\n${this.escapeHtml(errorStack)}</pre>
+              </details>
+            </div>
+          </body>
+        </html>
+      `;
+      try {
+        webviewView.webview.html = errorHtml;
+      } catch (htmlError: any) {
+        this.logger.error('[ViewpointWebviewViewProvider] Failed to set error HTML', htmlError);
       }
-    });
+    }
+  }
+
+  /**
+   * 转义 HTML 特殊字符
+   */
+  private escapeHtml(text: string): string {
+    const map: { [key: string]: string } = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
   }
 
   /**
@@ -121,6 +218,12 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     });
 
     try {
+      // 处理 webview 错误报告
+      if (message.method === 'webviewError') {
+        this.logger.error('[ViewpointWebviewViewProvider] Webview reported error:', message.params);
+        return;
+      }
+
       let result: any;
 
       switch (message.method) {
@@ -181,7 +284,11 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     } catch (error: any) {
       this.logger.error(
         `[ViewpointWebviewViewProvider] Error handling message: ${message.method}`,
-        error
+        {
+          message: error.message,
+          stack: error.stack,
+          errorObject: error
+        }
       );
       webview.postMessage({
         id: message.id,
@@ -814,82 +921,151 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
    * 获取 Webview 内容
    */
   private getWebviewContent(webview: vscode.Webview): string {
-    const webviewDistPath = this.getWebviewDistPath();
-    const htmlPath = path.join(webviewDistPath, 'viewpoint-panel.html');
+    try {
+      const webviewDistPath = this.getWebviewDistPath();
+      const htmlPath = path.join(webviewDistPath, 'viewpoint-panel.html');
 
-    if (!fs.existsSync(htmlPath)) {
-      return `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Viewpoints</title>
-          </head>
-          <body>
-            <div style="padding: 20px; text-align: center;">
-              <h2>Webview 未构建</h2>
-              <p>请先运行 <code>cd apps/webview && pnpm build</code> 构建 webview</p>
-            </div>
-          </body>
-        </html>
-      `;
-    }
+      this.logger.info(`[ViewpointWebviewViewProvider] Reading HTML from: ${htmlPath}`);
 
-    let html = fs.readFileSync(htmlPath, 'utf-8');
-
-    // 替换资源路径为 webview URI
-    html = html.replace(
-      /(src|href)=["']([^"']+)["']/g,
-      (match: string, attr: string, resourcePath: string) => {
-        if (
-          resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)
-        ) {
-          return match;
-        }
-
-        let normalizedPath = resourcePath;
-        if (normalizedPath.startsWith('./')) {
-          normalizedPath = normalizedPath.substring(2);
-        } else if (normalizedPath.startsWith('/')) {
-          normalizedPath = normalizedPath.substring(1);
-        }
-
-        const resourceFile = path.join(webviewDistPath, normalizedPath);
-
-        if (fs.existsSync(resourceFile)) {
-          const resourceUri = webview.asWebviewUri(
-            vscode.Uri.file(resourceFile)
-          );
-          return `${attr}="${resourceUri}"`;
-        }
-
-        return match;
+      if (!fs.existsSync(htmlPath)) {
+        this.logger.warn(`[ViewpointWebviewViewProvider] HTML file not found: ${htmlPath}`);
+        return `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Viewpoints</title>
+            </head>
+            <body>
+              <div style="padding: 20px; text-align: center;">
+                <h2>Webview 未构建</h2>
+                <p>请先运行 <code>cd apps/webview && pnpm build</code> 构建 webview</p>
+                <p style="font-size: 12px; color: var(--vscode-descriptionForeground);">
+                  预期路径: ${htmlPath}
+                </p>
+              </div>
+            </body>
+          </html>
+        `;
       }
-    );
 
-    // 注入 VSCode API
-    const vscodeScript = `
-      <script>
-        const vscode = acquireVsCodeApi();
-        window.acquireVsCodeApi = () => vscode;
-      </script>
-    `;
-    html = html.replace('</head>', `${vscodeScript}</head>`);
+      let html = fs.readFileSync(htmlPath, 'utf-8');
+      this.logger.info(`[ViewpointWebviewViewProvider] HTML file read successfully, length: ${html.length}`);
 
-    return html;
+      // 替换资源路径为 webview URI
+      let resourceReplaceCount = 0;
+      let missingResourceCount = 0;
+      const missingResources: string[] = [];
+
+      html = html.replace(
+        /(src|href)=["']([^"']+)["']/g,
+        (match: string, attr: string, resourcePath: string) => {
+          if (
+            resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)
+          ) {
+            return match;
+          }
+
+          let normalizedPath = resourcePath;
+          if (normalizedPath.startsWith('./')) {
+            normalizedPath = normalizedPath.substring(2);
+          } else if (normalizedPath.startsWith('/')) {
+            normalizedPath = normalizedPath.substring(1);
+          }
+
+          const resourceFile = path.join(webviewDistPath, normalizedPath);
+
+          if (fs.existsSync(resourceFile)) {
+            const resourceUri = webview.asWebviewUri(
+              vscode.Uri.file(resourceFile)
+            );
+            resourceReplaceCount++;
+            return `${attr}="${resourceUri}"`;
+          } else {
+            missingResourceCount++;
+            missingResources.push(resourcePath);
+            this.logger.warn(`[ViewpointWebviewViewProvider] Resource not found: ${resourcePath} (resolved to: ${resourceFile})`);
+            return match; // 保持原路径，但可能会404
+          }
+        }
+      );
+
+      if (missingResourceCount > 0) {
+        this.logger.warn(`[ViewpointWebviewViewProvider] ${missingResourceCount} resources not found:`, missingResources.slice(0, 10));
+      }
+      this.logger.info(`[ViewpointWebviewViewProvider] Resource replacement: ${resourceReplaceCount} replaced, ${missingResourceCount} missing`);
+
+      // 注入 VSCode API 和错误处理
+      const vscodeScript = `
+        <script>
+          const vscode = acquireVsCodeApi();
+          window.acquireVsCodeApi = () => vscode;
+          
+          // 监听全局错误
+          window.addEventListener('error', (event) => {
+            console.error('[Webview] Global error:', event.error);
+            vscode.postMessage({
+              method: 'webviewError',
+              params: {
+                message: event.error?.message || event.message,
+                stack: event.error?.stack,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno
+              }
+            });
+          });
+          
+          // 监听未处理的 Promise 拒绝
+          window.addEventListener('unhandledrejection', (event) => {
+            console.error('[Webview] Unhandled rejection:', event.reason);
+            vscode.postMessage({
+              method: 'webviewError',
+              params: {
+                message: 'Unhandled Promise Rejection: ' + (event.reason?.message || String(event.reason)),
+                stack: event.reason?.stack
+              }
+            });
+          });
+        </script>
+      `;
+      html = html.replace('</head>', `${vscodeScript}</head>`);
+
+      return html;
+    } catch (error: any) {
+      this.logger.error('[ViewpointWebviewViewProvider] Error in getWebviewContent', error);
+      throw error;
+    }
   }
 
   /**
    * 获取 Webview 构建路径
    */
   private getWebviewDistPath(): string {
-    const extensionPath = this.context.extensionPath;
-    const webviewPathInExtension = path.join(extensionPath, 'dist', 'webview');
-    const webviewPathInSource = path.join(extensionPath, '..', 'webview', 'dist');
-    return fs.existsSync(webviewPathInExtension)
-      ? webviewPathInExtension
-      : webviewPathInSource;
+    try {
+      const extensionPath = this.context.extensionPath;
+      const webviewPathInExtension = path.join(extensionPath, 'dist', 'webview');
+      const webviewPathInSource = path.join(extensionPath, '..', 'webview', 'dist');
+      
+      const existsInExtension = fs.existsSync(webviewPathInExtension);
+      const existsInSource = fs.existsSync(webviewPathInSource);
+      
+      this.logger.info(`[ViewpointWebviewViewProvider] Webview paths - Extension: ${webviewPathInExtension} (exists: ${existsInExtension}), Source: ${webviewPathInSource} (exists: ${existsInSource})`);
+      
+      if (existsInExtension) {
+        return webviewPathInExtension;
+      } else if (existsInSource) {
+        return webviewPathInSource;
+      } else {
+        this.logger.warn(`[ViewpointWebviewViewProvider] Neither webview path exists, using extension path as fallback`);
+        return webviewPathInExtension;
+      }
+    } catch (error: any) {
+      this.logger.error('[ViewpointWebviewViewProvider] Error getting webview dist path', error);
+      // 返回一个默认路径，即使可能不存在
+      return path.join(this.context.extensionPath, 'dist', 'webview');
+    }
   }
 }
 

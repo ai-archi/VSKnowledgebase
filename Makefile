@@ -14,9 +14,9 @@ watch:
 
 build-plantuml-js:
 	echo "Building plantuml-js..."
-	mkdir -p apps/extension/dist/plantuml-js
-	rm -rf apps/extension/dist/plantuml-js/*
-	cd packages/plantuml-js && OUTPUT_PATH=../../apps/extension/dist/plantuml-js pnpm run build
+	mkdir -p apps/extension/out/plantuml-js
+	rm -rf apps/extension/out/plantuml-js/*
+	cd packages/plantuml-js && OUTPUT_PATH=../../apps/extension/out/plantuml-js pnpm run build
 
 build-webview:
 	echo "Building webview..."

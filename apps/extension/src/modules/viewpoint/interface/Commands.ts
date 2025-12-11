@@ -31,30 +31,39 @@ export class ViewpointCommands {
    * 注册所有命令和 WebviewView
    */
   registerCommands(context: vscode.ExtensionContext): void {
-    // 注册 WebviewView Provider
-    this.logger.info('[ViewpointCommands] Registering WebviewView provider for architool.viewpointView');
-    const webviewViewProvider = new ViewpointWebviewViewProvider(
-      this.viewpointService,
-      this.vaultService,
-      this.artifactService,
-      this.taskService,
-      this.aiService,
-      this.logger,
-      this.context
-    );
+    try {
+      // 注册 WebviewView Provider
+      this.logger.info('[ViewpointCommands] Registering WebviewView provider for architool.viewpointView');
+      const webviewViewProvider = new ViewpointWebviewViewProvider(
+        this.viewpointService,
+        this.vaultService,
+        this.artifactService,
+        this.taskService,
+        this.aiService,
+        this.logger,
+        this.context
+      );
 
-    const disposable = vscode.window.registerWebviewViewProvider(
-      'architool.viewpointView',
-      webviewViewProvider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true,
-        },
-      }
-    );
-    
-    this.logger.info('[ViewpointCommands] WebviewView provider registered successfully');
-    context.subscriptions.push(disposable);
+      const disposable = vscode.window.registerWebviewViewProvider(
+        'architool.viewpointView',
+        webviewViewProvider,
+        {
+          webviewOptions: {
+            retainContextWhenHidden: true,
+          },
+        }
+      );
+      
+      this.logger.info('[ViewpointCommands] WebviewView provider registered successfully');
+      context.subscriptions.push(disposable);
+    } catch (error: any) {
+      this.logger.error('[ViewpointCommands] Failed to register WebviewView provider', {
+        message: error.message,
+        stack: error.stack,
+        errorObject: error
+      });
+      throw error;
+    }
 
     // 创建自定义视点
     const createViewpointCommand = vscode.commands.registerCommand(

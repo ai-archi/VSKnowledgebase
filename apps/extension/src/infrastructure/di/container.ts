@@ -61,15 +61,18 @@ import * as vscode from 'vscode';
 export function createContainer(
   architoolRoot: string,
   dbPath: string,
-  context?: vscode.ExtensionContext
+  context?: vscode.ExtensionContext,
+  logger?: Logger
 ): Container {
   const container = new Container();
 
   // Core Services
-  container.bind<Logger>(TYPES.Logger).toConstantValue(new Logger('ArchiTool'));
-  const logger = container.get<Logger>(TYPES.Logger);
+  // 如果提供了 logger，使用它；否则创建新的（向后兼容）
+  const sharedLogger = logger || new Logger('ArchiTool');
+  container.bind<Logger>(TYPES.Logger).toConstantValue(sharedLogger);
+  const containerLogger = container.get<Logger>(TYPES.Logger);
   container.bind<ConfigManager>(TYPES.ConfigManager)
-    .toDynamicValue(() => new ConfigManager(architoolRoot, logger))
+    .toDynamicValue(() => new ConfigManager(architoolRoot, containerLogger))
     .inSingletonScope();
   container.bind<EventBus>(TYPES.EventBus).to(EventBus).inSingletonScope();
   
@@ -87,7 +90,7 @@ export function createContainer(
   container.bind<WorkspaceFileSystemAdapter>(TYPES.WorkspaceFileSystemAdapter)
     .toConstantValue(new WorkspaceFileSystemAdapterImpl());
   container.bind<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex)
-    .toConstantValue(new SqliteRuntimeIndex(dbPath, logger));
+    .toConstantValue(new SqliteRuntimeIndex(dbPath, containerLogger));
   // YamlMetadataRepository 现在由 MetadataRepositoryImpl 内部管理（每个 vault 一个实例）
   // 不再需要在 DI 容器中绑定
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
