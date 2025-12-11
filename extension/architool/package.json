@@ -1,5 +1,5 @@
 {
-  "name": "architool",
+  "name": "Architool",
   "displayName": "Architool",
   "description": "Architecture Management Tool for VSCode",
   "version": "0.0.1",
@@ -13,6 +13,37 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "architool",
+          "title": "ArchiTool",
+          "icon": "$(list-unordered)"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "architool.documentView",
+          "name": "Documents",
+          "when": "true"
+        },
+        {
+          "id": "architool.assistantsView",
+          "name": "Assistants",
+          "when": "true"
+        }
+      ],
+      "architool": [
+        {
+          "id": "architool.taskView",
+          "name": "Tasks",
+          "type": "webview",
+          "when": "true"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "archi.vault.add",

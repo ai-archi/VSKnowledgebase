@@ -8,6 +8,9 @@ import { ViewpointCommands } from './commands/ViewpointCommands';
 import { AssistantsCommands } from './commands/AssistantsCommands';
 import { AICommands } from './commands/AICommands';
 import { LookupCommands } from './commands/LookupCommands';
+import { DocumentTreeViewProvider } from './views/DocumentTreeViewProvider';
+import { AssistantsTreeViewProvider } from './views/AssistantsTreeViewProvider';
+import { TaskWebviewViewProvider } from './views/TaskWebviewViewProvider';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -16,6 +19,37 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// 创建命令适配器
 	const commandAdapter = new CommandAdapter(context);
+
+	// 注册视图
+	try {
+		// 注册文档树视图（资源管理器）
+		const documentTreeViewProvider = new DocumentTreeViewProvider();
+		const documentTreeView = vscode.window.createTreeView('architool.documentView', {
+			treeDataProvider: documentTreeViewProvider
+		});
+		context.subscriptions.push(documentTreeView);
+		console.log('Document tree view registered');
+
+		// 注册助手树视图（资源管理器）
+		const assistantsTreeViewProvider = new AssistantsTreeViewProvider();
+		const assistantsTreeView = vscode.window.createTreeView('architool.assistantsView', {
+			treeDataProvider: assistantsTreeViewProvider
+		});
+		context.subscriptions.push(assistantsTreeView);
+		console.log('Assistants tree view registered');
+
+		// 注册任务 Webview 视图（面板）
+		const taskWebviewViewProvider = new TaskWebviewViewProvider(context);
+		const taskWebviewViewDisposable = vscode.window.registerWebviewViewProvider(
+			'architool.taskView',
+			taskWebviewViewProvider
+		);
+		context.subscriptions.push(taskWebviewViewDisposable);
+		console.log('Task webview view registered');
+	} catch (error: any) {
+		console.error('Failed to register views:', error);
+		vscode.window.showErrorMessage(`Failed to register views: ${error.message}`);
+	}
 
 	// 注册所有命令类
 	try {
