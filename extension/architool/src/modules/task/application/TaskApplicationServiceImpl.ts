@@ -98,6 +98,18 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
 
       const vault = vaultResult.value;
       
+      // 验证 vault 类型，只能创建到 task 或 document 类型的 vault
+      if (vault.type !== 'task' && vault.type !== 'document') {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.INVALID_INPUT,
+            `Cannot create task in vault of type '${vault.type}'. Only 'task' or 'document' type vaults are allowed.`,
+            { vaultId: options.vaultId, vaultType: vault.type }
+          ),
+        };
+      }
+      
       // 确保路径以 archi-tasks/ 开头，使用 YAML 格式
       let artifactPath = options.artifactPath;
       if (!artifactPath.startsWith('archi-tasks/')) {
