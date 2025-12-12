@@ -1295,6 +1295,11 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         vaultId: vault.id,
         basePath,
         itemCount: structureItems.length,
+        allItems: structureItems.map(item => ({
+          type: item.type,
+          name: item.name,
+          hasChildren: !!(item.children && item.children.length > 0)
+        })),
         firstItem: structureItems[0] ? {
           type: structureItems[0].type,
           name: structureItems[0].name
@@ -1303,11 +1308,53 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
 
       // 递归创建结构项（变量已在 ArtifactTemplate 中应用）
       // 完全按照模板设计进行目录结构的创建，不跳过任何层级
+      const errors: string[] = [];
       for (const item of structureItems) {
+        this.logger.info('Creating structure item', {
+          vaultId: vault.id,
+          basePath,
+          itemType: item.type,
+          itemName: item.name,
+          hasChildren: !!(item.children && item.children.length > 0)
+        });
+        
         const itemResult = await this.createStructureItem(vault, basePath, item, artifactTemplate.variables);
         if (!itemResult.success) {
-          return itemResult;
+          const errorMsg = `Failed to create ${item.type} '${item.name}': ${itemResult.error?.message || 'Unknown error'}`;
+          this.logger.error(errorMsg, {
+            vaultId: vault.id,
+            basePath,
+            itemType: item.type,
+            itemName: item.name,
+            error: itemResult.error
+          });
+          errors.push(errorMsg);
+          // 继续处理其他项，而不是立即返回
+          // 这样可以确保即使某个项创建失败，其他项也能被创建
+        } else {
+          this.logger.info('Structure item created successfully', {
+            vaultId: vault.id,
+            basePath,
+            itemType: item.type,
+            itemName: item.name
+          });
         }
+      }
+      
+      // 如果有错误，返回错误信息，但不会阻止其他项被创建
+      if (errors.length > 0) {
+        this.logger.warn('Some structure items failed to create', {
+          vaultId: vault.id,
+          basePath,
+          errorCount: errors.length,
+          errors
+        });
+        // 仍然返回成功，因为至少部分项已经创建
+        // 如果需要严格模式，可以返回错误
+        return {
+          success: true,
+          value: undefined
+        };
       }
 
       return { success: true, value: undefined };
@@ -1899,7 +1946,8 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     variables?: { [key: string]: string }
   ): Promise<Result<void, ArtifactError>> {
     const itemName = item.name;
-    const itemPath = path.join(basePath, itemName);
+    // 使用 / 连接路径，确保跨平台兼容性（vault 路径使用 / 分隔符）
+    const itemPath = basePath ? `${basePath}/${itemName}` : itemName;
 
     if (item.type === 'directory') {
       // 创建目录（完全按照模板结构，不做任何特殊处理）

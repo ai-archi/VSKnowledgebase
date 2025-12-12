@@ -37,8 +37,8 @@
       ],
       "architool": [
         {
-          "id": "architool.taskView",
-          "name": "Tasks",
+          "id": "architool.viewpointView",
+          "name": "Viewpoints",
           "type": "webview",
           "when": "true"
         }

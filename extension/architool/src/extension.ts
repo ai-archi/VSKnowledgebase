@@ -14,7 +14,6 @@ import { AICommands } from './commands/AICommands';
 import { LookupCommands } from './commands/LookupCommands';
 import { DocumentTreeViewProvider } from './views/DocumentTreeViewProvider';
 import { AssistantsTreeViewProvider } from './views/AssistantsTreeViewProvider';
-import { TaskWebviewViewProvider } from './views/TaskWebviewViewProvider';
 import { Logger } from './core/logger/Logger';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { createContainer } from './infrastructure/di/container';
@@ -67,8 +66,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	const documentTreeViewProvider = await initializeDocumentViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化助手视图和命令
 	const assistantsTreeViewProvider = await initializeAssistantsViewAndCommand(logger, context, commandAdapter, container);
-	// 初始化任务视图和命令
-	initializeTaskViewAndCommand(logger, context);
 	// 初始化其他命令（不依赖视图的命令）
 	initializeOtherCommands(logger, context, commandAdapter, container, documentTreeViewProvider, assistantsTreeViewProvider);
 }
@@ -228,30 +225,6 @@ async function initializeAssistantsViewAndCommand(
 		logger.error('Failed to initialize assistants view and commands:', error);
 		vscode.window.showErrorMessage(`Failed to initialize assistants view: ${error.message}`);
 		throw error;
-	}
-}
-
-/**
- * 初始化任务视图和命令
- */
-function initializeTaskViewAndCommand(
-	logger: Logger,
-	context: vscode.ExtensionContext
-) {
-	try {
-		// 注册任务 Webview 视图（面板）
-		// 注意：ViewpointWebviewViewProvider 已经通过 ViewpointCommands 注册为 'architool.viewpointView'
-		// 这里保留 TaskWebviewViewProvider 作为备用，或者可以移除
-		const taskWebviewViewProvider = new TaskWebviewViewProvider(context);
-		const taskWebviewViewDisposable = vscode.window.registerWebviewViewProvider(
-			'architool.taskView',
-			taskWebviewViewProvider
-		);
-		context.subscriptions.push(taskWebviewViewDisposable);
-		logger.info('Task webview view registered');
-	} catch (error: any) {
-		logger.error('Failed to initialize task view:', error);
-		vscode.window.showErrorMessage(`Failed to initialize task view: ${error.message}`);
 	}
 }
 
