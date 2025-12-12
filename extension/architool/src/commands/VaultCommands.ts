@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CommandAdapter, CommandDefinition } from '../core/commands/CommandAdapter';
+import { CommandAdapter, CommandDefinition } from '../core/vscode-api/CommandAdapter';
 
 /**
  * Vault 相关命令
