@@ -26,6 +26,10 @@ import { FileTreeDomainService } from './modules/shared/domain/services/FileTree
 import { FileOperationDomainService } from './modules/shared/domain/services/FileOperationDomainService';
 import { SqliteRuntimeIndex } from './modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { WebviewAdapter } from './core/vscode-api/WebviewAdapter';
+import { WebviewRPC } from './core/vscode-api/WebviewRPC';
+import { TemplateApplicationService } from './modules/template/application/TemplateApplicationService';
+import { CodeFileSystemApplicationService } from './modules/shared/application/CodeFileSystemApplicationService';
+import { AICommandApplicationService } from './modules/shared/application/AICommandApplicationService';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -60,13 +64,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	const commandAdapter = new CommandAdapter(context);
 	
 	// 初始化文档视图和命令
-	await initializeDocumentViewAndCommand(logger, context, commandAdapter, container);
+	const documentTreeViewProvider = await initializeDocumentViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化助手视图和命令
-	await initializeAssistantsViewAndCommand(logger, context, commandAdapter, container);
+	const assistantsTreeViewProvider = await initializeAssistantsViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化任务视图和命令
 	initializeTaskViewAndCommand(logger, context);
 	// 初始化其他命令（不依赖视图的命令）
-	initializeOtherCommands(logger, context, commandAdapter, container);
+	initializeOtherCommands(logger, context, commandAdapter, container, documentTreeViewProvider, assistantsTreeViewProvider);
 }
 
 /**
@@ -124,7 +128,7 @@ async function initializeDocumentViewAndCommand(
 	context: vscode.ExtensionContext,
 	commandAdapter: CommandAdapter,
 	container: Container
-) {
+): Promise<DocumentTreeViewProvider> {
 	try {
 		// 从容器获取服务实例
 		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
@@ -144,11 +148,22 @@ async function initializeDocumentViewAndCommand(
 		context.subscriptions.push(documentTreeView);
 		logger.info('Document tree view registered');
 
-		// 从容器获取 DocumentApplicationService
+		// 从容器获取 DocumentApplicationService 和其他服务
 		const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
+		const templateService = container.get<TemplateApplicationService>(TYPES.TemplateApplicationService);
+		const codeFileService = container.get<CodeFileSystemApplicationService>(TYPES.CodeFileSystemApplicationService);
+		const aiCommandService = container.get<AICommandApplicationService>(TYPES.AICommandApplicationService);
 
-		// 创建 WebviewAdapter
-		const webviewAdapter = new WebviewAdapter(logger);
+		// 创建 WebviewRPC（统一管理所有 RPC 方法，包括 template.list）
+		const webviewRPC = new WebviewRPC(
+			logger,
+			vaultService,
+			documentService,
+			templateService,
+			artifactService,
+			codeFileService,
+			aiCommandService
+		);
 
 		// 初始化文档命令（需要视图实例）
 		const documentCommands = new DocumentCommands(
@@ -161,13 +176,16 @@ async function initializeDocumentViewAndCommand(
 			context,
 			documentTreeViewProvider,
 			documentTreeView,
-			webviewAdapter
+			webviewRPC.getAdapter()
 		);
 		documentCommands.register(commandAdapter);
 		logger.info('Document commands registered');
+		
+		return documentTreeViewProvider;
 	} catch (error: any) {
 		logger.error('Failed to initialize document view and commands:', error);
 		vscode.window.showErrorMessage(`Failed to initialize document view: ${error.message}`);
+		throw error;
 	}
 }
 
@@ -180,7 +198,7 @@ async function initializeAssistantsViewAndCommand(
 	context: vscode.ExtensionContext,
 	commandAdapter: CommandAdapter,
 	container: Container
-) {
+): Promise<AssistantsTreeViewProvider> {
 	try {
 		// 从容器获取服务实例
 		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
@@ -204,9 +222,12 @@ async function initializeAssistantsViewAndCommand(
 		const assistantsCommands = new AssistantsCommands();
 		assistantsCommands.register(commandAdapter);
 		logger.info('Assistants commands registered');
+		
+		return assistantsTreeViewProvider;
 	} catch (error: any) {
 		logger.error('Failed to initialize assistants view and commands:', error);
 		vscode.window.showErrorMessage(`Failed to initialize assistants view: ${error.message}`);
+		throw error;
 	}
 }
 
@@ -241,11 +262,23 @@ function initializeOtherCommands(
 	logger: Logger,
 	context: vscode.ExtensionContext,
 	commandAdapter: CommandAdapter,
-	container: Container
+	container: Container,
+	documentTreeViewProvider?: DocumentTreeViewProvider,
+	assistantsTreeViewProvider?: AssistantsTreeViewProvider
 ) {
 	try {
+		// 从容器获取服务实例（统一在函数开头获取，避免重复声明）
+		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
+		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
+		
 		// Vault 命令
-		const vaultCommands = new VaultCommands();
+		const vaultCommands = new VaultCommands(
+			vaultService,
+			container,
+			logger,
+			documentTreeViewProvider,
+			assistantsTreeViewProvider
+		);
 		vaultCommands.register(commandAdapter);
 
 		// 视点命令
@@ -269,9 +302,6 @@ function initializeOtherCommands(
 		} catch (error) {
 			logger.warn('AIApplicationService not found in container');
 		}
-		
-		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
-		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
 		
 		const viewpointCommands = new ViewpointCommands(
 			viewpointService,

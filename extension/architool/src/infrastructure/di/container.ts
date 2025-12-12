@@ -20,16 +20,22 @@ import { MetadataRepositoryImpl } from '../../modules/shared/infrastructure/Meta
 import { VaultRepository } from '../../modules/shared/infrastructure/VaultRepository';
 import { VaultRepositoryImpl } from '../../modules/shared/infrastructure/VaultRepositoryImpl';
 import { ArtifactLinkRepository, ArtifactLinkRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactLinkRepository';
+import { AICommandRepository } from '../../modules/shared/infrastructure/AICommandRepository';
+import { AICommandRepositoryImpl } from '../../modules/shared/infrastructure/AICommandRepositoryImpl';
 
 // Application Services
 import { ArtifactApplicationServiceImpl } from '../../modules/shared/application/ArtifactApplicationServiceImpl';
 import { ArtifactApplicationService } from '../../modules/shared/application/ArtifactApplicationService';
 import { CodeFileSystemApplicationService } from '../../modules/shared/application/CodeFileSystemApplicationService';
 import { CodeFileSystemApplicationServiceImpl } from '../../modules/shared/application/CodeFileSystemApplicationServiceImpl';
+import { AICommandApplicationService } from '../../modules/shared/application/AICommandApplicationService';
+import { AICommandApplicationServiceImpl } from '../../modules/shared/application/AICommandApplicationServiceImpl';
 import { VaultApplicationServiceImpl } from '../../modules/shared/application/VaultApplicationServiceImpl';
 import { VaultApplicationService } from '../../modules/shared/application/VaultApplicationService';
 import { DocumentApplicationService } from '../../modules/document/application/DocumentApplicationService';
 import { DocumentApplicationServiceImpl } from '../../modules/document/application/DocumentApplicationServiceImpl';
+import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
+import { TemplateApplicationServiceImpl } from '../../modules/template/application/TemplateApplicationServiceImpl';
 
 // Domain Services
 import { FileTreeDomainService, FileTreeDomainServiceImpl } from '../../modules/shared/domain/services/FileTreeDomainService';
@@ -90,16 +96,23 @@ export function createContainer(
       return new ArtifactLinkRepositoryImpl(vaultAdapter, metadataRepo, vaultRepo);
     })
     .inSingletonScope();
+  container.bind<AICommandRepository>(TYPES.AICommandRepository)
+    .to(AICommandRepositoryImpl)
+    .inSingletonScope();
 
   // Application Services
   container.bind<ArtifactApplicationService>(TYPES.ArtifactApplicationService)
     .to(ArtifactApplicationServiceImpl).inSingletonScope();
   container.bind<CodeFileSystemApplicationService>(TYPES.CodeFileSystemApplicationService)
     .to(CodeFileSystemApplicationServiceImpl).inSingletonScope();
+  container.bind<AICommandApplicationService>(TYPES.AICommandApplicationService)
+    .to(AICommandApplicationServiceImpl).inSingletonScope();
   container.bind<VaultApplicationService>(TYPES.VaultApplicationService)
     .to(VaultApplicationServiceImpl).inSingletonScope();
   container.bind<DocumentApplicationService>(TYPES.DocumentApplicationService)
     .to(DocumentApplicationServiceImpl).inSingletonScope();
+  container.bind<TemplateApplicationService>(TYPES.TemplateApplicationService)
+    .to(TemplateApplicationServiceImpl).inSingletonScope();
 
   // Domain Services
   container.bind<FileTreeDomainService>(TYPES.FileTreeDomainService)

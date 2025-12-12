@@ -195,6 +195,98 @@
           "when": "view == architool.documentView",
           "group": "navigation@4"
         }
+      ],
+      "view/item/context": [
+        {
+          "command": "archi.document.addFile",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addFolder",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addPlantUMLDesign",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addMermaidDesign",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.editRelations",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.delete",
+          "when": "view == architool.documentView && viewItem == vault",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.document.addFile",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addFolder",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addPlantUMLDesign",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addMermaidDesign",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.editRelations",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.delete",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "2_actions"
+        },
+        {
+          "command": "archi.document.addFile",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addFolder",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addPlantUMLDesign",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.addMermaidDesign",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.editRelations",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.delete",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "2_actions"
+        }
       ]
     }
   },
