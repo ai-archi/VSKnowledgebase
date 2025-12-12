@@ -47,11 +47,13 @@
     "commands": [
       {
         "command": "archi.vault.add",
-        "title": "Add Vault"
+        "title": "Add Local Vault",
+        "icon": "$(add)"
       },
       {
         "command": "archi.vault.addFromGit",
-        "title": "Add Vault from Git"
+        "title": "Add Vault from Git",
+        "icon": "$(git-branch)"
       },
       {
         "command": "archi.vault.list",
@@ -75,23 +77,28 @@
       },
       {
         "command": "archi.document.expandAll",
-        "title": "Expand All"
+        "title": "Expand All",
+        "icon": "$(expand-all)"
       },
       {
         "command": "archi.document.collapseAll",
-        "title": "Collapse All"
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
       },
       {
         "command": "archi.document.addFile",
-        "title": "Add File"
+        "title": "Add File",
+        "icon": "$(file-add)"
       },
       {
         "command": "archi.document.addFolder",
-        "title": "Add Folder"
+        "title": "Add Folder",
+        "icon": "$(folder-create)"
       },
       {
         "command": "archi.document.delete",
-        "title": "Delete"
+        "title": "Delete",
+        "icon": "$(trash)"
       },
       {
         "command": "archi.document.create",
@@ -165,7 +172,31 @@
         "command": "archi.artifact.list",
         "title": "List Artifacts"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "archi.vault.add",
+          "when": "view == architool.documentView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "archi.vault.addFromGit",
+          "when": "view == architool.documentView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "archi.document.expandAll",
+          "when": "view == architool.documentView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "archi.document.collapseAll",
+          "when": "view == architool.documentView",
+          "group": "navigation@4"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run compile",

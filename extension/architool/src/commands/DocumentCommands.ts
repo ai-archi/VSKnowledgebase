@@ -209,7 +209,6 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
             selectedVault.id,
             `note/${documentName}.md`,
             documentName,
-            undefined,
             `# ${documentName}\n\n`
           );
 

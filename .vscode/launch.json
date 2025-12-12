@@ -25,6 +25,29 @@
       },
       "preLaunchTask": "Build All",
       "trace": true
+    },
+    {
+      "name": "Run Architool Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/extension/architool"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/extension/architool/dist/**/*.js"
+      ],
+      "sourceMaps": true,
+      "skipFiles": [
+        "<node_internals>/**/*.js"
+      ],
+      "env": {
+        "STAGE": "dev",
+        "VSCODE_DEBUGGING_EXTENSION": "architool",
+        "LOG_LEVEL": "debug"
+      },
+      "preLaunchTask": "Build Architool Extension",
+      "trace": true
     }
 	]
 }

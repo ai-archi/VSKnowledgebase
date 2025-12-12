@@ -125,6 +125,90 @@
       },
       "problemMatcher": "$tsc-watch",
       "isBackground": true
+    },
+    {
+      "label": "Build Architool Extension",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Copy Webview to Architool",
+        "Copy Demo Vaults to Architool",
+        "Copy PlantUML to Architool",
+        "Compile Architool Extension"
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Compile Architool Extension",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "run",
+        "compile"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/extension/architool"
+      },
+      "problemMatcher": "$tsc",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "echo": true
+      }
+    },
+    {
+      "label": "Copy Webview to Architool",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "mkdir -p ${workspaceFolder}/extension/architool/dist/webview && cp -r ${workspaceFolder}/apps/webview/dist/* ${workspaceFolder}/extension/architool/dist/webview/ || true"
+      ],
+      "dependsOn": "Build Webview",
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Copy Demo Vaults to Architool",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "mkdir -p ${workspaceFolder}/extension/architool/dist/demo-vaults && cp -r ${workspaceFolder}/packages/demo-vaults/* ${workspaceFolder}/extension/architool/dist/demo-vaults/ || true"
+      ],
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Copy PlantUML to Architool",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "mkdir -p ${workspaceFolder}/extension/architool/dist/vendor/plantuml && cp -r ${workspaceFolder}/vendor/plantuml/* ${workspaceFolder}/extension/architool/dist/vendor/plantuml/ || true"
+      ],
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
     }
   ]
 }
