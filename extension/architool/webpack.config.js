@@ -3,6 +3,7 @@
 'use strict';
 
 const path = require('path');
+const webpack = require('webpack');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -20,9 +21,16 @@ const extensionConfig = {
     libraryTarget: 'commonjs2'
   },
   externals: {
-    vscode: 'commonjs vscode' // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
+    vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
+    'better-sqlite3': 'commonjs better-sqlite3', // Native module, must be external
     // modules added here also need to be added in the .vscodeignore file
   },
+  plugins: [
+    // Ignore optional Knex database drivers that aren't installed
+    new webpack.IgnorePlugin({
+      resourceRegExp: /^(tedious|mysql|mysql2|oracledb|pg|pg-query-stream|sqlite3)$/
+    })
+  ],
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js']

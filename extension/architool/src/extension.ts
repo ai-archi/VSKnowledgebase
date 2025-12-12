@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import { Container } from 'inversify';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { VaultCommands } from './commands/VaultCommands';
 import { DocumentCommands } from './commands/DocumentCommands';
@@ -16,6 +17,15 @@ import { AssistantsTreeViewProvider } from './views/AssistantsTreeViewProvider';
 import { TaskWebviewViewProvider } from './views/TaskWebviewViewProvider';
 import { Logger } from './core/logger/Logger';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
+import { createContainer } from './infrastructure/di/container';
+import { TYPES } from './infrastructure/di/types';
+import { VaultApplicationService } from './modules/shared/application/VaultApplicationService';
+import { ArtifactApplicationService } from './modules/shared/application/ArtifactApplicationService';
+import { DocumentApplicationService } from './modules/document/application/DocumentApplicationService';
+import { FileTreeDomainService } from './modules/shared/domain/services/FileTreeDomainService';
+import { FileOperationDomainService } from './modules/shared/domain/services/FileOperationDomainService';
+import { SqliteRuntimeIndex } from './modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
+import { WebviewAdapter } from './core/vscode-api/WebviewAdapter';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -24,24 +34,45 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// 创建日志记录器
 	const logger = new Logger('ArchiTool');
+	
 	// 初始化工作区
-	await initializeWorkspace(logger, context);
+	const { workspaceRoot, architoolRoot } = await initializeWorkspace(logger, context);
+	
+	// 初始化依赖注入容器
+	const dbPath = path.join(architoolRoot, 'cache', 'runtime.sqlite');
+	const container = createContainer(architoolRoot, dbPath, context, logger);
+	
+	// 初始化 SQLite
+	try {
+		const index = container.get<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex);
+		await index.initialize();
+		logger.info('SQLite runtime index initialized');
+	} catch (error: any) {
+		const errorMessage = error?.message || String(error);
+		if (errorMessage.includes('bindings') || errorMessage.includes('better_sqlite3.node') || errorMessage.includes('NODE_MODULE_VERSION')) {
+			logger.warn('SQLite initialization failed due to native bindings version mismatch. Some features may not be available.');
+		} else {
+			logger.error('Failed to initialize SQLite', error);
+		}
+	}
+	
 	// 创建命令适配器
 	const commandAdapter = new CommandAdapter(context);
+	
 	// 初始化文档视图和命令
-	initializeDocumentViewAndCommand(logger, context, commandAdapter);
+	await initializeDocumentViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化助手视图和命令
-	initializeAssistantsViewAndCommand(logger, context, commandAdapter);
+	await initializeAssistantsViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化任务视图和命令
 	initializeTaskViewAndCommand(logger, context);
 	// 初始化其他命令（不依赖视图的命令）
-	initializeOtherCommands(logger, context, commandAdapter);
+	initializeOtherCommands(logger, context, commandAdapter, container);
 }
 
 /**
  * 初始化工作区
  */
-async function initializeWorkspace(logger: Logger, context: vscode.ExtensionContext) { 
+async function initializeWorkspace(logger: Logger, context: vscode.ExtensionContext): Promise<{ workspaceRoot: string; architoolRoot: string }> { 
 	// 初始化工作区路径和 .architool 目录
 	try {
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -76,8 +107,11 @@ async function initializeWorkspace(logger: Logger, context: vscode.ExtensionCont
 		} catch (error: any) {
 			logger.error('Failed to initialize demo-vaults:', error);
 		}
+		
+		return { workspaceRoot, architoolRoot };
 	} catch (error: any) {
 		logger.error('Failed to initialize architool directory:', error);
+		throw error;
 	}
 }
 
@@ -85,36 +119,23 @@ async function initializeWorkspace(logger: Logger, context: vscode.ExtensionCont
  * 初始化文档视图和命令
  * 将视图和命令一起初始化，确保命令可以访问视图实例
  */
-function initializeDocumentViewAndCommand(
+async function initializeDocumentViewAndCommand(
 	logger: Logger, 
 	context: vscode.ExtensionContext,
-	commandAdapter: CommandAdapter
+	commandAdapter: CommandAdapter,
+	container: Container
 ) {
 	try {
-		// TODO: 需要初始化依赖注入容器并获取服务实例
-		// 需要以下服务：
-		// - VaultApplicationService
-		// - ArtifactApplicationService
-		// - DocumentApplicationService
-		// - FileTreeDomainService
-		// - FileOperationDomainService
-		// - Logger
-		// - WebviewAdapter
-		//
-		// 示例代码（待完善）：
-		// const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
-		// const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
-		// const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
-		// const fileTreeDomainService = container.get<FileTreeDomainService>(TYPES.FileTreeDomainService);
-		// const fileOperationDomainService = container.get<FileOperationDomainService>(TYPES.FileOperationDomainService);
-		// const logger = container.get<Logger>(TYPES.Logger);
-		// const webviewAdapter = new WebviewAdapter(...); // TODO: 初始化 WebviewAdapter
+		// 从容器获取服务实例
+		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
+		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
+		const fileTreeDomainService = container.get<FileTreeDomainService>(TYPES.FileTreeDomainService);
+		const fileOperationDomainService = container.get<FileOperationDomainService>(TYPES.FileOperationDomainService);
 		
-		// 临时占位实现（待替换）
 		// 初始化文档树视图
 		const documentTreeViewProvider = new DocumentTreeViewProvider(
-			{} as any, // vaultService - TODO: 从容器获取
-			{} as any, // artifactService - TODO: 从容器获取
+			vaultService,
+			artifactService,
 			logger
 		);
 		const documentTreeView = vscode.window.createTreeView('architool.documentView', {
@@ -123,18 +144,24 @@ function initializeDocumentViewAndCommand(
 		context.subscriptions.push(documentTreeView);
 		logger.info('Document tree view registered');
 
+		// 从容器获取 DocumentApplicationService
+		const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
+
+		// 创建 WebviewAdapter
+		const webviewAdapter = new WebviewAdapter(logger);
+
 		// 初始化文档命令（需要视图实例）
 		const documentCommands = new DocumentCommands(
-			{} as any, // documentService - TODO: 从容器获取
-			{} as any, // artifactService - TODO: 从容器获取
-			{} as any, // vaultService - TODO: 从容器获取
-			{} as any, // fileTreeDomainService - TODO: 从容器获取
-			{} as any, // fileOperationDomainService - TODO: 从容器获取
+			documentService,
+			artifactService,
+			vaultService,
+			fileTreeDomainService,
+			fileOperationDomainService,
 			logger,
 			context,
 			documentTreeViewProvider,
 			documentTreeView,
-			{} as any  // webviewAdapter - TODO: 初始化
+			webviewAdapter
 		);
 		documentCommands.register(commandAdapter);
 		logger.info('Document commands registered');
@@ -148,28 +175,21 @@ function initializeDocumentViewAndCommand(
  * 初始化助手视图和命令
  * 将视图和命令一起初始化，确保命令可以访问视图实例
  */
-function initializeAssistantsViewAndCommand(
+async function initializeAssistantsViewAndCommand(
 	logger: Logger,
 	context: vscode.ExtensionContext,
-	commandAdapter: CommandAdapter
+	commandAdapter: CommandAdapter,
+	container: Container
 ) {
 	try {
-		// TODO: 需要初始化依赖注入容器并获取服务实例
-		// 需要以下服务：
-		// - VaultApplicationService
-		// - ArtifactApplicationService
-		// - Logger
-		//
-		// 示例代码（待完善）：
-		// const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
-		// const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
-		// const logger = container.get<Logger>(TYPES.Logger);
+		// 从容器获取服务实例
+		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
+		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
 		
-		// 临时占位实现（待替换）
 		// 初始化助手树视图
 		const assistantsTreeViewProvider = new AssistantsTreeViewProvider(
-			{} as any, // vaultService - TODO: 从容器获取
-			{} as any, // artifactService - TODO: 从容器获取
+			vaultService,
+			artifactService,
 			logger
 		);
 		const assistantsTreeView = vscode.window.createTreeView('architool.assistantsView', {
@@ -220,7 +240,8 @@ function initializeTaskViewAndCommand(
 function initializeOtherCommands(
 	logger: Logger,
 	context: vscode.ExtensionContext,
-	commandAdapter: CommandAdapter
+	commandAdapter: CommandAdapter,
+	container: Container
 ) {
 	try {
 		// Vault 命令
@@ -228,39 +249,36 @@ function initializeOtherCommands(
 		vaultCommands.register(commandAdapter);
 
 		// 视点命令
-		// TODO: 需要初始化依赖注入容器并获取服务实例
-		// 需要以下服务：
-		// - ViewpointApplicationService
-		// - VaultApplicationService
-		// - ArtifactApplicationService
-		// - TaskApplicationService
-		// - AIApplicationService
-		// - Logger
-		//
-		// 示例代码（待完善）：
-		// const viewpointService = container.get<ViewpointApplicationService>(TYPES.ViewpointApplicationService);
-		// const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
-		// const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
-		// const taskService = container.get<TaskApplicationService>(TYPES.TaskApplicationService);
-		// const aiService = container.get<AIApplicationService>(TYPES.AIApplicationService);
-		// const logger = container.get<Logger>(TYPES.Logger);
-		// const viewpointCommands = new ViewpointCommands(
-		//   viewpointService,
-		//   vaultService,
-		//   artifactService,
-		//   taskService,
-		//   aiService,
-		//   logger,
-		//   context
-		// );
+		// 注意：ViewpointApplicationService, TaskApplicationService, AIApplicationService 可能不存在
+		// 暂时使用空对象，如果命令需要会报错
+		let viewpointService: any;
+		let taskService: any;
+		let aiService: any;
+		try {
+			viewpointService = container.get(TYPES.ViewpointApplicationService);
+		} catch (error) {
+			logger.warn('ViewpointApplicationService not found in container');
+		}
+		try {
+			taskService = container.get(TYPES.TaskApplicationService);
+		} catch (error) {
+			logger.warn('TaskApplicationService not found in container');
+		}
+		try {
+			aiService = container.get(TYPES.AIApplicationService);
+		} catch (error) {
+			logger.warn('AIApplicationService not found in container');
+		}
 		
-		// 临时占位实现（待替换）
+		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
+		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
+		
 		const viewpointCommands = new ViewpointCommands(
-			{} as any, // viewpointService - TODO: 从容器获取
-			{} as any, // vaultService - TODO: 从容器获取
-			{} as any, // artifactService - TODO: 从容器获取
-			{} as any, // taskService - TODO: 从容器获取
-			{} as any, // aiService - TODO: 从容器获取
+			viewpointService,
+			vaultService,
+			artifactService,
+			taskService,
+			aiService,
 			logger,
 			context
 		);
