@@ -343,11 +343,36 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     );
 
     // 获取关联的 Artifacts
-    const artifactsResult = await this.viewpointService.getRelatedArtifacts(
-      relativePath
-    );
+    // 优先使用 viewpointService，如果不存在则直接使用 artifactService
+    let artifactsResult: { success: boolean; value?: any[]; error?: any };
+    
+    if (this.viewpointService && typeof this.viewpointService.getRelatedArtifacts === 'function') {
+      // 使用 ViewpointApplicationService
+      artifactsResult = await this.viewpointService.getRelatedArtifacts(relativePath);
+    } else {
+      // 直接使用 ArtifactApplicationService（参考 apps/extension 的实现）
+      this.logger.info('[ViewpointWebviewViewProvider] Using artifactService.findArtifactsByCodePath directly');
+      try {
+        const result = await this.artifactService.findArtifactsByCodePath(relativePath);
+        artifactsResult = {
+          success: result.success,
+          value: result.success ? result.value : undefined,
+          error: result.success ? undefined : result.error,
+        };
+      } catch (error: any) {
+        this.logger.error('[ViewpointWebviewViewProvider] Error finding artifacts by code path', error);
+        artifactsResult = {
+          success: false,
+          error: error,
+        };
+      }
+    }
 
     if (!artifactsResult.success || !artifactsResult.value) {
+      this.logger.warn('[ViewpointWebviewViewProvider] No related artifacts found', {
+        relativePath,
+        error: artifactsResult.error,
+      });
       return [];
     }
 

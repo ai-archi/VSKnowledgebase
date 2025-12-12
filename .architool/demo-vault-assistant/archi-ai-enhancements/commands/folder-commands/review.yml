@@ -1,0 +1,28 @@
+name: 检查
+description: 检查文件夹或选中文件的代码质量和潜在问题
+targetTypes:
+  - folder
+enabled: true
+order: 3
+commandContent: |
+  请检查以下内容的代码质量和潜在问题：
+  
+  {% if fileName %}
+  文件夹名称：{{ fileName }}
+  {% endif %}
+  
+  {% if folderPath %}
+  文件夹路径：{{ folderPath }}
+  {% endif %}
+  
+  {% if selectedFilesList %}
+  相关文件：
+  {% for file in selectedFilesList %}
+  - {{ file.title or file.name }} ({{ file.path }})
+  {% endfor %}
+  {% endif %}
+  
+  请提供代码审查意见。
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

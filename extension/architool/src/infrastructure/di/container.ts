@@ -36,6 +36,8 @@ import { DocumentApplicationService } from '../../modules/document/application/D
 import { DocumentApplicationServiceImpl } from '../../modules/document/application/DocumentApplicationServiceImpl';
 import { TemplateApplicationService } from '../../modules/template/application/TemplateApplicationService';
 import { TemplateApplicationServiceImpl } from '../../modules/template/application/TemplateApplicationServiceImpl';
+import { TaskApplicationService } from '../../modules/task/application/TaskApplicationService';
+import { TaskApplicationServiceImpl } from '../../modules/task/application/TaskApplicationServiceImpl';
 
 // Domain Services
 import { FileTreeDomainService, FileTreeDomainServiceImpl } from '../../modules/shared/domain/services/FileTreeDomainService';
@@ -113,6 +115,8 @@ export function createContainer(
     .to(DocumentApplicationServiceImpl).inSingletonScope();
   container.bind<TemplateApplicationService>(TYPES.TemplateApplicationService)
     .to(TemplateApplicationServiceImpl).inSingletonScope();
+  container.bind<TaskApplicationService>(TYPES.TaskApplicationService)
+    .to(TaskApplicationServiceImpl).inSingletonScope();
 
   // Domain Services
   container.bind<FileTreeDomainService>(TYPES.FileTreeDomainService)

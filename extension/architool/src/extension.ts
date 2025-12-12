@@ -29,6 +29,8 @@ import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { TemplateApplicationService } from './modules/template/application/TemplateApplicationService';
 import { CodeFileSystemApplicationService } from './modules/shared/application/CodeFileSystemApplicationService';
 import { AICommandApplicationService } from './modules/shared/application/AICommandApplicationService';
+import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
+import { PlantUMLEditorProvider } from './modules/editor/plantuml/PlantUMLEditorProvider';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -68,6 +70,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	const assistantsTreeViewProvider = await initializeAssistantsViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化其他命令（不依赖视图的命令）
 	initializeOtherCommands(logger, context, commandAdapter, container, documentTreeViewProvider, assistantsTreeViewProvider);
+	
+	// 注册自定义编辑器
+	initializeCustomEditors(logger, context);
 }
 
 /**
@@ -256,14 +261,25 @@ function initializeOtherCommands(
 
 		// 视点命令
 		// 注意：ViewpointApplicationService, TaskApplicationService, AIApplicationService 可能不存在
-		// 暂时使用空对象，如果命令需要会报错
+		// 创建一个简单的适配器，使用 artifactService 来实现 getRelatedArtifacts
 		let viewpointService: any;
 		let taskService: any;
 		let aiService: any;
 		try {
 			viewpointService = container.get(TYPES.ViewpointApplicationService);
 		} catch (error) {
-			logger.warn('ViewpointApplicationService not found in container');
+			logger.warn('ViewpointApplicationService not found in container, creating adapter');
+			// 创建一个简单的适配器，使用 artifactService.findArtifactsByCodePath
+			viewpointService = {
+				getRelatedArtifacts: async (codePath: string) => {
+					const result = await artifactService.findArtifactsByCodePath(codePath);
+					return {
+						success: result.success,
+						value: result.success ? result.value : undefined,
+						error: result.success ? undefined : result.error,
+					};
+				},
+			};
 		}
 		try {
 			taskService = container.get(TYPES.TaskApplicationService);
@@ -301,5 +317,29 @@ function initializeOtherCommands(
 		vscode.window.showErrorMessage(`Failed to register some commands: ${error.message}`);
 	}
 }
-	// This method is called when your extension is deactivated
+
+/**
+ * 初始化自定义编辑器
+ */
+function initializeCustomEditors(
+	logger: Logger,
+	context: vscode.ExtensionContext
+) {
+	try {
+		// 注册 Mermaid 编辑器
+		const mermaidEditorDisposable = MermaidEditorProvider.register(context);
+		context.subscriptions.push(mermaidEditorDisposable);
+		logger.info('Mermaid editor registered');
+
+		// 注册 PlantUML 编辑器
+		const plantumlEditorDisposable = PlantUMLEditorProvider.register(context);
+		context.subscriptions.push(plantumlEditorDisposable);
+		logger.info('PlantUML editor registered');
+	} catch (error: any) {
+		logger.error('Failed to register custom editors:', error);
+		vscode.window.showErrorMessage(`Failed to register custom editors: ${error.message}`);
+	}
+}
+
+// This method is called when your extension is deactivated
 export function deactivate() {}

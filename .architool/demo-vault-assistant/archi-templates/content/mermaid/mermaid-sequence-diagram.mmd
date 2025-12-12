@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant User as 用户
+    participant Frontend as 前端
+    participant Backend as 后端
+    participant Database as 数据库
+    
+    User->>Frontend: 发送请求
+    Frontend->>Backend: 调用API
+    Backend->>Database: 查询数据
+    Database-->>Backend: 返回结果
+    Backend-->>Frontend: 返回响应
+    Frontend-->>User: 显示结果
+

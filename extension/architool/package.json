@@ -44,6 +44,28 @@
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "architool.mermaidEditor",
+        "displayName": "Mermaid Diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.mmd"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "architool.plantumlEditor",
+        "displayName": "PlantUML Diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.puml"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "commands": [
       {
         "command": "archi.vault.add",

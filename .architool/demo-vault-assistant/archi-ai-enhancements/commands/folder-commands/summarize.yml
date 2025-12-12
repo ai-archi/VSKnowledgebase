@@ -1,0 +1,26 @@
+name: 总结
+description: 总结文件夹或选中文件的内容
+targetTypes:
+  - folder
+enabled: true
+order: 1
+commandContent: |
+  请总结以下内容：
+  
+  {% if fileName %}
+  文件夹名称：{{ fileName }}
+  {% endif %}
+  
+  {% if folderPath %}
+  文件夹路径：{{ folderPath }}
+  {% endif %}
+  
+  {% if selectedFilesList %}
+  相关文件：
+  {% for file in selectedFilesList %}
+  - {{ file.title or file.name }} ({{ file.path }})
+  {% endfor %}
+  {% endif %}
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+
