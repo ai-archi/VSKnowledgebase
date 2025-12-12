@@ -989,7 +989,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
         <body>
           <div style="padding: 20px; text-align: center;">
             <h2>Webview 未构建</h2>
-            <p>请先运行 <code>cd apps/webview && pnpm build</code> 构建 webview</p>
+            <p>请先运行 <code>cd packages/webview && pnpm build</code> 构建 webview</p>
           </div>
         </body>
       </html>

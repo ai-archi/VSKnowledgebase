@@ -249,7 +249,7 @@ VSKnowledgebase/
   - 每个 Vault 一个子目录
   - 包含 artifacts、metadata、templates 等
 
-- **`apps/extension/src/modules/mcp/`**：MCP 实现
+- **`extension/architool/src/modules/mcp/`**：MCP 实现
   - `MCPTools.ts`：核心工具接口（3 个方法）
   - `MCPResources.ts`：资源访问接口（可选）
   - `MCPServerStarter.ts`：服务器启动器
@@ -271,7 +271,7 @@ VSKnowledgebase/
 pnpm install
 
 # 2. 重新编译 better-sqlite3（为 Electron 环境）
-cd apps/extension && pnpm run rebuild:electron && cd ../..
+cd extension/architool && pnpm run rebuild:electron && cd ../..
 ```
 
 ### 开发工作流
@@ -337,23 +337,23 @@ pnpm run package:quick
 3. 重新编译 `better-sqlite3`（为 Electron 环境，可能需要 2-5 分钟）
 4. 使用 `vsce` 打包生成 `.vsix` 文件
 
-**输出位置**：`apps/extension/architool-{version}.vsix`
+**输出位置**：`extension/architool/architool-{version}.vsix`
 
 #### 安装测试
 
 **方式 1：命令行安装（在项目根目录执行）**
 ```bash
-code --install-extension apps/extension/architool-0.1.0.vsix
+code --install-extension extension/architool/architool-0.1.0.vsix
 ```
 
 **方式 2：VS Code GUI**
 1. 打开扩展视图（`Ctrl+Shift+X` / `Cmd+Shift+X`）
 2. 点击 "..." 菜单 → "Install from VSIX..."
-3. 选择 `apps/extension/architool-{version}.vsix`
+3. 选择 `extension/architool/architool-{version}.vsix`
 
 #### 打包前检查
 
-- ✅ 检查 `apps/extension/package.json` 中的 `version` 字段
+- ✅ 检查 `extension/architool/package.json` 中的 `version` 字段
 - ✅ 确认 `publisher` 字段（当前为 `"architool"`）
 - ✅ 确保已执行 `pnpm install`
 

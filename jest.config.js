@@ -38,8 +38,8 @@ module.exports = {
     {
       displayName: "extension-tests",
       testMatch: [
-        "<rootDir>/apps/extension/**/?(*.)+(spec|test).[jt]s?(x)",
-        "<rootDir>/apps/extension/**/__tests__/**/*.[jt]s?(x)",
+        "<rootDir>/extension/architool/**/?(*.)+(spec|test).[jt]s?(x)",
+        "<rootDir>/extension/architool/**/__tests__/**/*.[jt]s?(x)",
       ],
       ...commonConfig,
     },

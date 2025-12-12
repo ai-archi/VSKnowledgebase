@@ -48,7 +48,7 @@ export class SqliteFactory {
         logger?.error(
           'Failed to load better-sqlite3 native bindings. ' +
           'This usually means the native module needs to be rebuilt. ' +
-          'Please run: cd apps/extension && pnpm rebuild better-sqlite3'
+          'Please run: cd extension/architool && pnpm rebuild better-sqlite3'
         );
       }
       throw error;

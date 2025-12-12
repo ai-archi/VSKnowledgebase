@@ -476,7 +476,7 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
 Extension path: ${extensionPath}
 Webview dist path: ${webviewPath}
 
-Please run: cd apps/webview && pnpm build`;
+Please run: cd packages/webview && pnpm build`;
       
       console.error(errorMessage);
       throw new Error(errorMessage);

@@ -350,7 +350,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       // 使用 ViewpointApplicationService
       artifactsResult = await this.viewpointService.getRelatedArtifacts(relativePath);
     } else {
-      // 直接使用 ArtifactApplicationService（参考 apps/extension 的实现）
+      // 直接使用 ArtifactApplicationService
       this.logger.info('[ViewpointWebviewViewProvider] Using artifactService.findArtifactsByCodePath directly');
       try {
         const result = await this.artifactService.findArtifactsByCodePath(relativePath);
@@ -747,7 +747,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     const htmlPath = path.join(webviewDistPath, 'create-task-dialog.html');
 
     if (!fs.existsSync(htmlPath)) {
-      vscode.window.showErrorMessage('创建任务弹窗未构建，请先运行: cd apps/webview && pnpm build');
+      vscode.window.showErrorMessage('创建任务弹窗未构建，请先运行: cd packages/webview && pnpm build');
       return;
     }
 
@@ -990,7 +990,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
             <body>
               <div style="padding: 20px; text-align: center;">
                 <h2>Webview 未构建</h2>
-                <p>请先运行 <code>cd apps/webview && pnpm build</code> 构建 webview</p>
+                <p>请先运行 <code>cd packages/webview && pnpm build</code> 构建 webview</p>
                 <p style="font-size: 12px; color: var(--vscode-descriptionForeground);">
                   预期路径: ${htmlPath}
                 </p>
