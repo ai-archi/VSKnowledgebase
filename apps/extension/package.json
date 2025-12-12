@@ -522,7 +522,7 @@
   ],
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
-    "compile": "webpack --mode production --devtool hidden-source-map && pnpm run copy:resources",
+    "compile": "webpack --mode production --devtool hidden-source-map && pnpm run copy:resources && pnpm run copy:demo-vaults",
     "copy:resources": "mkdir -p dist/resources/templates && cp src/resources/templates/*.mmd src/resources/templates/*.puml dist/resources/templates/ 2>/dev/null || true",
     "copy:demo-vaults": "rm -rf dist/demo-vaults && mkdir -p dist/demo-vaults && cp -r ../../packages/demo-vaults/* dist/demo-vaults/ 2>/dev/null || true",
     "watch": "webpack --watch",

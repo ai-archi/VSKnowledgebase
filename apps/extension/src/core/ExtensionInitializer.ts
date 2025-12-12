@@ -153,6 +153,7 @@ export class ExtensionInitializer {
     logger: Logger
   ): Promise<void> {
     const demoVaultsSourcePath = path.join(extensionPath, 'dist', 'demo-vaults');
+
     logger.info(`Extension path: ${extensionPath}`);
     logger.info(`Demo vaults source path: ${demoVaultsSourcePath}`);
     logger.info(`Demo vaults source exists: ${fs.existsSync(demoVaultsSourcePath)}`);

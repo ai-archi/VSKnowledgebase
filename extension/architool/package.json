@@ -200,9 +200,10 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
-    "compile": "webpack --mode production --devtool hidden-source-map",
+    "compile": "webpack --mode production --devtool hidden-source-map && pnpm run copy:demo-vaults",
+    "copy:demo-vaults": "rm -rf dist/demo-vaults && mkdir -p dist/demo-vaults && cp -r ../../packages/demo-vaults/* dist/demo-vaults/ 2>/dev/null || true",
     "watch": "webpack --watch",
-    "package": "pnpm run compile && vsce package --no-dependencies",
+    "package": "pnpm run copy:demo-vaults && pnpm run compile && vsce package --no-dependencies",
     "package:vsix": "pnpm run package",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
