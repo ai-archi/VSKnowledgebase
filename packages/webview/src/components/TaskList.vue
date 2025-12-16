@@ -1,29 +1,14 @@
 <template>
   <div class="task-list">
-    <div class="task-list-header">
-      <el-button
-        type="primary"
-        size="small"
-        :icon="Plus"
-        @click="handleCreate"
-      >
-        新建任务
-      </el-button>
-    </div>
-
     <div v-if="loading" class="loading-container">
       <el-icon class="is-loading"><Loading /></el-icon>
       <span>加载中...</span>
     </div>
 
-    <div v-else-if="tasks.length === 0" class="empty-container">
-      <el-empty description="暂无任务" :image-size="80" />
-    </div>
-
     <div v-else class="tasks">
-      <!-- 按分类分组显示 -->
+      <!-- 按分类分组显示，即使没有任务也显示所有分类 -->
       <div
-        v-for="category in taskCategories"
+        v-for="(category, index) in taskCategories"
         :key="category.key"
         class="task-category"
       >
@@ -36,11 +21,27 @@
           </el-icon>
           <span class="category-title">{{ category.label }}</span>
           <span class="category-count">({{ category.tasks.length }})</span>
+          <el-button
+            v-if="index === 0"
+            type="primary"
+            size="small"
+            :icon="Plus"
+            @click.stop="handleCreate"
+            class="create-task-button"
+          >
+            新建任务
+          </el-button>
         </div>
         <div
           v-show="expandedCategories[category.key]"
           class="category-tasks"
         >
+          <div
+            v-if="category.tasks.length === 0"
+            class="empty-category"
+          >
+            <span class="empty-text">暂无{{ category.label }}</span>
+          </div>
           <div
             v-for="task in category.tasks"
             :key="task.id"
@@ -48,23 +49,38 @@
             :class="{ active: selectedTaskId === task.id }"
             @click="handleSelect(task)"
           >
-            <el-checkbox
-              :model-value="task.status === 'completed'"
-              @change="handleStatusChange(task, $event)"
-              @click.stop
-            />
             <div class="task-content">
               <div class="task-title">{{ task.title }}</div>
               <div class="task-meta">
-                <el-tag
-                  :type="getStatusType(task.status)"
+                <div class="task-meta-left">
+                  <el-tag
+                    :type="getStatusType(task.status)"
+                    size="small"
+                    @click.stop="handleStatusClick(task)"
+                    style="cursor: pointer;"
+                  >
+                    {{ getStatusText(task.status) }}
+                  </el-tag>
+                  <el-tag
+                    v-if="task.priority"
+                    :type="getPriorityType(task.priority)"
+                    size="small"
+                  >
+                    {{ getPriorityText(task.priority) }}
+                  </el-tag>
+                  <span v-if="task.createdAt" class="created-time">
+                    {{ formatDate(task.createdAt) }}
+                  </span>
+                </div>
+                <el-button
+                  type="danger"
                   size="small"
+                  :icon="Delete"
+                  @click.stop="handleDelete(task)"
+                  class="delete-button"
                 >
-                  {{ getStatusText(task.status) }}
-                </el-tag>
-                <span v-if="task.priority" class="priority">
-                  {{ getPriorityText(task.priority) }}
-                </span>
+                  删除
+                </el-button>
               </div>
             </div>
           </div>
@@ -76,7 +92,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Plus, Loading, ArrowRight } from '@element-plus/icons-vue';
+import { Plus, Loading, ArrowRight, Delete } from '@element-plus/icons-vue';
 import type { Task } from '../types';
 
 interface Props {
@@ -93,6 +109,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   select: [task: Task];
   create: [];
+  delete: [task: Task];
 }>();
 
 // 分类定义
@@ -134,11 +151,17 @@ function handleCreate() {
   emit('create');
 }
 
-function handleStatusChange(task: Task, checked: boolean) {
+function handleStatusClick(task: Task) {
+  // 切换状态：completed <-> in-progress
+  const newStatus = task.status === 'completed' ? 'in-progress' : 'completed';
   emit('select', {
     ...task,
-    status: checked ? 'completed' : 'in-progress',
+    status: newStatus,
   });
+}
+
+function handleDelete(task: Task) {
+  emit('delete', task);
 }
 
 function getStatusType(status: Task['status']): string {
@@ -171,6 +194,15 @@ function getStatusText(status: Task['status']): string {
   }
 }
 
+function getPriorityType(priority: string): string {
+  const types: Record<string, string> = {
+    low: 'info',
+    medium: 'warning',
+    high: 'danger',
+  };
+  return types[priority] || 'info';
+}
+
 function getPriorityText(priority: string): string {
   const map: Record<string, string> = {
     low: '低',
@@ -178,6 +210,18 @@ function getPriorityText(priority: string): string {
     high: '高',
   };
   return map[priority] || priority;
+}
+
+function formatDate(date: Date | string): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 </script>
 
@@ -188,13 +232,9 @@ function getPriorityText(priority: string): string {
   display: flex;
   flex-direction: column;
   background: var(--vscode-panel-background, #1e1e1e);
+  overflow: hidden;
 }
 
-.task-list-header {
-  padding: 12px;
-  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
-  flex-shrink: 0;
-}
 
 .tasks {
   flex: 1;
@@ -244,6 +284,11 @@ function getPriorityText(priority: string): string {
   margin-left: auto;
 }
 
+.create-task-button {
+  margin-left: auto;
+  margin-right: 0;
+}
+
 .category-tasks {
   padding: 4px 0 0 20px;
 }
@@ -286,19 +331,48 @@ function getPriorityText(priority: string): string {
 .task-meta {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
+  flex-wrap: wrap;
 }
 
-.loading-container,
-.empty-container {
+.task-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.created-time {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #999999);
+}
+
+.delete-button {
+  flex-shrink: 0;
+}
+
+.loading-container {
   display: flex;
   align-items: center;
   justify-content: center;
   flex: 1;
   padding: 40px;
   color: var(--vscode-descriptionForeground, #999999);
+}
+
+.empty-category {
+  padding: 12px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground, #999999);
+  font-size: 12px;
+}
+
+.empty-text {
+  display: inline-block;
 }
 </style>
 

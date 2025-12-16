@@ -347,6 +347,26 @@ const loadVaults = async () => {
     if (vaults.value.length === 0 && allVaults.length > 0) {
       console.warn('No task or document type vaults found. Available vaults:', allVaults.map(v => `${v.name} (${v.type || 'unknown'})`));
     }
+    
+    // 验证当前设置的 vaultId 是否在过滤后的列表中
+    // 如果不在（比如是 assistant 类型），清空并重新设置默认值
+    if (formData.value.vaultId) {
+      const isValidVault = vaults.value.some(v => v.id === formData.value.vaultId);
+      if (!isValidVault) {
+        console.warn(`Initial vaultId ${formData.value.vaultId} is not a valid task/document vault, clearing it`);
+        formData.value.vaultId = '';
+      }
+    }
+    
+    // 如果没有有效的 vaultId，且过滤后有可用的 vault，设置默认值
+    if (!formData.value.vaultId && vaults.value.length > 0) {
+      // 优先选择 task 类型的 vault，如果没有则选择 document 类型
+      const taskVault = vaults.value.find(v => v.type === 'task');
+      const defaultVault = taskVault || vaults.value[0];
+      if (defaultVault) {
+        formData.value.vaultId = defaultVault.id;
+      }
+    }
   } catch (err: any) {
     console.error('Failed to load vaults', err);
     vaults.value = [];

@@ -52,10 +52,14 @@ function handleOpen(file: RelatedFile) {
 
 <style scoped>
 .related-files {
-  padding: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
   background: var(--vscode-panel-background, #1e1e1e);
   flex-shrink: 0;
+  max-height: 100px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .files-scroll {
@@ -64,6 +68,8 @@ function handleOpen(file: RelatedFile) {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 4px 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .file-card {
@@ -120,8 +126,9 @@ function handleOpen(file: RelatedFile) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 20px;
+  padding: 8px;
   color: var(--vscode-descriptionForeground, #999999);
+  font-size: 12px;
 }
 </style>
 

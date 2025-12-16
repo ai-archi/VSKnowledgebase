@@ -1,135 +1,76 @@
 <template>
-  <div class="task-detail" v-if="task">
-    <!-- 任务基本信息 -->
-    <div class="task-info-section">
-      <div class="task-header">
-        <h2 class="task-title">{{ task.title }}</h2>
-        <div class="task-actions">
-          <el-button
-            type="primary"
-            size="small"
-            :icon="Edit"
-            @click="handleEdit"
-          >
-            编辑
-          </el-button>
-          <el-button
-            type="danger"
-            size="small"
-            :icon="Delete"
-            @click="handleDelete"
-          >
-            删除
-          </el-button>
-        </div>
-      </div>
-
-      <div class="task-meta">
-        <div class="meta-item">
-          <span class="meta-label">状态：</span>
-          <el-tag :type="getStatusType(task.status)" size="small">
-            {{ getStatusText(task.status) }}
-          </el-tag>
-        </div>
-        <div class="meta-item" v-if="task.priority">
-          <span class="meta-label">优先级：</span>
-          <el-tag :type="getPriorityType(task.priority)" size="small">
-            {{ getPriorityText(task.priority) }}
-          </el-tag>
-        </div>
-        <div class="meta-item" v-if="task.dueDate">
-          <span class="meta-label">截止日期：</span>
-          <span class="meta-value">{{ formatDate(task.dueDate) }}</span>
-        </div>
-        <div class="meta-item" v-if="task.createdAt">
-          <span class="meta-label">创建时间：</span>
-          <span class="meta-value">{{ formatDate(task.createdAt) }}</span>
-        </div>
-      </div>
-
-      <div class="task-description" v-if="taskDescription">
-        <h3>任务描述</h3>
-        <div class="description-content" v-html="formatMarkdown(taskDescription)"></div>
-      </div>
-    </div>
-
-    <!-- 工作流可视化 -->
-    <div class="workflow-section">
-      <h3>工作流程</h3>
-      <TaskWorkflowDiagram
-        :task="task"
-        :workflow-data="task.workflowData || {}"
-        @step-click="handleStepClick"
-        @step-update="handleStepUpdate"
-      />
-    </div>
-
-    <!-- 当前步骤详情 -->
-    <div class="current-step-section" v-if="currentStepData">
-      <h3>当前步骤：{{ getCurrentStepLabel() }}</h3>
-      <div class="step-content">
-        <div v-if="currentStepType === 'draft-proposal'">
-          <div v-if="currentStepData.questions" class="questions">
-            <h4>问题列表</h4>
-            <div
-              v-for="(question, index) in currentStepData.questions"
-              :key="index"
-              class="question-item"
+  <div class="task-detail-wrapper" v-if="task">
+    <div class="task-detail">
+      <!-- 工作流可视化 -->
+      <div class="workflow-section">
+        <div class="workflow-header">
+          <h3>任务详情</h3>
+          <div class="header-actions">
+            <el-button size="small" @click="handleOpenSolution">打开方案</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              @click="() => handleGeneratePrompt(selectedFormData)"
+              v-if="selectedStepId && hasForm"
             >
-              <p class="question-text">{{ question.text }}</p>
-              <p class="question-answer" v-if="question.answer">{{ question.answer }}</p>
-            </div>
-          </div>
-          <div v-if="currentStepData.proposal" class="proposal">
-            <h4>生成的提案</h4>
-            <div class="proposal-content" v-html="formatMarkdown(currentStepData.proposal)"></div>
-          </div>
-        </div>
-        <div v-else-if="currentStepType === 'review-alignment'">
-          <div v-if="currentStepData.proposal" class="proposal">
-            <h4>提案内容</h4>
-            <div class="proposal-content" v-html="formatMarkdown(currentStepData.proposal)"></div>
-          </div>
-          <div v-if="currentStepData.feedback" class="feedback">
-            <h4>反馈意见</h4>
-            <div class="feedback-content" v-html="formatMarkdown(currentStepData.feedback)"></div>
-          </div>
-        </div>
-        <div v-else-if="currentStepType === 'implementation'">
-          <div v-if="currentStepData.specification" class="specification">
-            <h4>规范内容</h4>
-            <div class="specification-content" v-html="formatMarkdown(currentStepData.specification)"></div>
-          </div>
-          <div v-if="currentStepData.codeFiles && currentStepData.codeFiles.length > 0" class="code-files">
-            <h4>生成的代码文件</h4>
-            <div class="files-list">
-              <el-tag
-                v-for="file in currentStepData.codeFiles"
-                :key="file"
-                class="file-tag"
-                @click="handleOpenFile(file)"
+              生成提示词
+            </el-button>
+            <div class="step-navigation-buttons" v-if="selectedStepId">
+              <el-button
+                type="default"
+                size="small"
+                @click="handlePrevStep"
+                v-if="canGoPrev"
               >
-                {{ file }}
-              </el-tag>
-            </div>
-          </div>
-        </div>
-        <div v-else-if="currentStepType === 'archive-update'">
-          <div v-if="currentStepData.updatedDocuments && currentStepData.updatedDocuments.length > 0" class="documents">
-            <h4>已更新的文档</h4>
-            <div class="documents-list">
-              <el-tag
-                v-for="doc in currentStepData.updatedDocuments"
-                :key="doc"
-                class="doc-tag"
+                上一步
+              </el-button>
+              <el-button
+                type="primary"
+                size="small"
+                @click="handleNextStep"
+                v-if="canGoNext && !isLastStep && !isCurrentStepCompleted"
               >
-                {{ doc }}
-              </el-tag>
+                下一步
+              </el-button>
+              <el-button
+                type="success"
+                size="small"
+                @click="handleCompleteTask"
+                v-if="isLastStep && !isCurrentStepCompleted"
+              >
+                完成
+              </el-button>
             </div>
           </div>
         </div>
-        <div v-else class="step-empty">
-          <el-empty description="暂无步骤数据" :image-size="60" />
+        <!-- 工作流程图（横向展示） -->
+        <div class="workflow-diagram-area">
+          <TaskWorkflowDiagram
+            :task="task"
+            @step-click="handleStepClick"
+          />
+        </div>
+        <!-- 步骤详情（下方） -->
+        <div class="step-detail-area-wrapper">
+          <StepDetailArea
+            v-if="selectedStepId"
+            :step-id="selectedStepId"
+            :step-name="selectedStepName"
+            :step-type="selectedStepType"
+            :chapter-exists="chapterExists"
+            :chapter-content="chapterContent"
+            :form-schema="selectedFormSchema"
+            :form-data="selectedFormData"
+            :can-go-next="canGoNext"
+            :can-go-prev="canGoPrev"
+            @save="handleStepSave"
+            @generate-prompt="handleGeneratePrompt"
+            @prev-step="handlePrevStep"
+            @jump-to-chapter="handleJumpToChapter"
+          />
+          <div v-else class="step-placeholder">
+            <el-empty description="请点击工作流程图中的步骤查看详情" :image-size="80" />
+          </div>
         </div>
       </div>
     </div>
@@ -140,10 +81,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { Edit, Delete } from '@element-plus/icons-vue';
-import { ElButton, ElTag, ElEmpty } from 'element-plus';
+import { ref, computed, watch, nextTick } from 'vue';
+import { ElEmpty, ElMessage } from 'element-plus';
 import TaskWorkflowDiagram from './TaskWorkflowDiagram.vue';
+import StepDetailArea from './StepDetailArea.vue';
 import type { Task } from '../types';
 import { extensionService } from '../services/ExtensionService';
 
@@ -154,156 +95,401 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  edit: [task: Task];
-  delete: [task: Task];
   stepClick: [stepType: string, stepData: any];
 }>();
 
-const currentStepType = ref<string>('');
-const currentStepData = ref<any>(null);
 
-// 计算任务描述
-const taskDescription = computed(() => {
-  return (props.task as any)?.description || '';
+// 新任务格式支持（TaskInstance）
+const selectedStepId = ref<string>('');
+const selectedStepName = ref<string>('');
+const selectedStepType = ref<string>('');
+const chapterExists = ref<boolean>(false);
+const chapterContent = ref<string>('');
+const selectedFormSchema = ref<Record<string, any>>({});
+const selectedFormData = ref<Record<string, any>>({});
+const canGoNext = ref<boolean>(false);
+const canGoPrev = ref<boolean>(false);
+
+// 计算是否有表单（用于显示生成提示词按钮）
+const hasForm = computed(() => {
+  return Object.keys(selectedFormSchema.value).length > 0;
 });
 
-// 计算当前步骤数据
-const currentStep = computed(() => {
-  if (!props.task || !props.task.workflowStep) return null;
-  return props.task.workflowStep;
+// 计算是否是最后一个步骤
+const isLastStep = computed(() => {
+  if (!props.task || !selectedStepId.value) return false;
+  const taskInstance = props.task as any;
+  if (!taskInstance.steps || !Array.isArray(taskInstance.steps)) return false;
+  
+  const steps = taskInstance.steps;
+  const currentIndex = steps.findIndex((s: any) => s.id === selectedStepId.value);
+  return currentIndex >= 0 && currentIndex === steps.length - 1;
 });
+
 
 // 监听任务变化，加载当前步骤数据
-watch(() => props.task, (newTask) => {
-  if (newTask) {
-    loadCurrentStepData();
+watch(() => props.task?.id, async (newTaskId, oldTaskId) => {
+  console.log('[TaskDetail] Task ID watch triggered', { oldTaskId, newTaskId, task: props.task });
+  
+  // 如果任务被清空，重置所有状态
+  if (!newTaskId) {
+    console.log('[TaskDetail] Task cleared, resetting state');
+    resetTaskState();
+    return;
+  }
+  
+  // 如果任务 ID 变化（切换任务），先重置状态，再加载新任务数据
+  if (newTaskId !== oldTaskId) {
+    console.log('[TaskDetail] Task switched', { from: oldTaskId, to: newTaskId });
+    resetTaskState();
+    await nextTick();
+    
+    if (props.task) {
+      console.log('[TaskDetail] Opening current step for new task', {
+        taskId: props.task.id,
+        stepsCount: (props.task as any).steps?.length || 0
+      });
+      await openCurrentStep();
+    } else {
+      console.warn('[TaskDetail] Task is null after reset');
+    }
   } else {
-    currentStepData.value = null;
-    currentStepType.value = '';
+    console.log('[TaskDetail] Task ID unchanged');
   }
 }, { immediate: true });
 
-function loadCurrentStepData() {
-  if (!props.task || !props.task.workflowStep) {
-    currentStepData.value = null;
-    currentStepType.value = '';
+// 监听任务对象的变化（用于同一任务内的数据更新）
+watch(() => props.task, async (newTask, oldTask) => {
+  if (newTask && oldTask && newTask.id === oldTask.id) {
+    // 如果当前没有选中的步骤，自动打开当前进行中的步骤
+    if (!selectedStepId.value) {
+      await openCurrentStep();
+    }
+  }
+}, { deep: true });
+
+/**
+ * 重置任务相关的所有状态
+ */
+function resetTaskState() {
+  selectedStepId.value = '';
+  selectedStepName.value = '';
+  selectedStepType.value = '';
+  chapterExists.value = false;
+  chapterContent.value = '';
+  selectedFormSchema.value = {};
+  selectedFormData.value = {};
+  canGoNext.value = false;
+  canGoPrev.value = false;
+}
+
+
+/**
+ * 找到当前进行中的步骤
+ * 优先级：in-progress > pending > currentStep > workflowStep > 第一个步骤
+ */
+function findCurrentActiveStep(): { stepId: string; step: any } | null {
+  if (!props.task) return null;
+
+  const taskInstance = props.task as any;
+  if (!taskInstance.steps || !Array.isArray(taskInstance.steps)) {
+    return null;
+  }
+
+  const steps = taskInstance.steps;
+
+  // 1. 优先找状态为 'in-progress' 的步骤
+  let activeStep = steps.find((s: any) => s.status === 'in-progress');
+  if (activeStep) {
+    return { stepId: activeStep.id, step: activeStep };
+  }
+
+  // 2. 如果没有，找第一个状态为 'pending' 的步骤
+  activeStep = steps.find((s: any) => s.status === 'pending');
+  if (activeStep) {
+    return { stepId: activeStep.id, step: activeStep };
+  }
+
+  // 3. 如果都没有，使用 task.currentStep
+  if (taskInstance.currentStep) {
+    activeStep = steps.find((s: any) => s.id === taskInstance.currentStep);
+    if (activeStep) {
+      return { stepId: activeStep.id, step: activeStep };
+    }
+  }
+
+  // 4. 如果都没有，使用第一个步骤
+  if (steps.length > 0) {
+    return { stepId: steps[0].id, step: steps[0] };
+  }
+
+  return null;
+}
+
+/**
+ * 自动打开当前进行中的步骤
+ */
+async function openCurrentStep() {
+  const activeStep = findCurrentActiveStep();
+  if (activeStep) {
+    // 使用 handleStepClick 来打开步骤（这会加载所有相关数据）
+    await handleStepClick(activeStep.stepId, activeStep.step);
+  }
+}
+
+
+
+async function handleStepClick(stepType: string, stepData: any) {
+  if (!props.task) return;
+  
+  const taskInstance = props.task as any;
+  if (!taskInstance.steps || !Array.isArray(taskInstance.steps)) {
     return;
   }
-
-  currentStepType.value = props.task.workflowStep;
-  currentStepData.value = props.task.workflowData?.[props.task.workflowStep] || null;
-}
-
-function getCurrentStepLabel(): string {
-  const labels: Record<string, string> = {
-    'draft-proposal': '起草提案',
-    'review-alignment': '审查对齐',
-    'implementation': '实现任务',
-    'archive-update': '归档更新',
-  };
-  return labels[currentStepType.value] || currentStepType.value;
-}
-
-function getStatusType(status: string): string {
-  const types: Record<string, string> = {
-    'pending': 'info',
-    'in-progress': 'warning',
-    'completed': 'success',
-    'cancelled': 'danger',
-  };
-  return types[status] || 'info';
-}
-
-function getStatusText(status: string): string {
-  const texts: Record<string, string> = {
-    'pending': '待处理',
-    'in-progress': '进行中',
-    'completed': '已完成',
-    'cancelled': '已取消',
-  };
-  return texts[status] || status;
-}
-
-function getPriorityType(priority: string): string {
-  const types: Record<string, string> = {
-    'low': 'info',
-    'medium': 'warning',
-    'high': 'danger',
-  };
-  return types[priority] || 'info';
-}
-
-function getPriorityText(priority: string): string {
-  const texts: Record<string, string> = {
-    'low': '低',
-    'medium': '中',
-    'high': '高',
-  };
-  return texts[priority] || priority;
-}
-
-function formatDate(date: Date | string): string {
-  if (!date) return '';
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatMarkdown(text: string): string {
-  if (!text) return '';
-  // 简单的 markdown 格式化（可以后续使用 markdown 库）
-  return text
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>');
-}
-
-function handleEdit() {
-  if (props.task) {
-    emit('edit', props.task);
+  
+  selectedStepId.value = stepType;
+  const step = taskInstance.steps.find((s: any) => s.id === stepType);
+  if (step) {
+    selectedStepName.value = step.form?.title || stepType;
+    selectedStepType.value = step.type || stepType;
+    selectedFormData.value = step.formData || {};
+    selectedFormSchema.value = step.form?.schema || {};
+    canGoNext.value = canGoToNextStep(stepType);
+    canGoPrev.value = canGoToPrevStep(stepType);
+    
+    try {
+      await ensureSolutionFileAndChapter(stepType);
+    } catch (error) {
+      console.error('Failed to ensure solution file and chapter:', error);
+    }
+    
+    await checkChapterExists(stepType);
   }
-}
-
-function handleDelete() {
-  if (props.task) {
-    emit('delete', props.task);
-  }
-}
-
-function handleStepClick(stepType: string, stepData: any) {
-  currentStepType.value = stepType;
-  currentStepData.value = stepData;
+  
   emit('stepClick', stepType, stepData);
 }
 
-function handleStepUpdate(stepType: string, data: any) {
-  // 更新当前步骤数据
-  if (stepType === currentStepType.value) {
-    currentStepData.value = data;
+async function checkChapterExists(stepId: string) {
+  if (!props.task) return;
+  try {
+    const result = await extensionService.call('checkSolutionChapter', {
+      taskId: props.task.id,
+      stepId,
+    });
+    chapterExists.value = result?.exists || false;
+    chapterContent.value = result?.content || '';
+  } catch (error) {
+    console.error('Failed to check chapter existence:', error);
+    chapterExists.value = false;
   }
 }
 
-function handleOpenFile(filePath: string) {
-  extensionService.call('openFile', {
-    filePath: filePath,
-  });
+function canGoToNextStep(stepId: string): boolean {
+  if (!props.task || !(props.task as any).steps || !Array.isArray((props.task as any).steps)) return false;
+  const taskInstance = props.task as any;
+  const steps = taskInstance.steps;
+  const currentIndex = steps.findIndex((s: any) => s.id === stepId);
+  return currentIndex >= 0 && currentIndex < steps.length - 1;
 }
+
+function canGoToPrevStep(stepId: string): boolean {
+  if (!props.task || !(props.task as any).steps || !Array.isArray((props.task as any).steps)) return false;
+  const taskInstance = props.task as any;
+  const steps = taskInstance.steps;
+  const currentIndex = steps.findIndex((s: any) => s.id === stepId);
+  return currentIndex > 0;
+}
+
+async function handleStepSave(data: Record<string, any>) {
+  if (!props.task || !selectedStepId.value) return;
+  try {
+    await extensionService.call('saveStepFormData', {
+      taskId: props.task.id,
+      stepId: selectedStepId.value,
+      formData: data,
+    });
+    // 保存后重新检查章节是否存在
+    await checkChapterExists(selectedStepId.value);
+  } catch (error) {
+    console.error('Failed to save step data:', error);
+  }
+}
+
+async function handleGeneratePrompt(data: Record<string, any>) {
+  if (!props.task || !selectedStepId.value) return;
+  try {
+    // 清理 formData，确保可序列化（Vue 响应式对象可能包含不可序列化的内容）
+    const cleanFormData = JSON.parse(JSON.stringify(data || {}));
+    
+    // 调用后端生成提示词
+    const result = await extensionService.call<string>('generateStepPrompt', {
+      taskId: props.task.id,
+      stepId: selectedStepId.value,
+      formData: cleanFormData,
+    });
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(result).then(() => {
+      ElMessage.success('提示词已复制到剪贴板');
+    }).catch(err => {
+      console.error('Failed to copy to clipboard', err);
+      ElMessage.error('复制到剪贴板失败');
+    });
+  } catch (error: any) {
+    console.error('Failed to generate prompt', error);
+    ElMessage.error(`生成提示词失败：${error.message || '未知错误'}`);
+  }
+}
+
+async function handleNextStep() {
+  if (!props.task || !selectedStepId.value) return;
+  try {
+    // 先保存当前步骤的表单数据
+    if (Object.keys(selectedFormData.value).length > 0) {
+      await handleStepSave(selectedFormData.value);
+    }
+    
+    // 调用后端方法更新步骤状态并切换到下一步
+    const result = await extensionService.call<{ success: boolean; nextStepId?: string }>('goToNextStep', {
+      taskId: props.task.id,
+      currentStepId: selectedStepId.value,
+    });
+    
+    if (result.success && result.nextStepId) {
+      // 重新加载任务数据（因为后端已经更新了 yaml 文件）
+      // 通过触发任务变更通知来刷新数据
+      const taskInstance = props.task as any;
+      const steps = taskInstance.steps || [];
+      const nextStep = steps.find((s: any) => s.id === result.nextStepId);
+      if (nextStep) {
+        // 等待一下，确保后端文件已保存
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // 打开下一步
+        await handleStepClick(nextStep.id, nextStep);
+      }
+    }
+  } catch (error: any) {
+    console.error('Failed to go to next step:', error);
+    ElMessage.error(`切换到下一步失败：${error.message || '未知错误'}`);
+  }
+}
+
+async function handlePrevStep() {
+  if (!props.task || !selectedStepId.value) return;
+  try {
+    // 先保存当前步骤的表单数据
+    if (Object.keys(selectedFormData.value).length > 0) {
+      await handleStepSave(selectedFormData.value);
+    }
+    
+    // 调用后端方法更新步骤状态并切换到上一步
+    const result = await extensionService.call<{ success: boolean; prevStepId?: string }>('goToPreviousStep', {
+      taskId: props.task.id,
+      currentStepId: selectedStepId.value,
+    });
+    
+    if (result.success && result.prevStepId) {
+      // 重新加载任务数据（因为后端已经更新了 yaml 文件）
+      const taskInstance = props.task as any;
+      const steps = taskInstance.steps || [];
+      const prevStep = steps.find((s: any) => s.id === result.prevStepId);
+      if (prevStep) {
+        // 等待一下，确保后端文件已保存
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // 打开上一步
+        await handleStepClick(prevStep.id, prevStep);
+      }
+    }
+  } catch (error: any) {
+    console.error('Failed to go to prev step:', error);
+    ElMessage.error(`切换到上一步失败：${error.message || '未知错误'}`);
+  }
+}
+
+async function handleCompleteTask() {
+  if (!props.task || !selectedStepId.value) return;
+  try {
+    // 先保存当前步骤的表单数据
+    if (Object.keys(selectedFormData.value).length > 0) {
+      await handleStepSave(selectedFormData.value);
+    }
+    
+    // 调用后端方法完成任务
+    const result = await extensionService.call<{ success: boolean }>('completeTask', {
+      taskId: props.task.id,
+      stepId: selectedStepId.value,
+    });
+    
+    if (result.success) {
+      ElMessage.success('任务已完成');
+      // 等待一下，确保后端文件已保存
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // 后端会通过 notifyTaskChanged 通知前端刷新任务列表
+      // 这里不需要额外操作，ViewpointPanelPage 会监听 taskChanged 事件
+    }
+  } catch (error: any) {
+    console.error('Failed to complete task:', error);
+    ElMessage.error(`完成任务失败：${error.message || '未知错误'}`);
+  }
+}
+
+
+async function handleJumpToChapter() {
+  if (!props.task || !selectedStepId.value) return;
+  try {
+    await extensionService.call('jumpToSolutionChapter', {
+      taskId: props.task.id,
+      stepId: selectedStepId.value,
+    });
+  } catch (error) {
+    console.error('Failed to jump to chapter:', error);
+  }
+}
+
+async function handleOpenSolution() {
+  if (!props.task) return;
+  try {
+    await extensionService.call('openSolution', {
+      taskId: props.task.id,
+    });
+  } catch (error) {
+    console.error('Failed to open solution:', error);
+  }
+}
+
+async function ensureSolutionFileAndChapter(_stepId: string) {
+  if (!props.task) return;
+  try {
+    await extensionService.call('openSolution', {
+      taskId: props.task.id,
+    });
+  } catch (error) {
+    console.error('Failed to open solution:', error);
+  }
+}
+
 </script>
 
 <style scoped>
+.task-detail-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 .task-detail {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--vscode-panel-background, #1e1e1e);
   color: var(--vscode-panel-foreground, #cccccc);
+  box-sizing: border-box;
 }
 
 .task-info-section {
@@ -312,47 +498,7 @@ function handleOpenFile(filePath: string) {
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
 
-.task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
 
-.task-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--vscode-foreground, #cccccc);
-}
-
-.task-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.task-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.meta-label {
-  color: var(--vscode-descriptionForeground, #999999);
-  font-size: 13px;
-}
-
-.meta-value {
-  color: var(--vscode-foreground, #cccccc);
-  font-size: 13px;
-}
 
 .task-description {
   margin-top: 16px;
@@ -376,27 +522,52 @@ function handleOpenFile(filePath: string) {
 }
 
 .workflow-section {
-  margin-bottom: 24px;
-  padding-bottom: 24px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
 
+.workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.step-navigation-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .workflow-section h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
   color: var(--vscode-foreground, #cccccc);
 }
 
-.current-step-section {
-  flex: 1;
+.workflow-diagram-area {
+  width: 100%;
+  margin-bottom: 12px;
 }
 
-.current-step-section h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--vscode-foreground, #cccccc);
+.step-detail-area-wrapper {
+  width: 100%;
+}
+
+.step-placeholder {
+  padding: 40px;
+  text-align: center;
+  background: var(--vscode-editor-background, #1e1e1e);
+  border: 1px solid var(--vscode-panel-border, #3e3e3e);
+  border-radius: 4px;
 }
 
 .step-content {

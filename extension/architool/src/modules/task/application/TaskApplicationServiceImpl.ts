@@ -39,9 +39,11 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         };
       }
 
-      // 过滤出 archi-tasks/ 目录下的 artifact
+      // 过滤出 archi-tasks/ 目录下的 artifact，排除方案文件（.solution.md）
       const taskArtifacts = artifactsResult.value.filter(a => 
-        a.path.startsWith('archi-tasks/')
+        a.path.startsWith('archi-tasks/') && 
+        !a.path.endsWith('.solution.md') &&
+        (a.path.endsWith('.yml') || a.path.endsWith('.yaml'))
       );
 
       const tasks: Task[] = [];
@@ -127,9 +129,13 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         artifactPath = artifactPath.replace(/\.md$/, '.yml');
       }
 
-      // 如果有模板ID，加载模板并初始化工作流
-      let workflowStep = 'draft-proposal';
-      let workflowData: Record<string, any> = {};
+      // 构建任务内容（YAML 格式，支持新格式 steps 和旧格式 workflow）
+      const taskId = uuidv4();
+      const now = new Date().toISOString();
+      
+      // 如果有模板ID，加载模板并初始化步骤
+      let steps: any[] = [];
+      let currentStep: string | undefined;
       let templateId: string | undefined;
 
       if (options.templateId) {
@@ -137,26 +143,56 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         if (templateResult.success && templateResult.value) {
           const template = templateResult.value;
           templateId = template.id;
-          workflowStep = template.workflow.initialStep;
-          // 为每个步骤初始化空数据
-          for (const step of template.workflow.steps) {
-            workflowData[step.key] = {};
-          }
+          
+          // 从模板创建步骤数组
+          steps = template.steps.map((stepDef: any, index: number) => {
+            const stepId = stepDef.id || `step-${index + 1}`;
+            // 第一个步骤状态为 'in-progress'，其他为 'pending'
+            const status: 'in-progress' | 'pending' = index === 0 ? 'in-progress' : 'pending';
+            
+            return {
+              id: stepId,
+              type: stepDef.type,
+              form: stepDef.form,
+              prompt: stepDef.prompt,
+              depends_on: stepDef.depends_on || [],
+              status: status,
+              formData: {},
+              createdAt: now,
+              ...(status === 'in-progress' ? { startedAt: now } : {}),
+            };
+          });
+          
+          // 设置当前步骤为第一个 in-progress 的步骤
+          currentStep = steps.find(s => s.status === 'in-progress')?.id || steps[0]?.id;
         }
       } else {
-        // 默认工作流
-        workflowData = {
-          'draft-proposal': {},
-          'review-alignment': {},
-          'implementation': {},
-          'archive-update': {},
-        };
+        // 默认步骤
+        const defaultSteps = [
+          { id: 'draft-proposal', form: { title: '起草提案' } },
+          { id: 'review-alignment', form: { title: '审查对齐' } },
+          { id: 'implementation', form: { title: '实现任务' } },
+          { id: 'archive-update', form: { title: '归档更新' } },
+        ];
+        
+        steps = defaultSteps.map((stepDef, index) => {
+          const stepId = stepDef.id;
+          const status: 'in-progress' | 'pending' = index === 0 ? 'in-progress' : 'pending';
+          
+          return {
+            id: stepId,
+            form: stepDef.form,
+            status: status,
+            formData: {},
+            depends_on: [],
+            createdAt: now,
+            ...(status === 'in-progress' ? { startedAt: now } : {}),
+          };
+        });
+        
+        currentStep = steps[0]?.id;
       }
-
-      // 构建任务内容（YAML 格式，包含流程定义）
-      const taskId = uuidv4();
-      const now = new Date().toISOString();
-      const taskData = {
+      const taskData: any = {
         id: taskId,
         title: options.title,
         status: options.status || 'pending',
@@ -165,19 +201,17 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         category: options.category || 'task', // 默认分类为 'task'
         createdAt: now,
         updatedAt: now,
-        // 流程定义
-        workflow: {
-          step: workflowStep,
-          data: workflowData,
-          templateId: templateId,
-        },
+        // 新格式：steps 数组
+        steps: steps,
+        currentStep: currentStep,
+        templateId: templateId,
         // 描述
         description: '',
       };
 
       const content = yaml.dump(taskData, { indent: 2, lineWidth: -1 });
 
-      // 创建文件
+      // 创建任务 YAML 文件
       const writeResult = await this.artifactService.writeFile(
         { id: vault.id, name: vault.name },
         artifactPath,
@@ -189,6 +223,29 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
           success: false,
           error: writeResult.error,
         };
+      }
+
+      // 创建任务方案 Markdown 文件
+      const solutionPath = artifactPath
+        .replace(/\.yml$/, '.solution.md')
+        .replace(/\.yaml$/, '.solution.md');
+      
+      // 生成方案文件的初始内容
+      const solutionContent = this.generateSolutionContent(options.title, steps);
+      
+      const solutionWriteResult = await this.artifactService.writeFile(
+        { id: vault.id, name: vault.name },
+        solutionPath,
+        solutionContent
+      );
+
+      if (!solutionWriteResult.success) {
+        // 如果方案文件创建失败，记录警告但不影响任务创建
+        this.logger.warn('Failed to create solution file', {
+          taskId,
+          solutionPath,
+          error: solutionWriteResult.error
+        });
       }
 
       // 创建 Task 对象
@@ -204,7 +261,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         vaultId: options.vaultId,
       };
 
-      this.logger.info('Task created', { taskId, artifactPath, vaultId: options.vaultId });
+      this.logger.info('Task created', { taskId, artifactPath, solutionPath, vaultId: options.vaultId });
       return {
         success: true,
         value: task,
@@ -219,6 +276,27 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         ),
       };
     }
+  }
+
+  /**
+   * 生成任务方案文件的初始内容
+   */
+  private generateSolutionContent(taskTitle: string, steps: any[]): string {
+    let content = `# ${taskTitle}\n\n`;
+    
+    // 为每个步骤生成章节占位符
+    if (steps && steps.length > 0) {
+      steps.forEach((step, index) => {
+        const stepTitle = step.form?.title || step.id || `步骤 ${index + 1}`;
+        content += `## ${stepTitle}\n\n`;
+        content += `<!-- 在此处添加 ${stepTitle} 的内容 -->\n\n`;
+      });
+    } else {
+      content += `## 任务说明\n\n`;
+      content += `<!-- 在此处添加任务说明 -->\n\n`;
+    }
+    
+    return content;
   }
 
   /**
@@ -312,13 +390,56 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
 
   async deleteTask(taskId: string): Promise<Result<void, ArtifactError>> {
     try {
-      // This is a simplified implementation
+      // 获取任务列表，找到要删除的任务
+      const tasksResult = await this.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            'Failed to list tasks'
+          ),
+        };
+      }
+
+      const task = tasksResult.value.find(t => t.id === taskId);
+      if (!task) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Task not found: ${taskId}`
+          ),
+        };
+      }
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${task.vaultId}`
+          ),
+        };
+      }
+
+      const vault = vaultResult.value;
+
+      // 删除任务文件（使用 deleteArtifact，artifactId 可以是路径）
+      const deleteResult = await this.artifactService.deleteArtifact(task.vaultId, task.artifactPath);
+      if (!deleteResult.success) {
+        return {
+          success: false,
+          error: deleteResult.error,
+        };
+      }
+
+      this.logger.info('Task deleted', { taskId, artifactPath: task.artifactPath, vaultId: task.vaultId });
       return {
-        success: false,
-        error: new ArtifactError(
-          ArtifactErrorCode.OPERATION_FAILED,
-          'Delete task not yet implemented'
-        ),
+        success: true,
+        value: undefined,
       };
     } catch (error: any) {
       this.logger.error('Failed to delete task', error);
@@ -404,19 +525,19 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
               if (readResult.success) {
                 try {
                   const templateData = yaml.load(readResult.value) as any;
-                  this.logger.info(`[TaskApplicationService] Parsed template data: id=${templateData?.id}, name=${templateData?.name}, hasWorkflow=${!!templateData?.workflow}`);
+                  this.logger.info(`[TaskApplicationService] Parsed template data: id=${templateData?.id}, name=${templateData?.name}, hasSteps=${!!templateData?.steps}`);
                   
-                  if (templateData && templateData.id && templateData.workflow) {
+                  if (templateData && templateData.id && templateData.steps && Array.isArray(templateData.steps)) {
                     templates.push({
                       id: templateData.id,
                       name: templateData.name || templateData.id,
                       description: templateData.description,
                       category: templateData.category || 'task',
-                      workflow: templateData.workflow,
+                      steps: templateData.steps,
                     });
                     this.logger.info(`[TaskApplicationService] Successfully loaded task template: ${templateData.id} (${templateData.name})`);
                   } else {
-                    this.logger.warn(`[TaskApplicationService] Task template file missing required fields: path=${node.path}, hasId=${!!templateData?.id}, hasWorkflow=${!!templateData?.workflow}`);
+                    this.logger.warn(`[TaskApplicationService] Task template file missing required fields: path=${node.path}, hasId=${!!templateData?.id}, hasSteps=${!!templateData?.steps}`);
                   }
                 } catch (parseError: any) {
                   this.logger.error(`[TaskApplicationService] Failed to parse task template: ${node.path}`, parseError);
@@ -462,7 +583,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
           if (readResult.success) {
             try {
               const templateData = yaml.load(readResult.value) as any;
-              if (templateData && templateData.id === templateId && templateData.workflow) {
+              if (templateData && templateData.id === templateId && templateData.steps && Array.isArray(templateData.steps)) {
                 return {
                   success: true,
                   value: {
@@ -470,7 +591,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
                     name: templateData.name || templateData.id,
                     description: templateData.description,
                     category: templateData.category || 'task',
-                    workflow: templateData.workflow,
+                    steps: templateData.steps,
                   },
                 };
               }

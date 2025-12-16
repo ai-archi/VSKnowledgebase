@@ -11,14 +11,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['mermaid', 'codemirror'],
+    include: ['mermaid', 'codemirror', '@milkdown/core', '@milkdown/preset-commonmark', '@milkdown/plugin-listener', '@milkdown/theme-nord'],
   },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     assetsInlineLimit: 0, // 不内联资源，确保所有资源文件都被复制
     commonjsOptions: {
-      include: [/mermaid/, /codemirror/, /node_modules/],
+      include: [/mermaid/, /codemirror/, /@milkdown/, /node_modules/],
     },
     rollupOptions: {
       input: {
@@ -30,6 +30,7 @@ export default defineConfig({
         'viewpoint-panel': resolve(__dirname, 'viewpoint-panel.html'),
         'mermaid-editor': resolve(__dirname, 'mermaid-editor.html'),
         'plantuml-editor': resolve(__dirname, 'plantuml-editor.html'),
+        'solution-editor': resolve(__dirname, 'solution-editor.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

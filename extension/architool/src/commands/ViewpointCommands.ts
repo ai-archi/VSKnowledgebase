@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
-import { ViewpointWebviewViewProvider, ViewpointApplicationService, TaskApplicationService, AIApplicationService } from '../views/ViewpointWebviewViewProvider';
+import { ViewpointWebviewViewProvider, ViewpointApplicationService, AIApplicationService } from '../views/ViewpointWebviewViewProvider';
+import { TaskApplicationService } from '../modules/task/application/TaskApplicationService';
 import { VaultApplicationService } from '../modules/shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../modules/shared/application/ArtifactApplicationService';
+import { FileOperationDomainService } from '../modules/shared/domain/services/FileOperationDomainService';
 import { Logger } from '../core/logger/Logger';
 
 /**
@@ -14,6 +16,7 @@ export class ViewpointCommands {
     private artifactService: ArtifactApplicationService,
     private taskService: TaskApplicationService,
     private aiService: AIApplicationService,
+    private fileOperationService: FileOperationDomainService,
     private logger: Logger,
     private context: vscode.ExtensionContext
   ) {}
@@ -31,6 +34,7 @@ export class ViewpointCommands {
         this.artifactService,
         this.taskService,
         this.aiService,
+        this.fileOperationService,
         this.logger,
         this.context
       );

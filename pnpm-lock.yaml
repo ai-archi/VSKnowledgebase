@@ -74,128 +74,6 @@ importers:
         specifier: ^2.15.0
         version: 2.15.0
 
-  apps/extension:
-    dependencies:
-      '@huggingface/jinja':
-        specifier: ^0.5.3
-        version: 0.5.3
-      better-sqlite3:
-        specifier: ^12.0.0
-        version: 12.4.6
-      diagram-js:
-        specifier: ^15.4.0
-        version: 15.4.0
-      fast-glob:
-        specifier: ^3.3.2
-        version: 3.3.3
-      ignore:
-        specifier: ^5.2.4
-        version: 5.3.2
-      inversify:
-        specifier: ^6.0.2
-        version: 6.2.2(reflect-metadata@0.2.2)
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.1.1
-      knex:
-        specifier: ^3.1.0
-        version: 3.1.0(better-sqlite3@12.4.6)
-      minimatch:
-        specifier: ^5.1.6
-        version: 5.1.6
-      reflect-metadata:
-        specifier: ^0.2.2
-        version: 0.2.2
-      simple-git:
-        specifier: ^3.22.0
-        version: 3.30.0
-      uuid:
-        specifier: ^9.0.1
-        version: 9.0.1
-    devDependencies:
-      '@electron/rebuild':
-        specifier: ^4.0.1
-        version: 4.0.1
-      '@huggingface/hub':
-        specifier: ^2.7.1
-        version: 2.7.1
-      '@huggingface/transformers':
-        specifier: ^3.0.0
-        version: 3.8.1
-      '@types/better-sqlite3':
-        specifier: ^7.6.0
-        version: 7.6.13
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      '@types/minimatch':
-        specifier: ^6.0.0
-        version: 6.0.0
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.25
-      '@types/uuid':
-        specifier: ^9.0.6
-        version: 9.0.8
-      '@types/vscode':
-        specifier: ^1.80.0
-        version: 1.106.1
-      systemjs:
-        specifier: ^6.15.1
-        version: 6.15.1
-      ts-loader:
-        specifier: ^9.5.4
-        version: 9.5.4(typescript@5.9.3)(webpack@5.103.0)
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-      webpack:
-        specifier: ^5.103.0
-        version: 5.103.0(webpack-cli@6.0.1)
-      webpack-cli:
-        specifier: ^6.0.1
-        version: 6.0.1(webpack@5.103.0)
-
-  apps/webview:
-    dependencies:
-      '@element-plus/icons-vue':
-        specifier: ^2.3.2
-        version: 2.3.2(vue@3.5.24(typescript@5.9.3))
-      codemirror:
-        specifier: ^5.65.16
-        version: 5.65.20
-      element-plus:
-        specifier: ^2.11.8
-        version: 2.11.8(vue@3.5.24(typescript@5.9.3))
-      jointjs:
-        specifier: ^3.4.2
-        version: 3.7.7
-      mermaid:
-        specifier: ^11.12.2
-        version: 11.12.2
-      pinia:
-        specifier: ^2.1.7
-        version: 2.3.1(typescript@5.9.3)(vue@3.5.24(typescript@5.9.3))
-      vue:
-        specifier: ^3.4.0
-        version: 3.5.24(typescript@5.9.3)
-    devDependencies:
-      '@types/codemirror':
-        specifier: ^5.60.5
-        version: 5.60.17
-      '@vitejs/plugin-vue':
-        specifier: ^5.0.0
-        version: 5.2.4(vite@5.4.21(@types/node@22.19.1)(lightningcss@1.30.2)(terser@5.44.1))(vue@3.5.24(typescript@5.9.3))
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-      vite:
-        specifier: ^5.0.0
-        version: 5.4.21(@types/node@22.19.1)(lightningcss@1.30.2)(terser@5.44.1)
-      vue-tsc:
-        specifier: ^1.8.27
-        version: 1.8.27(typescript@5.9.3)
-
   extension/architool:
     dependencies:
       '@huggingface/jinja':
@@ -314,6 +192,46 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+
+  packages/webview:
+    dependencies:
+      '@element-plus/icons-vue':
+        specifier: ^2.3.2
+        version: 2.3.2(vue@3.5.24(typescript@5.9.3))
+      codemirror:
+        specifier: ^5.65.16
+        version: 5.65.20
+      element-plus:
+        specifier: ^2.11.8
+        version: 2.11.8(vue@3.5.24(typescript@5.9.3))
+      jointjs:
+        specifier: ^3.4.2
+        version: 3.7.7
+      mermaid:
+        specifier: ^11.12.2
+        version: 11.12.2
+      pinia:
+        specifier: ^2.1.7
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.24(typescript@5.9.3))
+      vue:
+        specifier: ^3.4.0
+        version: 3.5.24(typescript@5.9.3)
+    devDependencies:
+      '@types/codemirror':
+        specifier: ^5.60.5
+        version: 5.60.17
+      '@vitejs/plugin-vue':
+        specifier: ^5.0.0
+        version: 5.2.4(vite@5.4.21(@types/node@22.19.1)(lightningcss@1.30.2)(terser@5.44.1))(vue@3.5.24(typescript@5.9.3))
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@22.19.1)(lightningcss@1.30.2)(terser@5.44.1)
+      vue-tsc:
+        specifier: ^1.8.27
+        version: 1.8.27(typescript@5.9.3)
 
 packages:
 
@@ -1592,9 +1510,6 @@ packages:
 
   '@types/uuid@9.0.8':
     resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}
-
-  '@types/vscode@1.106.1':
-    resolution: {integrity: sha512-R/HV8u2h8CAddSbX8cjpdd7B8/GnE4UjgjpuGuHcbp1xV6yh4OeqU4L1pKjlwujCrSFS0MOpwJAIs/NexMB1fQ==}
 
   '@types/vscode@1.107.0':
     resolution: {integrity: sha512-XS8YE1jlyTIowP64+HoN30OlC1H9xqSlq1eoLZUgFEC8oUTO6euYZxti1xRiLSfZocs4qytTzR6xCBYtioQTCg==}
@@ -6952,8 +6867,6 @@ snapshots:
     optional: true
 
   '@types/uuid@9.0.8': {}
-
-  '@types/vscode@1.106.1': {}
 
   '@types/vscode@1.107.0': {}
 

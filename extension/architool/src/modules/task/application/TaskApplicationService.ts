@@ -29,22 +29,16 @@ export interface TaskTemplate {
   name: string;
   description?: string;
   category: string;
-  workflow: {
-    steps: Array<{
-      key: string;
-      label: string;
-      description?: string;
-      order: number;
-      fields?: Array<{
-        key: string;
-        type: string;
-        label: string;
-        readonly?: boolean;
-        items?: any;
-      }>;
-    }>;
-    initialStep: string;
-  };
+  steps: Array<{
+    id: string;
+    type?: string;
+    form?: {
+      title: string;
+      schema?: Record<string, any>;
+    };
+    prompt?: string;
+    depends_on?: string[];
+  }>;
 }
 
 export interface TaskApplicationService {

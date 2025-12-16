@@ -4,6 +4,10 @@ import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { VaultApplicationService } from '../modules/shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../modules/shared/application/ArtifactApplicationService';
+import { TaskApplicationService } from '../modules/task/application/TaskApplicationService';
+import { FileOperationDomainService } from '../modules/shared/domain/services/FileOperationDomainService';
+import { CommandExecutionContext } from '../modules/shared/domain/value_object/CommandExecutionContext';
+import { Artifact } from '../modules/shared/domain/entity/artifact';
 import { Logger } from '../core/logger/Logger';
 
 /**
@@ -11,16 +15,6 @@ import { Logger } from '../core/logger/Logger';
  */
 export interface ViewpointApplicationService {
   getRelatedArtifacts(codePath: string): Promise<{ success: boolean; value?: any[]; error?: any }>;
-}
-
-/**
- * 任务应用服务接口（临时定义，待后续迁移完整服务）
- */
-export interface TaskApplicationService {
-  listTasks(): Promise<{ success: boolean; value?: any[]; error?: any }>;
-  createTask(options: any): Promise<{ success: boolean; value?: any; error?: any }>;
-  updateTask(taskId: string, updates: any): Promise<{ success: boolean; value?: any; error?: any }>;
-  getTaskTemplates(vaultId?: string): Promise<{ success: boolean; value?: any[]; error?: any }>;
 }
 
 /**
@@ -44,6 +38,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     private artifactService: ArtifactApplicationService,
     private taskService: TaskApplicationService,
     private aiService: AIApplicationService,
+    private fileOperationService: FileOperationDomainService,
     private logger: Logger,
     private context: vscode.ExtensionContext
   ) {}
@@ -288,9 +283,55 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
           result = { success: true };
           break;
 
+        case 'openSolution':
+          await this.openSolution(message.params.taskId);
+          result = { success: true };
+          break;
+
         case 'openCreateTaskDialog':
           await this.openCreateTaskDialog();
           result = { success: true };
+          break;
+
+        case 'generateStepPrompt':
+          result = await this.generateStepPrompt(
+            message.params.taskId,
+            message.params.stepId,
+            message.params.formData || {}
+          );
+          break;
+
+        case 'saveStepFormData':
+          result = await this.saveStepFormData(
+            message.params.taskId,
+            message.params.stepId,
+            message.params.formData || {}
+          );
+          break;
+
+        case 'goToNextStep':
+          result = await this.goToNextStep(
+            message.params.taskId,
+            message.params.currentStepId
+          );
+          break;
+
+        case 'goToPreviousStep':
+          result = await this.goToPreviousStep(
+            message.params.taskId,
+            message.params.currentStepId
+          );
+          break;
+
+        case 'completeTask':
+          result = await this.completeTask(
+            message.params.taskId,
+            message.params.stepId
+          );
+          break;
+
+        case 'deleteTask':
+          result = await this.deleteTask(message.params.taskId);
           break;
 
         default:
@@ -395,8 +436,11 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
    */
   private async getTasks(): Promise<any[]> {
     const result = await this.taskService.listTasks();
-    if (!result.success || !result.value) {
+    if (!result.success) {
       throw new Error(result.error?.message || 'Failed to list tasks');
+    }
+    if (!result.value) {
+      return [];
     }
 
     // 读取每个任务的完整信息，包括 workflow
@@ -416,8 +460,9 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
               artifactId: task.artifactId,
               artifactPath: task.artifactPath,
               vaultId: task.vaultId,
-              workflowStep: 'draft-proposal',
-              workflowData: {},
+              category: task.category || 'task',
+              steps: [],
+              currentStep: undefined,
               templateId: undefined,
             };
           }
@@ -431,22 +476,24 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
           if (readResult.success) {
             const taskData = yaml.load(readResult.value) as any;
             
-            if (taskData && taskData.workflow) {
-              return {
-                id: task.id,
-                title: task.title,
-                status: task.status,
-                priority: task.priority,
-                dueDate: task.dueDate,
-                artifactId: task.artifactId,
-                artifactPath: task.artifactPath,
-                vaultId: task.vaultId,
-                category: task.category || taskData.category || 'task', // 默认分类为 'task'
-                workflowStep: taskData.workflow.step || 'draft-proposal',
-                workflowData: taskData.workflow.data || {},
-                templateId: taskData.workflow.templateId,
-                description: taskData.description || '',
-                createdAt: taskData.createdAt,
+            // 使用新格式：steps 和 currentStep
+            if (taskData && taskData.steps && Array.isArray(taskData.steps)) {
+                return {
+                  id: task.id,
+                  title: task.title,
+                  status: task.status,
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                  artifactId: task.artifactId,
+                  artifactPath: task.artifactPath,
+                  vaultId: task.vaultId,
+                  category: task.category || taskData.category || 'task',
+                  steps: taskData.steps,
+                  currentStep: taskData.currentStep,
+                templateId: taskData.templateId,
+                  description: taskData.description || '',
+                  createdAt: taskData.createdAt,
+                updatedAt: taskData.updatedAt,
               };
             }
           }
@@ -464,9 +511,9 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
         artifactId: task.artifactId,
         artifactPath: task.artifactPath,
         vaultId: task.vaultId,
-        category: task.category || 'task', // 默认分类为 'task'
-        workflowStep: 'draft-proposal',
-        workflowData: {},
+        category: task.category || 'task',
+        steps: [],
+        currentStep: undefined,
         templateId: undefined,
       };
       })
@@ -543,8 +590,11 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     
     const result = await this.taskService.getTaskTemplates(vaultId);
     
-    if (!result.success || !result.value) {
+    if (!result.success) {
       this.logger.error('[ViewpointWebviewViewProvider] Failed to get task templates', result.error);
+      return [];
+    }
+    if (!result.value) {
       return [];
     }
 
@@ -717,6 +767,104 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
   }
 
   /**
+   * 打开任务方案文件
+   * 如果方案文件不存在，会自动创建
+   */
+  private async openSolution(taskId: string): Promise<void> {
+    try {
+      // 获取任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        throw new Error('Failed to get task list');
+      }
+
+      const task = tasksResult.value.find((t: any) => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // 获取 vault
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        throw new Error(`Vault not found: ${task.vaultId}`);
+      }
+      const vaultRef = { id: vaultResult.value.id, name: vaultResult.value.name };
+
+      // 构建方案文件路径（将 .yml 或 .yaml 替换为 .solution.md）
+      const solutionPath = task.artifactPath
+        .replace(/\.yml$/, '.solution.md')
+        .replace(/\.yaml$/, '.solution.md');
+
+      // 检查方案文件是否存在
+      const existsResult = await this.artifactService.exists(vaultRef, solutionPath);
+      if (!existsResult.success) {
+        this.logger.error('Failed to check solution file existence', { solutionPath, error: existsResult.error });
+        throw new Error('Failed to check solution file existence');
+      }
+
+      // 如果方案文件不存在，自动创建
+      if (!existsResult.value) {
+        this.logger.info('Solution file not found, creating it', { solutionPath, taskId });
+        
+        // 读取任务 YAML 文件以获取任务标题和步骤信息
+        const readResult = await this.artifactService.readFile(vaultRef, task.artifactPath);
+        if (!readResult.success) {
+          throw new Error('Failed to read task file');
+        }
+
+        const taskData = yaml.load(readResult.value) as any;
+        if (!taskData) {
+          throw new Error('Invalid task file');
+        }
+
+        // 生成方案文件内容
+        const taskTitle = taskData.title || task.title || '任务方案';
+        const steps = taskData.steps || [];
+        const solutionContent = this.generateSolutionContent(taskTitle, steps);
+
+        // 创建方案文件
+        const writeResult = await this.artifactService.writeFile(vaultRef, solutionPath, solutionContent);
+        if (!writeResult.success) {
+          this.logger.error('Failed to create solution file', { solutionPath, error: writeResult.error });
+          throw new Error('Failed to create solution file');
+        }
+
+        this.logger.info('Solution file created successfully', { solutionPath, taskId });
+      }
+
+      // 使用 openFile 方法打开方案文件
+      await this.openFile({
+        filePath: solutionPath,
+        vaultId: task.vaultId,
+      });
+    } catch (error: any) {
+      this.logger.error('Failed to open solution', { taskId, error });
+      throw new Error(error?.message || 'Failed to open solution');
+    }
+  }
+
+  /**
+   * 生成任务方案文件的初始内容
+   */
+  private generateSolutionContent(taskTitle: string, steps: any[]): string {
+    let content = `# ${taskTitle} 方案\n\n`;
+    
+    // 为每个步骤生成章节占位符
+    if (steps && steps.length > 0) {
+      steps.forEach((step, index) => {
+        const stepTitle = step.form?.title || step.id || `步骤 ${index + 1}`;
+        content += `## ${stepTitle}\n\n`;
+        content += `<!-- 在此处添加 ${stepTitle} 的内容 -->\n\n`;
+      });
+    } else {
+      content += `## 任务说明\n\n`;
+      content += `<!-- 在此处添加任务说明 -->\n\n`;
+    }
+    
+    return content;
+  }
+
+  /**
    * 获取 vault 路径（辅助方法）
    */
   private async getVaultPath(vaultId: string): Promise<string> {
@@ -751,11 +899,20 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       return;
     }
 
-    // 获取当前选中的 vault
+    // 获取当前选中的 vault，只选择 task 或 document 类型的 vault
     const vaultsResult = await this.vaultService.listVaults();
     let initialVaultId: string | undefined;
     if (vaultsResult.success && vaultsResult.value.length > 0) {
-      initialVaultId = vaultsResult.value[0].id;
+      // 过滤出 task 或 document 类型的 vault
+      const validVaults = vaultsResult.value.filter(
+        v => v.type === 'task' || v.type === 'document'
+      );
+      
+      if (validVaults.length > 0) {
+        // 优先选择 task 类型的 vault，如果没有则选择 document 类型
+        const taskVault = validVaults.find(v => v.type === 'task');
+        initialVaultId = taskVault ? taskVault.id : validVaults[0].id;
+      }
     }
 
     // 创建 webview panel
@@ -1116,5 +1273,554 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       // 返回一个默认路径，即使可能不存在
       return path.join(this.context.extensionPath, 'dist', 'webview');
     }
+  }
+
+  /**
+   * 生成步骤提示词
+   * 使用与创建文件提示词生成一致的逻辑
+   */
+  private async generateStepPrompt(
+    taskId: string,
+    stepId: string,
+    formData: Record<string, any>
+  ): Promise<string> {
+    try {
+      // 获取任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        throw new Error('Failed to get task list');
+      }
+
+      const task = tasksResult.value.find((t: any) => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        throw new Error(`Vault not found: ${task.vaultId}`);
+      }
+
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
+      
+      // 读取任务文件，获取步骤定义
+      const readResult = await this.artifactService.readFile(vaultRef, task.artifactPath);
+      if (!readResult.success) {
+        throw new Error('Failed to read task file');
+      }
+
+      const taskData = yaml.load(readResult.value) as any;
+      if (!taskData) {
+        throw new Error('Invalid task file');
+      }
+
+      // 使用 steps 格式
+      if (!taskData.steps || !Array.isArray(taskData.steps)) {
+        throw new Error('Task does not have steps');
+      }
+
+      const stepDefinition = taskData.steps.find((s: any) => s.id === stepId);
+      if (!stepDefinition) {
+        throw new Error(`Step not found: ${stepId}`);
+      }
+
+      // 获取步骤的 prompt 模板
+      const promptTemplate = stepDefinition.prompt;
+      if (!promptTemplate) {
+        throw new Error(`Step ${stepId} does not have a prompt template`);
+      }
+
+      // 构建方案路径
+      const solutionPath = task.artifactPath.replace(/\.yml$/, '.solution.md').replace(/\.yaml$/, '.solution.md');
+
+      // 确保 formData 是可序列化的（深拷贝并移除不可序列化的属性）
+      const serializableFormData = this.sanitizeForSerialization(formData || {});
+
+      // 确保 task 对象是可序列化的
+      const serializableTask = {
+        id: String(taskData.id || taskId),
+        name: String(taskData.name || task.title || ''),
+        description: String(taskData.description || ''),
+        vaultId: String(task.vaultId),
+        solutionPath: String(solutionPath),
+      };
+
+      // 将 prompt 模板转换为 Artifact 对象（与创建文件的逻辑一致）
+      const stepTitle = stepDefinition.form?.title || stepId;
+      const artifact: Artifact = {
+        id: `${taskId}-${stepId}`,
+        vault: vaultRef,
+        nodeType: 'FILE',
+        path: task.artifactPath,
+        name: stepTitle,
+        format: 'md',
+        contentLocation: '',
+        viewType: 'document',
+        title: stepTitle,
+        description: stepTitle,
+        body: promptTemplate, // 模板内容放在 body 字段中
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: 'draft',
+      };
+
+      // 构建 CommandExecutionContext（与创建文件的逻辑一致）
+      const context: CommandExecutionContext = {
+        vaultId: String(task.vaultId),
+        vaultName: String(vault.name),
+        task: serializableTask,
+        formData: serializableFormData,
+        solutionPath: String(solutionPath),
+      };
+
+      // 使用 fileOperationService.renderTemplate 渲染模板（与创建文件的逻辑一致）
+      const rendered = this.fileOperationService.renderTemplate(artifact, context);
+
+      // 确保返回的是纯字符串，并且可序列化
+      const renderedStr = String(rendered || '').trim();
+      
+      // 验证可以序列化
+      try {
+        JSON.stringify(renderedStr);
+        return renderedStr;
+      } catch (e) {
+        this.logger.warn('Rendered prompt is not serializable, using empty string', { rendered });
+        return '';
+      }
+    } catch (error: any) {
+      this.logger.error('Failed to generate step prompt', { taskId, stepId, error });
+      const errorMessage = error?.message || String(error) || 'Failed to generate prompt';
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * 保存步骤表单数据
+   */
+  private async saveStepFormData(
+    taskId: string,
+    stepId: string,
+    formData: Record<string, any>
+  ): Promise<{ success: boolean }> {
+    try {
+      // 获取任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        throw new Error('Failed to get task list');
+      }
+
+      const task = tasksResult.value.find((t: any) => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        throw new Error(`Vault not found: ${task.vaultId}`);
+      }
+
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
+      
+      // 读取任务文件
+      const readResult = await this.artifactService.readFile(vaultRef, task.artifactPath);
+      if (!readResult.success) {
+        throw new Error('Failed to read task file');
+      }
+
+      const taskData = yaml.load(readResult.value) as any;
+      if (!taskData) {
+        throw new Error('Invalid task file');
+      }
+
+      // 更新步骤的表单数据
+      if (!taskData.steps || !Array.isArray(taskData.steps)) {
+        throw new Error('Task does not have steps');
+      }
+      
+      const stepIndex = taskData.steps.findIndex((s: any) => s.id === stepId);
+      if (stepIndex === -1) {
+        throw new Error(`Step not found: ${stepId}`);
+      }
+      taskData.steps[stepIndex].formData = this.sanitizeForSerialization(formData || {});
+      
+      // 更新任务的 updatedAt
+      taskData.updatedAt = new Date().toISOString();
+
+      // 保存回文件
+      const content = yaml.dump(taskData, { indent: 2, lineWidth: -1 });
+      const writeResult = await this.artifactService.writeFile(vaultRef, task.artifactPath, content);
+      
+      if (!writeResult.success) {
+        throw new Error('Failed to write task file');
+      }
+
+      // 通知任务已变更
+      await this.notifyTaskChanged();
+
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error('Failed to save step form data', { taskId, stepId, error });
+      throw new Error(error?.message || 'Failed to save step form data');
+    }
+  }
+
+  /**
+   * 切换到下一步
+   */
+  private async goToNextStep(
+    taskId: string,
+    currentStepId: string
+  ): Promise<{ success: boolean; nextStepId?: string }> {
+    try {
+      // 获取任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        throw new Error('Failed to get task list');
+      }
+
+      const task = tasksResult.value.find((t: any) => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        throw new Error(`Vault not found: ${task.vaultId}`);
+      }
+
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
+      
+      // 读取任务文件
+      const readResult = await this.artifactService.readFile(vaultRef, task.artifactPath);
+      if (!readResult.success) {
+        throw new Error('Failed to read task file');
+      }
+
+      const taskData = yaml.load(readResult.value) as any;
+      if (!taskData) {
+        throw new Error('Invalid task file');
+      }
+
+      // 使用 steps 格式
+      if (!taskData.steps || !Array.isArray(taskData.steps)) {
+        throw new Error('Task does not have steps');
+      }
+
+      const steps = taskData.steps;
+      const currentStepIndex = steps.findIndex((s: any) => s.id === currentStepId);
+      if (currentStepIndex === -1) {
+        throw new Error(`Current step not found: ${currentStepId}`);
+      }
+
+      // 检查是否有下一步
+      if (currentStepIndex >= steps.length - 1) {
+        throw new Error('No next step available');
+      }
+
+      // 更新当前步骤状态为 completed
+      steps[currentStepIndex].status = 'completed';
+      if (!steps[currentStepIndex].completedAt) {
+        steps[currentStepIndex].completedAt = new Date().toISOString();
+      }
+
+      // 更新下一步状态为 in-progress
+      const nextStepIndex = currentStepIndex + 1;
+      steps[nextStepIndex].status = 'in-progress';
+      if (!steps[nextStepIndex].startedAt) {
+        steps[nextStepIndex].startedAt = new Date().toISOString();
+      }
+
+      // 更新 currentStep
+      taskData.currentStep = steps[nextStepIndex].id;
+      
+      // 更新任务的 updatedAt
+      taskData.updatedAt = new Date().toISOString();
+
+      // 保存回文件
+      const content = yaml.dump(taskData, { indent: 2, lineWidth: -1 });
+      const writeResult = await this.artifactService.writeFile(vaultRef, task.artifactPath, content);
+      
+      if (!writeResult.success) {
+        throw new Error('Failed to write task file');
+      }
+
+      // 通知任务已变更
+      await this.notifyTaskChanged();
+
+      return { success: true, nextStepId: taskData.currentStep };
+    } catch (error: any) {
+      this.logger.error('Failed to go to next step', { taskId, currentStepId, error });
+      throw new Error(error?.message || 'Failed to go to next step');
+    }
+  }
+
+  /**
+   * 切换到上一步
+   */
+  private async goToPreviousStep(
+    taskId: string,
+    currentStepId: string
+  ): Promise<{ success: boolean; prevStepId?: string }> {
+    try {
+      // 获取任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        throw new Error('Failed to get task list');
+      }
+
+      const task = tasksResult.value.find((t: any) => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        throw new Error(`Vault not found: ${task.vaultId}`);
+      }
+
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
+      
+      // 读取任务文件
+      const readResult = await this.artifactService.readFile(vaultRef, task.artifactPath);
+      if (!readResult.success) {
+        throw new Error('Failed to read task file');
+      }
+
+      const taskData = yaml.load(readResult.value) as any;
+      if (!taskData) {
+        throw new Error('Invalid task file');
+      }
+
+      // 使用 steps 格式
+      if (!taskData.steps || !Array.isArray(taskData.steps)) {
+        throw new Error('Task does not have steps');
+      }
+
+      const steps = taskData.steps;
+      const currentStepIndex = steps.findIndex((s: any) => s.id === currentStepId);
+      if (currentStepIndex === -1) {
+        throw new Error(`Current step not found: ${currentStepId}`);
+      }
+
+      // 检查是否有上一步
+      if (currentStepIndex <= 0) {
+        throw new Error('No previous step available');
+      }
+
+      // 更新当前步骤状态为 pending（如果之前是 in-progress）
+      if (steps[currentStepIndex].status === 'in-progress') {
+        steps[currentStepIndex].status = 'pending';
+        // 移除 startedAt（如果存在）
+        if (steps[currentStepIndex].startedAt) {
+          delete steps[currentStepIndex].startedAt;
+        }
+      }
+
+      // 更新上一步状态为 in-progress
+      const prevStepIndex = currentStepIndex - 1;
+      steps[prevStepIndex].status = 'in-progress';
+      if (!steps[prevStepIndex].startedAt) {
+        steps[prevStepIndex].startedAt = new Date().toISOString();
+      }
+      // 如果上一步之前是 completed，移除 completedAt
+      if (steps[prevStepIndex].completedAt) {
+        delete steps[prevStepIndex].completedAt;
+      }
+
+      // 更新 currentStep
+      taskData.currentStep = steps[prevStepIndex].id;
+      
+      // 更新任务的 updatedAt
+      taskData.updatedAt = new Date().toISOString();
+
+      // 保存回文件
+      const content = yaml.dump(taskData, { indent: 2, lineWidth: -1 });
+      const writeResult = await this.artifactService.writeFile(vaultRef, task.artifactPath, content);
+      
+      if (!writeResult.success) {
+        throw new Error('Failed to write task file');
+      }
+
+      // 通知任务已变更
+      await this.notifyTaskChanged();
+
+      return { success: true, prevStepId: taskData.currentStep };
+    } catch (error: any) {
+      this.logger.error('Failed to go to previous step', { taskId, currentStepId, error });
+      throw new Error(error?.message || 'Failed to go to previous step');
+    }
+  }
+
+  /**
+   * 完成任务
+   */
+  private async completeTask(
+    taskId: string,
+    stepId: string
+  ): Promise<{ success: boolean }> {
+    try {
+      // 获取任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success || !tasksResult.value) {
+        throw new Error('Failed to get task list');
+      }
+
+      const task = tasksResult.value.find((t: any) => t.id === taskId);
+      if (!task) {
+        throw new Error('Task not found');
+      }
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        throw new Error(`Vault not found: ${task.vaultId}`);
+      }
+
+      const vault = vaultResult.value;
+      const vaultRef = { id: vault.id, name: vault.name };
+      
+      // 读取任务文件
+      const readResult = await this.artifactService.readFile(vaultRef, task.artifactPath);
+      if (!readResult.success) {
+        throw new Error('Failed to read task file');
+      }
+
+      const taskData = yaml.load(readResult.value) as any;
+      if (!taskData) {
+        throw new Error('Invalid task file');
+      }
+
+      // 使用 steps 格式
+      if (!taskData.steps || !Array.isArray(taskData.steps)) {
+        throw new Error('Task does not have steps');
+      }
+
+      const steps = taskData.steps;
+      const currentStepIndex = steps.findIndex((s: any) => s.id === stepId);
+      if (currentStepIndex === -1) {
+        throw new Error(`Step not found: ${stepId}`);
+      }
+
+      // 检查是否是最后一个步骤
+      if (currentStepIndex !== steps.length - 1) {
+        throw new Error('Can only complete the last step');
+      }
+
+      // 更新当前步骤状态为 completed
+      steps[currentStepIndex].status = 'completed';
+      if (!steps[currentStepIndex].completedAt) {
+        steps[currentStepIndex].completedAt = new Date().toISOString();
+      }
+
+      // 更新任务状态为 completed
+      taskData.status = 'completed';
+      
+      // 更新任务的 updatedAt
+      taskData.updatedAt = new Date().toISOString();
+
+      // 保存回文件
+      const content = yaml.dump(taskData, { indent: 2, lineWidth: -1 });
+      const writeResult = await this.artifactService.writeFile(vaultRef, task.artifactPath, content);
+      
+      if (!writeResult.success) {
+        throw new Error('Failed to write task file');
+      }
+
+      // 通知任务已变更
+      await this.notifyTaskChanged();
+
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error('Failed to complete task', { taskId, stepId, error });
+      throw new Error(error?.message || 'Failed to complete task');
+    }
+  }
+
+  /**
+   * 通知 webview 任务已变更
+   */
+  private async notifyTaskChanged(): Promise<void> {
+    if (!this.webviewView?.visible) {
+      return;
+    }
+
+    try {
+      // 发送任务变更事件
+      this.webviewView.webview.postMessage({
+        method: 'taskChanged',
+        params: {},
+      });
+    } catch (error: any) {
+      this.logger.error('[ViewpointWebviewViewProvider] Failed to notify task changed', error);
+    }
+  }
+
+  /**
+   * 删除任务
+   */
+  private async deleteTask(taskId: string): Promise<{ success: boolean }> {
+    try {
+      const result = await this.taskService.deleteTask(taskId);
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to delete task');
+      }
+
+      // 通知任务已变更
+      await this.notifyTaskChanged();
+
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error('Failed to delete task', { taskId, error });
+      throw new Error(error?.message || 'Failed to delete task');
+    }
+  }
+
+  /**
+   * 清理对象，移除不可序列化的属性
+   */
+  private sanitizeForSerialization(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.sanitizeForSerialization(item));
+    }
+
+    if (typeof obj === 'object') {
+      const sanitized: any = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          const value = obj[key];
+          // 跳过函数、Symbol 等不可序列化的值
+          if (typeof value !== 'function' && typeof value !== 'symbol') {
+            try {
+              // 尝试序列化以验证是否可序列化
+              JSON.stringify(value);
+              sanitized[key] = this.sanitizeForSerialization(value);
+            } catch (e) {
+              // 如果无法序列化，转换为字符串
+              sanitized[key] = String(value);
+            }
+          }
+        }
+      }
+      return sanitized;
+    }
+
+    // 其他类型转换为字符串
+    return String(obj);
   }
 }

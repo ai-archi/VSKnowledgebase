@@ -1,5 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
+// IMPORTANT: reflect-metadata must be imported BEFORE inversify for decorators to work
+import 'reflect-metadata';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
@@ -292,12 +294,16 @@ function initializeOtherCommands(
 			logger.warn('AIApplicationService not found in container');
 		}
 		
+		// 获取 FileOperationDomainService（用于提示词生成，必需）
+		const fileOperationService = container.get<FileOperationDomainService>(TYPES.FileOperationDomainService);
+		
 		const viewpointCommands = new ViewpointCommands(
 			viewpointService,
 			vaultService,
 			artifactService,
 			taskService,
 			aiService,
+			fileOperationService,
 			logger,
 			context
 		);

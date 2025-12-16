@@ -2,66 +2,134 @@ id: default-task-template
 name: 默认任务模板
 description: 标准任务流程：起草提案 → 审查对齐 → 实现任务 → 归档更新
 category: task
-workflow:
-  steps:
-    - key: draft-proposal
-      label: 起草提案
-      description: AI 将询问关键问题以明确需求
-      order: 1
-      fields:
-        - key: questions
+# 步骤定义
+steps:
+  - id: draft-proposal
+    type: DraftProposalStep
+    form:
+      title: 起草提案
+      schema:
+        questions:
           type: array
-          label: 问题列表
-          items:
-            type: object
-            properties:
-              - key: text
-                type: string
-                label: 问题
-              - key: answer
-                type: string
-                label: 回答
-        - key: proposal
+          title: 问题列表
+          description: AI 将询问关键问题以明确需求
+        proposal:
           type: textarea
-          label: 生成的提案
-          readonly: true
-    - key: review-alignment
-      label: 审查对齐
-      description: 人和 AI 共同审查，展示提案并收集反馈，反复迭代
-      order: 2
-      fields:
-        - key: proposal
-          type: textarea
-          label: 提案内容
-          readonly: true
-        - key: feedback
-          type: textarea
-          label: 反馈意见
-    - key: implementation
-      label: 实现任务
-      description: 根据批准的规范生成代码
-      order: 3
-      fields:
-        - key: specification
-          type: textarea
-          label: 规范内容
-          readonly: true
-        - key: codeFiles
-          type: array
-          label: 生成的代码文件
-          items:
-            type: string
-    - key: archive-update
-      label: 归档更新
-      description: 变更归档，规范文档自动更新
-      order: 4
-      fields:
-        - key: updatedDocuments
-          type: array
-          label: 已更新的文档
-          items:
-            type: string
-  initialStep: draft-proposal
-createdAt: 2024-01-01T00:00:00Z
-updatedAt: 2024-01-01T00:00:00Z
+          title: 生成的提案
+          description: 基于问题回答生成的提案内容
+          required: false
+    prompt: |
+      你是一个专业的系统架构师，需要基于以下信息起草提案：
+      
+      任务名称：{{ task.name }}
+      任务描述：{{ task.description }}
+      方案路径：{{ solutionPath }}
+      
+      当前步骤表单数据：
+      {% for key, value in formData %}
+      - {{ key }}: {{ value }}
+      {% endfor %}
+      
+      请基于以上信息，生成一个详细的提案，包括：
+      1. 需求分析
+      2. 技术方案
+      3. 实施计划
+      4. 风险评估
+    depends_on: []
 
+  - id: review-alignment
+    type: ReviewAlignmentStep
+    form:
+      title: 审查对齐
+      schema:
+        proposal:
+          type: textarea
+          title: 提案内容
+          description: 待审查的提案内容
+          required: false
+        feedback:
+          type: textarea
+          title: 反馈意见
+          description: 对提案的反馈和修改建议
+          required: false
+    prompt: |
+      你是一个专业的系统架构审查专家，需要审查以下提案：
+      
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+      
+      当前步骤表单数据：
+      {% for key, value in formData %}
+      - {{ key }}: {{ value }}
+      {% endfor %}
+      
+      请基于以上信息，对提案进行审查，并提供：
+      1. 提案的优点
+      2. 存在的问题
+      3. 改进建议
+      4. 风险评估
+    depends_on:
+      - draft-proposal
+
+  - id: implementation
+    type: ImplementationStep
+    form:
+      title: 实现任务
+      schema:
+        specification:
+          type: textarea
+          title: 规范内容
+          description: 经过审查和修改后的最终规范
+          required: false
+        codeFiles:
+          type: array
+          title: 生成的代码文件
+          description: 根据规范生成的代码文件列表
+          required: false
+    prompt: |
+      你是一个专业的软件开发工程师，需要基于以下信息实现任务：
+      
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+      
+      当前步骤表单数据：
+      {% for key, value in formData %}
+      - {{ key }}: {{ value }}
+      {% endfor %}
+      
+      请基于以上信息，生成实现方案，包括：
+      1. 技术实现方案
+      2. 代码文件结构
+      3. 关键代码实现
+      4. 测试计划
+    depends_on:
+      - review-alignment
+
+  - id: archive-update
+    type: ArchiveUpdateStep
+    form:
+      title: 归档更新
+      schema:
+        updatedDocuments:
+          type: array
+          title: 已更新的文档
+          description: 需要更新或创建的文档列表
+          required: false
+    prompt: |
+      你是一个专业的文档管理专家，需要基于以下信息更新文档：
+      
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+      
+      当前步骤表单数据：
+      {% for key, value in formData %}
+      - {{ key }}: {{ value }}
+      {% endfor %}
+      
+      请基于以上信息，生成文档更新方案，包括：
+      1. 需要更新的文档列表
+      2. 每个文档的更新内容
+      3. 文档结构建议
+      4. 归档建议
+    depends_on:
+      - implementation

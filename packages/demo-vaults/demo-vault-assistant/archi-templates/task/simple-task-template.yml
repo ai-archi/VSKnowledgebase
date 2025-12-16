@@ -2,32 +2,66 @@ id: simple-task-template
 name: 简化任务模板
 description: 简化流程：实现任务 → 归档更新
 category: task
-workflow:
-  steps:
-    - key: implementation
-      label: 实现任务
-      description: 根据需求直接生成代码
-      order: 1
-      fields:
-        - key: requirements
+# 步骤定义
+steps:
+  - id: implementation
+    type: ImplementationStep
+    form:
+      title: 实现任务
+      schema:
+        requirements:
           type: textarea
-          label: 需求描述
-        - key: codeFiles
+          title: 需求描述
+          description: 任务的具体需求描述
+          required: true
+        codeFiles:
           type: array
-          label: 生成的代码文件
-          items:
-            type: string
-    - key: archive-update
-      label: 归档更新
-      description: 更新相关文档
-      order: 2
-      fields:
-        - key: updatedDocuments
-          type: array
-          label: 已更新的文档
-          items:
-            type: string
-  initialStep: implementation
-createdAt: 2024-01-01T00:00:00Z
-updatedAt: 2024-01-01T00:00:00Z
+          title: 生成的代码文件
+          description: 根据需求生成的代码文件列表
+          required: false
+    prompt: |
+      你是一个专业的软件开发工程师，需要基于以下信息实现任务：
+      
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+      
+      当前步骤表单数据：
+      {% for key, value in formData %}
+      - {{ key }}: {{ value }}
+      {% endfor %}
+      
+      请基于以上信息，生成实现方案，包括：
+      1. 技术实现方案
+      2. 代码文件结构
+      3. 关键代码实现
+      4. 测试计划
+    depends_on: []
 
+  - id: archive-update
+    type: ArchiveUpdateStep
+    form:
+      title: 归档更新
+      schema:
+        updatedDocuments:
+          type: array
+          title: 已更新的文档
+          description: 需要更新或创建的文档列表
+          required: false
+    prompt: |
+      你是一个专业的文档管理专家，需要基于以下信息更新文档：
+      
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+      
+      当前步骤表单数据：
+      {% for key, value in formData %}
+      - {{ key }}: {{ value }}
+      {% endfor %}
+      
+      请基于以上信息，生成文档更新方案，包括：
+      1. 需要更新的文档列表
+      2. 每个文档的更新内容
+      3. 文档结构建议
+      4. 归档建议
+    depends_on:
+      - implementation

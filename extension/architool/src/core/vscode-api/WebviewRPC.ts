@@ -76,6 +76,7 @@ export class WebviewRPC {
         id: v.id,
         name: v.name,
         description: v.description,
+        type: v.type,
       }));
     });
 

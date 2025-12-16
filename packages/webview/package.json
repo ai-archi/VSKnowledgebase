@@ -16,7 +16,12 @@
     "pinia": "^2.1.7",
     "vue": "^3.4.0",
     "mermaid": "^11.12.2",
-    "codemirror": "^5.65.16"
+    "codemirror": "^5.65.16",
+    "@milkdown/core": "^7.17.3",
+    "@milkdown/prose": "^7.17.3",
+    "@milkdown/preset-commonmark": "^7.17.3",
+    "@milkdown/plugin-listener": "^7.17.3",
+    "@milkdown/theme-nord": "^7.17.3"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

@@ -2,6 +2,7 @@
   <div class="viewpoint-panel">
     <!-- 关联文件区 -->
     <RelatedFiles
+      v-if="relatedFiles.length > 0 || loadingRelatedFiles"
       :files="relatedFiles"
       :loading="loadingRelatedFiles"
       @open="handleOpenFile"
@@ -17,6 +18,7 @@
           :selected-task-id="selectedTaskId"
           @select="handleSelectTask"
           @create="handleCreateTask"
+          @delete="handleDeleteTask"
         />
       </div>
 
@@ -25,34 +27,22 @@
         <TaskDetail
           v-if="selectedTask"
           :task="selectedTask"
-          @edit="handleEditTask"
-          @delete="handleDeleteTask"
-          @step-click="handleStepClick"
         />
         <div v-else class="empty-workflow">
           <el-empty description="请选择一个任务查看详情" :image-size="100" />
         </div>
       </div>
     </div>
-
-    <!-- 任务步骤详情弹窗 -->
-    <TaskStepDetail
-      v-if="showStepDetail"
-      :step="currentStep"
-      :step-type="currentStepType"
-      @close="showStepDetail = false"
-      @save="handleStepSave"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { extensionService } from './services/ExtensionService';
 import RelatedFiles from './components/RelatedFiles.vue';
 import TaskList from './components/TaskList.vue';
 import TaskDetail from './components/TaskDetail.vue';
-import TaskStepDetail from './components/TaskStepDetail.vue';
 import type { RelatedFile, Task } from './types';
 
 // 状态
@@ -62,9 +52,6 @@ const tasks = ref<Task[]>([]);
 const loadingTasks = ref(false);
 const selectedTaskId = ref<string | null>(null);
 const selectedTask = ref<Task | null>(null);
-const showStepDetail = ref(false);
-const currentStep = ref<any>(null);
-const currentStepType = ref<string>('');
 
 // 方法
 async function loadRelatedFiles() {
@@ -91,9 +78,24 @@ async function loadTasks() {
   }
 }
 
-function handleSelectTask(task: Task) {
+async function handleSelectTask(task: Task) {
+  console.log('[ViewpointPanelPage] Task selected', {
+    taskId: task.id,
+    taskTitle: task.title,
+    stepsCount: (task as any).steps?.length || 0
+  });
   selectedTaskId.value = task.id;
   selectedTask.value = task;
+  
+  // 自动打开任务方案文件
+  try {
+    await extensionService.call('openSolution', {
+      taskId: task.id,
+    });
+  } catch (error) {
+    console.error('Failed to open solution file:', error);
+    // 不显示错误消息，因为方案文件可能不存在（新任务）
+  }
 }
 
 async function handleCreateTask() {
@@ -114,36 +116,6 @@ function handleOpenFile(file: RelatedFile) {
   });
 }
 
-function handleStepClick(stepType: string, stepData: any) {
-  currentStepType.value = stepType;
-  currentStep.value = stepData;
-  showStepDetail.value = true;
-}
-
-async function handleStepUpdate(stepType: string, data: any) {
-  if (!selectedTask.value) return;
-  
-  try {
-    await extensionService.call('updateTaskWorkflow', {
-      taskId: selectedTask.value.id,
-      stepType,
-      data,
-    });
-    await loadTasks();
-    // 更新选中的任务
-    const updatedTask = tasks.value.find(t => t.id === selectedTask.value!.id);
-    if (updatedTask) {
-      selectedTask.value = updatedTask;
-    }
-  } catch (error) {
-    console.error('Failed to update workflow step:', error);
-  }
-}
-
-function handleStepSave(stepData: any) {
-  handleStepUpdate(currentStepType.value, stepData);
-  showStepDetail.value = false;
-}
 
 async function handleEditTask(task: Task) {
   try {
@@ -159,13 +131,41 @@ async function handleEditTask(task: Task) {
 
 async function handleDeleteTask(task: Task) {
   try {
-    // 直接打开任务文件，让用户手动删除
-    await extensionService.call('openFile', {
-      filePath: task.artifactPath,
-      vaultId: task.vaultId,
+    // 使用 ElMessageBox 确认删除
+    await ElMessageBox.confirm(
+      `确定要删除任务 "${task.title}" 吗？此操作不可恢复。`,
+      '确认删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: false,
+      }
+    );
+
+    // 调用删除任务方法
+    await extensionService.call('deleteTask', {
+      taskId: task.id,
     });
-  } catch (error) {
-    console.error('Failed to open task file for deletion:', error);
+
+    // 显示成功消息
+    ElMessage.success('任务已删除');
+
+    // 重新加载任务列表
+    await loadTasks();
+
+    // 如果删除的是当前选中的任务，清空选中状态
+    if (selectedTaskId.value === task.id) {
+      selectedTaskId.value = null;
+      selectedTask.value = null;
+    }
+  } catch (error: any) {
+    // 如果用户取消删除，ElMessageBox 会抛出错误，需要忽略
+    if (error === 'cancel' || error === 'close') {
+      return;
+    }
+    console.error('Failed to delete task:', error);
+    ElMessage.error(`删除任务失败: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -180,6 +180,33 @@ watch(selectedTaskId, (newId) => {
     selectedTask.value = null;
   }
 });
+
+// 监听任务列表变化，同步更新选中的任务对象引用
+watch(tasks, (newTasks, oldTasks) => {
+  console.log('[ViewpointPanelPage] Tasks list changed', {
+    selectedTaskId: selectedTaskId.value,
+    newTasksCount: newTasks.length,
+    oldTasksCount: oldTasks?.length || 0
+  });
+  
+  if (selectedTaskId.value) {
+    const updatedTask = newTasks.find(t => t.id === selectedTaskId.value);
+    if (updatedTask) {
+      console.log('[ViewpointPanelPage] Updating selectedTask reference', {
+        taskId: updatedTask.id,
+        taskTitle: updatedTask.title,
+        stepsCount: (updatedTask as any).steps?.length || 0
+      });
+      // 更新引用，确保 TaskDetail 和 TaskWorkflowDiagram 能检测到变化
+      selectedTask.value = updatedTask;
+    } else {
+      console.log('[ViewpointPanelPage] Selected task not found in new list, clearing selection');
+      // 如果任务不在列表中，清空选中状态
+      selectedTaskId.value = null;
+      selectedTask.value = null;
+    }
+  }
+}, { deep: true });
 
 // 生命周期
 onMounted(() => {
@@ -219,14 +246,20 @@ onMounted(() => {
 .task-list-container {
   width: 300px;
   border-right: 1px solid var(--vscode-panel-border, #3e3e3e);
-  overflow: hidden;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
 }
 
 .workflow-container {
   flex: 1;
-  overflow: hidden;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
 }
 
 .empty-workflow {
