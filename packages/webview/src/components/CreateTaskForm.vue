@@ -102,7 +102,7 @@
       </el-form>
     </div>
 
-    <!-- 下方：已选择和检索结果（上下结构） -->
+    <!-- 下方：已选择和检索结果（左右结构） -->
     <div class="bottom-section">
       <!-- 已选择 -->
       <div class="file-panel selected-panel">
@@ -708,7 +708,7 @@ const handleCreate = async () => {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 16px;
   padding: 16px;
   overflow: hidden;
@@ -724,14 +724,14 @@ const handleCreate = async () => {
 }
 
 .selected-panel {
-  flex: 0 0 300px; /* 已选择面板固定高度 */
-  min-height: 300px;
+  flex: 0 0 300px; /* 已选择面板固定宽度 */
+  min-width: 300px;
+  max-width: 400px;
 }
 
 .search-panel {
-  flex: 0 1 auto; /* 检索结果面板占据剩余空间，但允许缩小 */
-  min-height: 0;
-  max-height: calc(100vh - 500px); /* 限制最大高度 */
+  flex: 1 1 auto; /* 检索结果面板占据剩余空间 */
+  min-width: 0;
 }
 
 .panel-header {
@@ -741,6 +741,10 @@ const handleCreate = async () => {
   padding: 8px 12px;
   background: var(--vscode-panel-background, #1e1e1e);
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+}
+
+.selected-panel .panel-header {
+  border-right: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
 
 .panel-header h4 {
