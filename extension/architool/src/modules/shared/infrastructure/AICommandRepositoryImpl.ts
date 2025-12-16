@@ -191,7 +191,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
         updatedAt: new Date().toISOString(),
       };
 
-      const markdownContent = `---\n${yaml.dump(frontMatter)}---\n\n${command.template}`;
+      const markdownContent = `---\n${yaml.dump(frontMatter)}---\n\n${command.content}`;
 
       // 写入文件
       const writeResult = await this.artifactService.writeFile(vaultRef, command.filePath, markdownContent);
@@ -405,7 +405,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
           targetTypes: commandData.targetTypes || ['all'],
           enabled: commandData.enabled !== false, // 默认启用
           order: commandData.order || 0,
-          template: commandData.commandContent || commandData.template || '', // 支持新字段commandContent和旧字段template
+          content: commandData.content || '',
           variables: commandData.variables || [],
           filePath: commandPath,
           createdAt: commandData.createdAt,
@@ -445,7 +445,7 @@ export class AICommandRepositoryImpl implements AICommandRepository {
           targetTypes: frontMatter.targetTypes || frontMatter.contexts || ['all'], // 兼容旧格式
         enabled: frontMatter.enabled !== false, // 默认启用
         order: frontMatter.order || 0,
-        template: templateContent,
+        content: templateContent,
         variables: frontMatter.variables || [],
         filePath: commandPath,
         createdAt: frontMatter.createdAt,

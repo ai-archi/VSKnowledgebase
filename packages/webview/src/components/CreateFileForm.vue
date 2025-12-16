@@ -590,19 +590,62 @@ const executeCommand = async (commandId: string) => {
 
   try {
     // 构建执行上下文（确保所有数据都是可序列化的）
+    const folderPath = initialFolderPath.value && typeof initialFolderPath.value === 'string' && initialFolderPath.value.trim() !== ''
+      ? initialFolderPath.value.trim()
+      : undefined;
+    
+    // 从 templateId 获取模板文件信息
+    let templateFile: any = undefined;
+    if (formData.value.templateId) {
+      const templateId = formData.value.templateId;
+      let templatePath = templateId;
+      let templateVault: { id: string; name: string } | undefined = undefined;
+      
+      // 解析 templateId：可能是 "vaultName/path" 或 "path"
+      if (templateId.includes('/')) {
+        const parts = templateId.split('/');
+        // 检查第一部分是否是 vault 名称（不是 "archi-templates"）
+        if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+          const vaultName = parts[0];
+          const foundVault = vaults.value.find(v => v.name === vaultName);
+          if (foundVault) {
+            templateVault = { id: foundVault.id, name: foundVault.name };
+            templatePath = parts.slice(1).join('/');
+          }
+        }
+      }
+      
+      // 如果没找到 vault，使用当前 vault
+      if (!templateVault) {
+        const currentVault = vaults.value.find(v => v.id === formData.value.vaultId);
+        if (currentVault) {
+          templateVault = { id: currentVault.id, name: currentVault.name };
+        }
+      }
+      
+      // 从模板列表中找到对应的模板，获取 name
+      const template = templates.value.find(t => t.id === templateId);
+      const templateName = template?.name || templatePath.split('/').pop() || templatePath;
+      
+      if (templatePath && templateName && templateVault) {
+        templateFile = {
+          path: templatePath,
+          name: templateName,
+          vault: templateVault,
+        };
+      }
+    }
+    
     const context = {
-      vaultId: formData.value.vaultId,
-      vaultName: vaults.value.find(v => v.id === formData.value.vaultId)?.name || '',
-      selectedFiles: selectedFiles.value.map(f => ({
-        id: f.id || undefined,
-        path: f.path || '',
-        name: f.name || '',
-        title: f.title || undefined,
-        vault: f.vault ? {
-          id: f.vault.id || '',
-          name: f.vault.name || '',
-        } : undefined,
-      })),
+      fileName: formData.value.fileName.trim() || undefined,
+      folderPath: folderPath,
+      templateFile: templateFile,
+      selectedFiles: selectedFiles.value
+        .filter(f => f.path && f.name) // 只保留有 path 和 name 的文件
+        .map(f => ({
+          path: f.path,
+          name: f.name,
+        })),
     };
 
     // 调用后端执行命令
@@ -653,12 +696,14 @@ const executeCommand = async (commandId: string) => {
 .action-buttons-section {
   display: flex;
   align-items: center;
+  flex: 1; /* 占据剩余空间，确保创建按钮在右侧 */
 }
 
 .create-button-section {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0; /* 防止创建按钮被压缩 */
 }
 
 /* 中间区域 */

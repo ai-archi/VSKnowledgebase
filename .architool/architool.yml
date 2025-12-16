@@ -1,0 +1,5 @@
+workspace:
+  vaults:
+    - name: 架构插件知识库
+      fsPath: /Users/jin/DEVELOP/VSKnowledgebase/.architool/架构插件知识库
+      description: ''

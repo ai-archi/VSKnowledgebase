@@ -1,0 +1,36 @@
+name: AI文件创建
+description: 生成创建文件的提示词模板
+targetTypes:
+  - file
+enabled: true
+order: 2
+content: |
+  ## 任务
+  
+  根据参考文件，并基于文件模板 {{ templateFile.fullRelativePath }} ,创建{{ artifact.fullRelativePath }}.{{ artifact.format }}文件
+  
+  {% if artifact.folderPath %}
+  目标路径：{{ artifact.folderPath }}
+  {% endif %}
+  
+  ## 链式提示
+  1. 分析参考文件的结构、功能和设计模式
+  2. 根据任务需求，设计新文件的架构和实现方案
+  3. 创建符合项目规范和最佳实践的文件内容
+  4. 确保新文件与现有代码库的兼容性和一致性
+  
+  ### 约束
+  1. 遵循项目的代码风格和命名规范
+  2. 保持与参考文件相似的代码结构和组织方式
+  3. 确保新文件的功能完整性和可维护性
+  4. 添加必要的注释和文档说明
+
+  {% if selectedFiles %}
+  ### 参考文件
+  {% for file in selectedFiles %}
+  - {{ file.fullRelativePath }}
+  {% endfor %}
+  {% endif %}
+createdAt: 2024-01-01T00:00:00Z
+updatedAt: 2024-01-01T00:00:00Z
+

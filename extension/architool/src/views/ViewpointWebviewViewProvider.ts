@@ -1348,6 +1348,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       };
 
       // 将 prompt 模板转换为 Artifact 对象（与创建文件的逻辑一致）
+      // 将 context 中的信息合并到 artifact 中
       const stepTitle = stepDefinition.form?.title || stepId;
       const artifact: Artifact = {
         id: `${taskId}-${stepId}`,
@@ -1360,23 +1361,20 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
         viewType: 'document',
         title: stepTitle,
         description: stepTitle,
-        body: promptTemplate, // 模板内容放在 body 字段中
+        content: promptTemplate, // 模板内容放在 content 字段中
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'draft',
-      };
-
-      // 构建 CommandExecutionContext（与创建文件的逻辑一致）
-      const context: CommandExecutionContext = {
-        vaultId: String(task.vaultId),
-        vaultName: String(vault.name),
+        // 自定义上下文信息（task, formData, solutionPath 等）
+        custom: {
         task: serializableTask,
         formData: serializableFormData,
         solutionPath: String(solutionPath),
+        },
       };
 
       // 使用 fileOperationService.renderTemplate 渲染模板（与创建文件的逻辑一致）
-      const rendered = this.fileOperationService.renderTemplate(artifact, context);
+      const rendered = this.fileOperationService.renderTemplate(artifact);
 
       // 确保返回的是纯字符串，并且可序列化
       const renderedStr = String(rendered || '').trim();

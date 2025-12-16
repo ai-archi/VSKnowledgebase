@@ -4,7 +4,7 @@ targetTypes:
   - folder
 enabled: true
 order: 5
-commandContent: |
+content: |
   请优化以下内容：
   
   {% if fileName %}

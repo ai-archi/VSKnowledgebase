@@ -4,7 +4,7 @@ targetTypes:
   - design
 enabled: true
 order: 3
-commandContent: |
+content: |
   请检查以下设计图的质量和潜在问题：
   
   {% if fileName %}

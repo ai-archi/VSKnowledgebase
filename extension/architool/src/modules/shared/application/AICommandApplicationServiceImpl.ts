@@ -227,6 +227,27 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
       }
 
       // 将 AICommand 转换为 Artifact 对象以使用通用的 renderTemplate 方法
+      // 从 context 中获取要创建的文件信息（fileName, folderPath）
+      const fileName = (context as any).fileName || command.name;
+      const folderPath = context.folderPath;
+      
+      // 构建要创建的文件路径
+      let targetPath: string;
+      if (folderPath) {
+        targetPath = `${folderPath}/${fileName}`;
+      } else {
+        targetPath = fileName;
+      }
+
+      // 将 context 中的 templateFile 和 selectedFiles 合并到 artifact 中
+      // 其他自定义上下文信息放到 artifact.custom 中
+      const custom: Record<string, any> = {};
+      for (const [key, value] of Object.entries(context)) {
+        if (key !== 'templateFile' && key !== 'selectedFiles' && key !== 'folderPath' && key !== 'diagramType' && key !== 'fileName') {
+          custom[key] = value;
+        }
+      }
+
       const artifact: Artifact = {
         id: command.id,
         vault: {
@@ -234,21 +255,30 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
           name: command.vaultName,
         },
         nodeType: 'FILE',
-        path: command.filePath,
-        name: command.name,
+        path: targetPath, // 要创建的文件路径
+        name: fileName, // 要创建的文件名
         format: 'md',
         contentLocation: '',
         viewType: 'document',
-        title: command.name,
+        title: fileName,
         description: command.description,
-        body: command.template, // 模板内容放在 body 字段中
+        content: command.content, // 模板内容放在 content 字段中
         createdAt: command.createdAt || new Date().toISOString(),
         updatedAt: command.updatedAt || new Date().toISOString(),
         status: 'draft',
+        // 从 context 中获取模板渲染相关的信息
+        templateFile: context.templateFile,
+        selectedFiles: context.selectedFiles,
+        // 其他自定义上下文信息（包括 folderPath 和 diagramType，供模板使用）
+        custom: {
+          folderPath: folderPath,
+          diagramType: context.diagramType,
+          ...(Object.keys(custom).length > 0 ? custom : {}),
+        },
       };
 
       // 渲染模板
-      const rendered = this.fileOperationService.renderTemplate(artifact, context);
+      const rendered = this.fileOperationService.renderTemplate(artifact);
 
       return { success: true, value: rendered };
     } catch (error: any) {

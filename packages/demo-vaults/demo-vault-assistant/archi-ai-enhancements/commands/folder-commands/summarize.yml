@@ -4,7 +4,7 @@ targetTypes:
   - folder
 enabled: true
 order: 1
-commandContent: |
+content: |
   请总结以下内容：
   
   {% if fileName %}

@@ -690,11 +690,16 @@ const handleCreate = async () => {
 }
 
 .action-buttons-section {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  flex: 1; /* 占据剩余空间，确保创建按钮在右侧 */
 }
 
 .create-button-section {
-  margin-left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0; /* 防止创建按钮被压缩 */
 }
 
 .middle-section {

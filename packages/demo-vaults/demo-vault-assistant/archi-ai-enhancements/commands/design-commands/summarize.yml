@@ -4,7 +4,7 @@ targetTypes:
   - design
 enabled: true
 order: 1
-commandContent: |
+content: |
   请总结以下设计图的内容：
   
   {% if fileName %}

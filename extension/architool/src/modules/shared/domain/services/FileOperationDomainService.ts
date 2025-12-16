@@ -1,9 +1,9 @@
 import { Vault } from '../entity/vault';
 import { Artifact } from '../entity/artifact';
-import { CommandExecutionContext } from '../value_object/CommandExecutionContext';
 import { Template } from '@huggingface/jinja';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
 
 /**
  * 文件操作领域服务接口
@@ -53,11 +53,10 @@ export interface FileOperationDomainService {
   /**
    * 渲染模板（通用模板逻辑）
    * 所有AI命令、基于模板生成文件等都通过这个方法实现
-   * @param artifact Artifact对象，包含模板内容（通常在body字段中）
-   * @param context 执行上下文
+   * @param artifact Artifact对象，包含模板内容（通常在content字段中）以及模板渲染所需的关联信息（templateFile, selectedFiles）
    * @returns 渲染后的内容
    */
-  renderTemplate(artifact: Artifact, context: CommandExecutionContext): string;
+  renderTemplate(artifact: Artifact): string;
 }
 
 /**
@@ -207,9 +206,9 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
    * 渲染模板（通用模板逻辑）
    * 所有AI命令、基于模板生成文件等都通过这个方法实现
    */
-  renderTemplate(artifact: Artifact, context: CommandExecutionContext): string {
-    // 从 Artifact 获取模板内容（优先使用 body，如果没有则尝试从其他字段获取）
-    const templateString = artifact.body || (artifact as any).template || (artifact as any).commandContent;
+  renderTemplate(artifact: Artifact): string {
+    // 从 Artifact 获取模板内容
+    const templateString = artifact.content;
     
     if (!templateString) {
       return '';
@@ -220,7 +219,7 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
       const template = new Template(templateString);
       
       // 构建变量映射（支持嵌套对象结构）
-      const variables = this.buildVariableMap(context, artifact);
+      const variables = this.buildVariableMap(artifact);
       
       // 渲染模板
       const rendered = template.render(variables);
@@ -235,82 +234,124 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
 
   /**
    * 构建变量映射（支持嵌套对象结构，用于 Jinja2 模板引擎）
+   * 所有变量统一为对象风格：
+   * 1. vault.xxx - Vault 信息
+   * 2. artifact.xxx - 要创建的文件/Artifact 信息
+   * 3. templateFile - 模板文件对象（增强版，包含 fullRelativePath, absolutePath 等）
+   * 4. selectedFiles - 选中的文件数组（增强版，包含 fullRelativePath, absolutePath 等）
    */
-  private buildVariableMap(context: CommandExecutionContext, artifact: Artifact): Record<string, any> {
+  private buildVariableMap(artifact: Artifact): Record<string, any> {
     const variables: Record<string, any> = {};
 
-    // 基础变量
-    variables['fileName'] = context.fileName || artifact.name || '';
-    variables['folderPath'] = context.folderPath || '';
-    variables['vaultName'] = context.vaultName || artifact.vault.name || '';
-    variables['vaultId'] = context.vaultId || artifact.vault.id || '';
-    variables['diagramType'] = context.diagramType || '';
+    // 获取工作区根目录（用于构建绝对路径）
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath || '';
 
-    // Artifact 相关变量
+    // 基础值（从 artifact 获取）
+    const vaultId = artifact.vault.id || '';
+    const vaultName = artifact.vault.name || '';
+    const fileName = artifact.name || '';
+
+    // ========== vault.xxx - Vault 信息 ==========
+    variables['vault'] = {
+      id: vaultId,
+      name: vaultName
+    };
+
+    // ========== artifact.xxx - 要创建的文件/Artifact 信息 ==========
+    const targetFilePath = artifact.path || fileName;
+    const targetFullRelativePath = `.architool/${vaultId}/${targetFilePath}`;
+    const targetAbsolutePath = workspaceRoot 
+      ? path.join(workspaceRoot, '.architool', vaultId, targetFilePath)
+      : targetFilePath;
+
+    // 从 custom 中提取 folderPath 和 diagramType（如果存在）
+    const folderPath = artifact.custom?.folderPath;
+    const diagramType = artifact.custom?.diagramType;
+
     variables['artifact'] = {
+      // Artifact 原有信息
       id: artifact.id,
-      name: artifact.name,
-      title: artifact.title,
-      path: artifact.path,
+      name: fileName || artifact.name,
+      title: artifact.title || fileName,
+      path: targetFilePath,
       format: artifact.format,
       viewType: artifact.viewType,
       category: artifact.category,
+      // 文件路径信息
+      fullRelativePath: targetFullRelativePath,
+      absolutePath: targetAbsolutePath,
+      // 创建时的临时信息（从 custom 中提取）
+      folderPath: folderPath,
+      diagramType: diagramType,
+      vault: {
+        id: vaultId,
+        name: vaultName
+      }
     };
 
-    // 选中的文件列表 - 提供多种格式以支持不同的模板需求
-    if (context.selectedFiles && context.selectedFiles.length > 0) {
-      // 字符串格式（向后兼容）
-      const fileNames = context.selectedFiles.map(f => f.title || f.name).join('、');
-      const filePaths = context.selectedFiles.map(f => {
-        const vaultPrefix = f.vault ? `${f.vault.name}(vault): ` : '';
-        return `${vaultPrefix}${f.path}`;
-      }).join('\n');
-      
-      variables['selectedFiles'] = fileNames;
-      variables['selectedFilePaths'] = filePaths;
-      variables['selectedFilesCount'] = context.selectedFiles.length.toString();
-      
-      // 数组格式（支持 {% for file in selectedFilesList %}）
-      variables['selectedFilesList'] = context.selectedFiles.map(f => ({
-        id: f.id || '',
-        path: f.path,
+    // ========== templateFile - 模板文件对象（简化版，只保留必要字段）==========
+    // 从 artifact.templateFile 获取，添加增强信息（fullRelativePath, absolutePath）
+    if (artifact.templateFile && artifact.templateFile.path && artifact.templateFile.name) {
+      const f = artifact.templateFile;
+      const fullRelativePath = f.vault 
+        ? `.architool/${f.vault.id}/${f.path}`
+        : f.path;
+      const absolutePath = f.vault && workspaceRoot
+        ? path.join(workspaceRoot, '.architool', f.vault.id, f.path)
+        : f.path;
+
+      variables['templateFile'] = {
         name: f.name,
-        title: f.title || f.name,
+        path: f.path,
+        fullRelativePath: fullRelativePath,
+        absolutePath: absolutePath,
         vault: f.vault ? {
           id: f.vault.id,
           name: f.vault.name
         } : null
-      }));
-      
-      // 第一个文件对象（支持 {{ file.title or file.name }}）
-      if (context.selectedFiles.length > 0) {
-        const firstFile = context.selectedFiles[0];
-        variables['file'] = {
-          id: firstFile.id || '',
-          path: firstFile.path,
-          name: firstFile.name,
-          title: firstFile.title || firstFile.name,
-          vault: firstFile.vault ? {
-            id: firstFile.vault.id,
-            name: firstFile.vault.name
-          } : null
-        };
-      }
+      };
     } else {
-      variables['selectedFiles'] = '';
-      variables['selectedFilePaths'] = '';
-      variables['selectedFilesCount'] = '0';
-      variables['selectedFilesList'] = [];
-      variables['file'] = null;
+      variables['templateFile'] = null;
     }
 
-    // 其他自定义变量
-    for (const [key, value] of Object.entries(context)) {
-      if (!['vaultId', 'vaultName', 'fileName', 'folderPath', 'diagramType', 'selectedFiles'].includes(key)) {
-        // 保持原始类型，让 Jinja2 处理
-        variables[key] = value !== undefined && value !== null ? value : '';
+    // ========== selectedFiles - 选中的文件数组（简化版，只保留必要字段）==========
+    // 从 artifact.selectedFiles 获取，添加增强信息（fullRelativePath, absolutePath）
+    let enhancedSelectedFiles: Array<any> = [];
+    if (artifact.selectedFiles && artifact.selectedFiles.length > 0) {
+      enhancedSelectedFiles = artifact.selectedFiles
+        .filter(f => f.path && f.name) // 只保留有 path 和 name 的文件
+        .map(f => {
+          const fullRelativePath = f.vault 
+            ? `.architool/${f.vault.id}/${f.path}`
+            : f.path;
+          const absolutePath = f.vault && workspaceRoot
+            ? path.join(workspaceRoot, '.architool', f.vault.id, f.path)
+            : f.path;
+
+          return {
+            name: f.name,
+            path: f.path,
+            fullRelativePath: fullRelativePath,
+            absolutePath: absolutePath
+          };
+        });
+    }
+    
+    // 直接使用 selectedFiles（增强后）
+    variables['selectedFiles'] = enhancedSelectedFiles;
+
+    // ========== context.xxx - 其他上下文信息 ==========
+    // 将 artifact.custom 中的自定义属性放入 context 对象（供模板使用）
+    const contextVars: Record<string, any> = {};
+    
+    if (artifact.custom) {
+      for (const [key, value] of Object.entries(artifact.custom)) {
+        contextVars[key] = value !== undefined && value !== null ? value : '';
       }
     }
+    
+    variables['context'] = contextVars;
 
     return variables;
   }

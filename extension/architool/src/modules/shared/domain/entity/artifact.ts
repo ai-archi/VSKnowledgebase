@@ -24,7 +24,7 @@ export interface Artifact {
   // 内容属性
   title: string;
   description?: string;
-  body?: string; // 内容体，可选（大文件不加载到内存）
+  content?: string; // 内容体，可选（大文件不加载到内存）
   contentHash?: string; // 内容哈希，用于变更检测
   contentSize?: number; // 内容大小（字节），当内容未加载时提供
   
@@ -42,5 +42,28 @@ export interface Artifact {
   // 扩展属性
   tags?: string[]; // 标签数组
   custom?: Record<string, any>; // 自定义属性
+  
+  // 模板渲染相关（可选，仅在模板渲染时使用）
+  templateFile?: {
+    id?: string;
+    path: string;
+    name: string;
+    title?: string;
+    vault?: {
+      id: string;
+      name: string;
+    };
+  };
+  
+  selectedFiles?: Array<{
+    id?: string;
+    path: string;
+    name: string;
+    title?: string;
+    vault?: {
+      id: string;
+      name: string;
+    };
+  }>;
 }
 

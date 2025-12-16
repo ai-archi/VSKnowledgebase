@@ -4,7 +4,7 @@ targetTypes:
   - folder
 enabled: true
 order: 3
-commandContent: |
+content: |
   请检查以下内容的代码质量和潜在问题：
   
   {% if fileName %}

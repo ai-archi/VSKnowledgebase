@@ -35,7 +35,7 @@ export interface AICommand {
   order: number; // 显示顺序
   
   // 模板相关
-  template: string; // 提示词模板内容（支持变量）
+  content: string; // 提示词模板内容（支持变量）
   variables?: VariableDefinition[]; // 可用变量定义
   
   // 文件路径

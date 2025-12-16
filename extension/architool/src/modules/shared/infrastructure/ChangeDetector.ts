@@ -78,8 +78,8 @@ export class ChangeDetectorImpl implements ChangeDetector {
       }
 
       // 检查内容是否变更
-      const oldHash = oldArtifact.contentHash || this.calculateHash(oldArtifact.body || '');
-      const newHash = newArtifact.contentHash || this.calculateHash(newArtifact.body || '');
+      const oldHash = oldArtifact.contentHash || this.calculateHash(oldArtifact.content || '');
+      const newHash = newArtifact.contentHash || this.calculateHash(newArtifact.content || '');
 
       if (oldHash !== newHash) {
         return this.createChange(artifactId, 'UPDATE', newArtifact, oldArtifact);
@@ -301,8 +301,8 @@ export class ChangeDetectorImpl implements ChangeDetector {
     }
 
     // 检查内容变更
-    const oldHash = oldArtifact.contentHash || this.calculateHash(oldArtifact.body || '');
-    const newHash = newArtifact.contentHash || this.calculateHash(newArtifact.body || '');
+    const oldHash = oldArtifact.contentHash || this.calculateHash(oldArtifact.content || '');
+    const newHash = newArtifact.contentHash || this.calculateHash(newArtifact.content || '');
     if (oldHash !== newHash) {
       changes.push('Content changed');
     }

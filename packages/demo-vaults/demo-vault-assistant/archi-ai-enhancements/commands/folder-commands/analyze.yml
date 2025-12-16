@@ -4,7 +4,7 @@ targetTypes:
   - folder
 enabled: true
 order: 4
-commandContent: |
+content: |
   请分析以下内容：
   
   {% if fileName %}
