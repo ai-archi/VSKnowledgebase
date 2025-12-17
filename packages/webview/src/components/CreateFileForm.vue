@@ -645,7 +645,7 @@ const executeCommand = async (commandId: string) => {
         .map(f => ({
           path: f.path,
           name: f.name,
-        })),
+      })),
     };
 
     // 调用后端执行命令

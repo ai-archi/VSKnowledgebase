@@ -108,9 +108,22 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
       // Build authenticated URL if credentials are provided
       const authenticatedUrl = buildAuthenticatedUrl(remote);
 
-      // Clone repository
+      // Clone repository with submodules
       const git = simpleGit();
-      await git.clone(authenticatedUrl, targetPath, ['--branch', remote.branch || 'main']);
+      await git.clone(authenticatedUrl, targetPath, [
+        '--branch', remote.branch || 'main',
+        '--recurse-submodules'
+      ]);
+
+      // Initialize and update submodules after clone (in case --recurse-submodules didn't work)
+      const repoGit = this.getGitInstance(targetPath);
+      try {
+        await repoGit.raw(['submodule', 'update', '--init', '--recursive']);
+      } catch (submoduleError: any) {
+        // If submodule update fails, it might be because there are no submodules
+        // This is not a critical error, so we log it but don't fail the clone
+        // The clone itself was successful
+      }
 
       return { success: true, value: undefined };
     } catch (error: any) {
@@ -137,7 +150,17 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
       }
 
       const git = this.getGitInstance(vaultPath);
-      await git.pull();
+      // Pull with submodule updates
+      await git.pull(['--recurse-submodules']);
+      
+      // Update submodules to ensure they are up to date
+      try {
+        await git.raw(['submodule', 'update', '--remote', '--recursive']);
+      } catch (submoduleError: any) {
+        // If submodule update fails, it might be because there are no submodules
+        // This is not a critical error, so we log it but don't fail the pull
+        // The pull itself was successful
+      }
 
       return { success: true, value: undefined };
     } catch (error: any) {

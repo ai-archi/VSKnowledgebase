@@ -4,7 +4,7 @@ targetTypes:
   - design
 enabled: true
 order: 5
-commandContent: |
+content: |
   请优化以下设计图：
   
   {% if fileName %}

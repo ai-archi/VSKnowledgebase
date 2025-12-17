@@ -34,7 +34,7 @@
     "build:webview": "cd packages/webview && pnpm run build && mkdir -p ../../extension/architool/dist/webview && rm -rf ../../extension/architool/dist/webview/* && cp -r dist/* ../../extension/architool/dist/webview/",
     "build:extension": "cd extension/architool && pnpm run compile",
     "build": "pnpm run build:webview && pnpm run build:mcp-server && pnpm run build:extension && pnpm run copy:vendor",
-    "copy:vendor": "mkdir -p extension/architool/dist/vendor/plantuml && cp vendor/plantuml/*.jar extension/architool/dist/vendor/plantuml/ 2>/dev/null || true",
+    "copy:vendor": "mkdir -p extension/architool/dist/vendor/plantuml && cp vendor/plantuml/*.jar extension/architool/dist/vendor/plantuml/ 2>/dev/null || true && cp -r vendor/plantuml/archimate extension/architool/dist/vendor/plantuml/ 2>/dev/null || true",
     "build:ci": "pnpm run build:extension",
     "watch": "cd extension/architool && pnpm run watch",
     "ci:init": "pnpm install && pnpm build",

@@ -51,6 +51,13 @@ export interface FileOperationDomainService {
   generateDefaultPlantUMLContent(fileName: string): string;
 
   /**
+   * 生成默认 ArchiMate 设计图内容
+   * @param fileName 文件名（不含扩展名）
+   * @returns ArchiMate PlantUML 内容
+   */
+  generateDefaultArchimateContent(fileName: string): string;
+
+  /**
    * 渲染模板（通用模板逻辑）
    * 所有AI命令、基于模板生成文件等都通过这个方法实现
    * @param artifact Artifact对象，包含模板内容（通常在content字段中）以及模板渲染所需的关联信息（templateFile, selectedFiles）
@@ -117,6 +124,8 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
         return this.generateDefaultMermaidContent(fileName);
       case 'puml':
         return this.generateDefaultPlantUMLContent(fileName);
+      case 'archimate':
+        return this.generateDefaultArchimateContent(fileName);
       default:
         return this.generateDefaultMarkdownContent(fileName);
     }
@@ -148,6 +157,48 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
   }
 
   /**
+   * 生成默认 ArchiMate 设计图内容
+   * @param fileName 文件名（不含扩展名）
+   * @returns ArchiMate PlantUML 内容
+   */
+  generateDefaultArchimateContent(fileName: string): string {
+    // 尝试从内置模板文件加载
+    const templateContent = this.loadBuiltinTemplate('archimate', fileName);
+    if (templateContent) {
+      return templateContent;
+    }
+    // 如果无法加载，使用硬编码的默认 ArchiMate 内容
+    return `@startuml
+' 使用本地 ArchiMate 宏库
+!global $ARCH_LOCAL = %true()
+!include archimate/Archimate.puml
+
+title ${fileName}
+
+' 业务层元素示例
+Business_Actor(actor1, "业务参与者")
+Business_Process(process1, "业务流程")
+Business_Service(service1, "业务服务")
+
+' 应用层元素示例
+Application_Component(app1, "应用组件")
+Application_Service(appService1, "应用服务")
+
+' 技术层元素示例
+Technology_Node(tech1, "技术节点")
+
+' 定义关系
+Rel_Serving(actor1, process1, "使用")
+Rel_Serving(process1, service1, "提供")
+Rel_Serving(service1, app1, "通过")
+Rel_Serving(app1, appService1, "调用")
+Rel_Serving(appService1, tech1, "部署在")
+
+@enduml
+`;
+  }
+
+  /**
    * 从内置模板文件加载内容
    * @param fileType 文件类型
    * @param fileName 文件名（用于替换占位符）
@@ -170,6 +221,9 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
         case 'puml':
           templateFileName = 'empty.puml';
           break;
+        case 'archimate':
+          templateFileName = 'archimate-demo.puml';
+          break;
         default:
           return null;
       }
@@ -182,6 +236,10 @@ export class FileOperationDomainServiceImpl implements FileOperationDomainServic
         path.join(extensionPath, 'resources', 'templates', templateFileName),
         // 备用路径：从扩展根目录的 resources 加载
         path.join(path.dirname(extensionPath), 'resources', 'templates', templateFileName),
+        // demo-vaults 模板目录（开发环境）
+        path.join(extensionPath, '..', '..', 'packages', 'demo-vaults', 'demo-vault-assistant', 'archi-templates', 'content', 'plantuml', templateFileName),
+        // demo-vaults 模板目录（打包后）
+        path.join(extensionPath, 'demo-vaults', 'demo-vault-assistant', 'archi-templates', 'content', 'plantuml', templateFileName),
       ];
 
       for (const templatePath of possiblePaths) {

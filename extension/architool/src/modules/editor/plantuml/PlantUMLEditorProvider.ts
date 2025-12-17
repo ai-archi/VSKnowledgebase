@@ -172,6 +172,9 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
       );
     }
 
+    // 获取 vendor/plantuml 目录路径（用于宏文件的 !include）
+    const vendorDir = path.dirname(jarPath);
+
     return new Promise((resolve, reject) => {
       // 使用 spawn 执行 java -jar plantuml-1.2025.10.jar -pipe -tsvg
       // 添加性能优化参数：
@@ -188,6 +191,8 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
         '-tsvg',    // 输出 SVG 格式
       ], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        // 设置工作目录为 vendor/plantuml，这样 !include 指令可以找到宏文件
+        cwd: vendorDir,
         // 设置环境变量，禁用不必要的功能
         env: {
           ...process.env,
