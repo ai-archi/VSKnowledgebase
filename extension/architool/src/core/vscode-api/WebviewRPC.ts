@@ -77,7 +77,53 @@ export class WebviewRPC {
         name: v.name,
         description: v.description,
         type: v.type,
+        readonly: v.readonly,
       }));
+    });
+
+    this.webviewAdapter.registerMethod('vault.get', async (params: { vaultId: string }) => {
+      const result = await this.vaultService.getVault(params.vaultId);
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return {
+        id: result.value.id,
+        name: result.value.name,
+        description: result.value.description,
+        type: result.value.type,
+        readonly: result.value.readonly,
+        remote: result.value.remote,
+        createdAt: result.value.createdAt,
+        updatedAt: result.value.updatedAt,
+      };
+    });
+
+    this.webviewAdapter.registerMethod('vault.update', async (params: {
+      vaultId: string;
+      name?: string;
+      type?: string;
+      description?: string;
+      readonly?: boolean;
+    }) => {
+      const result = await this.vaultService.updateVault(params.vaultId, {
+        name: params.name,
+        type: params.type as any,
+        description: params.description,
+        readonly: params.readonly,
+      });
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return {
+        id: result.value.id,
+        name: result.value.name,
+        description: result.value.description,
+        type: result.value.type,
+        readonly: result.value.readonly,
+        remote: result.value.remote,
+        createdAt: result.value.createdAt,
+        updatedAt: result.value.updatedAt,
+      };
     });
 
     // Document 相关方法（不限制文件类型，支持查询）

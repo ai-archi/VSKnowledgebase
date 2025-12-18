@@ -10,7 +10,7 @@
           type="primary"
           @click="handleSave"
           :loading="saving"
-          :disabled="!hasChanges"
+          :disabled="targetType === 'vault' ? !hasMetadataChanges : !hasChanges"
         >
           保存
         </el-button>
@@ -18,19 +18,69 @@
       </div>
     </div>
 
-    <!-- 中间：搜索框 -->
-    <div class="middle-section">
-      <el-input
-        v-model="searchQuery"
-        placeholder="搜索文档或代码文件（支持模糊搜索）"
-        clearable
-        @input="handleSearchInput"
-        :prefix-icon="Search"
-      />
+    <!-- Vault 元数据编辑 -->
+    <div v-if="targetType === 'vault'" class="metadata-section">
+      <el-form :model="vaultMetadata" label-width="120px" label-position="left">
+        <el-form-item label="Vault 名称">
+          <el-input v-model="vaultMetadata.name" :disabled="true" />
+        </el-form-item>
+        <el-form-item label="Vault 类型">
+          <el-select v-model="vaultMetadata.type" :disabled="!!vaultMetadata.remote" style="width: 100%">
+            <el-option label="文档" value="document" />
+            <el-option label="AI增强&模板" value="ai-enhancement" />
+          </el-select>
+          <span v-if="vaultMetadata.remote" style="margin-left: 8px; color: var(--vscode-descriptionForeground, #999999); font-size: 12px;">
+            (Git vault 的类型不允许修改)
+          </span>
+        </el-form-item>
+        <el-form-item label="是否可编辑">
+          <el-switch
+            v-model="vaultMetadata.readonly"
+            :active-value="false"
+            :inactive-value="true"
+            active-text="可编辑"
+            inactive-text="只读"
+            :disabled="!!vaultMetadata.remote"
+          />
+          <span v-if="vaultMetadata.remote" style="margin-left: 8px; color: var(--vscode-descriptionForeground, #999999); font-size: 12px;">
+            (Git vault 的只读状态由远程仓库控制)
+          </span>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input
+            v-model="vaultMetadata.description"
+            type="textarea"
+            :rows="3"
+            placeholder="输入 vault 描述"
+          />
+        </el-form-item>
+        <el-form-item v-if="vaultMetadata.remote" label="Git 远程">
+          <el-input v-model="vaultMetadata.remote.url" :disabled="true" />
+        </el-form-item>
+        <el-form-item v-if="vaultMetadata.createdAt" label="创建时间">
+          <el-input v-model="vaultMetadata.createdAt" :disabled="true" />
+        </el-form-item>
+        <el-form-item v-if="vaultMetadata.updatedAt" label="更新时间">
+          <el-input v-model="vaultMetadata.updatedAt" :disabled="true" />
+        </el-form-item>
+      </el-form>
     </div>
 
-    <!-- 下方：已选择和检索结果（左右结构） -->
-    <div class="bottom-section">
+    <!-- 关联关系编辑（非 vault 类型） -->
+    <template v-else>
+      <!-- 中间：搜索框 -->
+      <div class="middle-section">
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索文档或代码文件（支持模糊搜索）"
+          clearable
+          @input="handleSearchInput"
+          :prefix-icon="Search"
+        />
+      </div>
+
+      <!-- 下方：已选择和检索结果（左右结构） -->
+      <div class="bottom-section">
       <!-- 已选择 -->
       <div class="file-panel selected-panel">
         <div class="panel-header">
@@ -118,6 +168,7 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -129,6 +180,11 @@ import {
   ElIcon,
   ElEmpty,
   ElMessage,
+  ElForm,
+  ElFormItem,
+  ElSelect,
+  ElOption,
+  ElSwitch,
 } from 'element-plus';
 import {
   Document,
@@ -147,6 +203,14 @@ interface Vault {
   id: string;
   name: string;
   description?: string;
+  type?: string;
+  readonly?: boolean;
+  remote?: {
+    url: string;
+    branch?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface FileItem {
@@ -183,6 +247,27 @@ const searchDebounceTimer = ref<number | null>(null);
 
 const saving = ref(false);
 
+// Vault 元数据
+const vaultMetadata = ref<{
+  name: string;
+  type: string;
+  description?: string;
+  readonly?: boolean;
+  remote?: {
+    url: string;
+    branch?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}>({
+  name: '',
+  type: 'document',
+  description: '',
+  readonly: false,
+});
+
+const initialVaultMetadata = ref<typeof vaultMetadata.value | null>(null);
+
 // 初始选中的文件（用于判断是否有变化）
 const initialSelectedFileKeys = ref<Set<string>>(new Set());
 
@@ -212,6 +297,17 @@ const hasChanges = computed(() => {
   return false;
 });
 
+const hasMetadataChanges = computed(() => {
+  if (!initialVaultMetadata.value) return false;
+  const current = vaultMetadata.value;
+  const initial = initialVaultMetadata.value;
+  return (
+    current.type !== initial.type ||
+    current.description !== initial.description ||
+    current.readonly !== initial.readonly
+  );
+});
+
 const getFileKey = (file: FileItem): string => {
   // 对于文档，使用id或path；对于代码文件，使用path
   if (file.id) {
@@ -229,13 +325,41 @@ onMounted(async () => {
     targetType.value = initialData.targetType || 'artifact';
     displayName.value = initialData.displayName || '';
 
-    // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
-    await loadCurrentRelations();
+    if (targetType.value === 'vault') {
+      // 加载 vault 元数据
+      await loadVaultMetadata();
+    } else {
+      // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
+      await loadCurrentRelations();
+    }
   } else {
     // 如果没有初始数据，只加载文件
     await loadFiles();
   }
 });
+
+const loadVaultMetadata = async () => {
+  try {
+    const vault = await extensionService.call<Vault>('vault.get', {
+      vaultId: targetId.value,
+    });
+    if (vault) {
+      vaultMetadata.value = {
+        name: vault.name || '',
+        type: vault.type || 'document',
+        description: vault.description || '',
+        readonly: vault.readonly ?? false,
+        remote: vault.remote,
+        createdAt: vault.createdAt,
+        updatedAt: vault.updatedAt,
+      };
+      initialVaultMetadata.value = JSON.parse(JSON.stringify(vaultMetadata.value));
+    }
+  } catch (err: any) {
+    console.error('Failed to load vault metadata', err);
+    ElMessage.error(`加载 vault 元数据失败: ${err.message || '未知错误'}`);
+  }
+};
 
 const loadCurrentRelations = async () => {
   try {
@@ -368,40 +492,53 @@ const handleSave = async () => {
   try {
     saving.value = true;
 
-    // 分离文档和代码文件
-    const artifactIds: string[] = [];
-    const codePaths: string[] = [];
+    if (targetType.value === 'vault') {
+      // 保存 vault 元数据
+      await extensionService.call('vault.update', {
+        vaultId: targetId.value,
+        type: vaultMetadata.value.type,
+        description: vaultMetadata.value.description,
+        readonly: vaultMetadata.value.readonly,
+      });
+      ElMessage.success('Vault 元数据已保存');
+      initialVaultMetadata.value = JSON.parse(JSON.stringify(vaultMetadata.value));
+    } else {
+      // 分离文档和代码文件
+      const artifactIds: string[] = [];
+      const codePaths: string[] = [];
 
-    for (const file of selectedFiles.value) {
-      if (file.isCodeFile) {
-        // 代码文件，使用path
-        codePaths.push(file.path);
-      } else {
-        // 文档，优先使用id，否则使用path
-        if (file.id) {
-          artifactIds.push(file.id);
+      for (const file of selectedFiles.value) {
+        if (file.isCodeFile) {
+          // 代码文件，使用path
+          codePaths.push(file.path);
         } else {
-          artifactIds.push(file.path);
+          // 文档，优先使用id，否则使用path
+          if (file.id) {
+            artifactIds.push(file.id);
+          } else {
+            artifactIds.push(file.path);
+          }
         }
       }
+
+      await Promise.all([
+        extensionService.call('artifact.updateRelatedArtifacts', {
+          vaultId: vaultId.value,
+          targetId: targetId.value,
+          targetType: targetType.value,
+          relatedArtifacts: artifactIds,
+        }),
+        extensionService.call('artifact.updateRelatedCodePaths', {
+          vaultId: vaultId.value,
+          targetId: targetId.value,
+          targetType: targetType.value,
+          relatedCodePaths: codePaths,
+        }),
+      ]);
+
+      ElMessage.success('关联关系已保存');
     }
 
-    await Promise.all([
-      extensionService.call('artifact.updateRelatedArtifacts', {
-        vaultId: vaultId.value,
-        targetId: targetId.value,
-        targetType: targetType.value,
-        relatedArtifacts: artifactIds,
-      }),
-      extensionService.call('artifact.updateRelatedCodePaths', {
-        vaultId: vaultId.value,
-        targetId: targetId.value,
-        targetType: targetType.value,
-        relatedCodePaths: codePaths,
-      }),
-    ]);
-
-    ElMessage.success('关联关系已保存');
     emit('saved');
     
     // 通知后端关闭 webview
@@ -410,8 +547,8 @@ const handleSave = async () => {
       vscode.postMessage({ method: 'close' });
     }
   } catch (err: any) {
-    console.error('Failed to save relations', err);
-    ElMessage.error(`保存关联关系失败: ${err.message || '未知错误'}`);
+    console.error('Failed to save', err);
+    ElMessage.error(`保存失败: ${err.message || '未知错误'}`);
   } finally {
     saving.value = false;
   }
@@ -459,6 +596,13 @@ const handleClose = () => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.metadata-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--vscode-editor-background, #1e1e1e);
 }
 
 .middle-section {

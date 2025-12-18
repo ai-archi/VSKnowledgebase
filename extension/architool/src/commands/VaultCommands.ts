@@ -49,6 +49,19 @@ export class VaultCommands {
           });
           if (!vaultName) return;
 
+          // 选择 vault 类型
+          const vaultTypeOptions = [
+            { label: '文档', value: 'document' as const, description: 'Document vault' },
+            { label: 'AI增强&模板', value: 'ai-enhancement' as const, description: 'AI Enhancement & Template vault' },
+          ];
+
+          const selectedType = await vscode.window.showQuickPick(vaultTypeOptions, {
+            placeHolder: 'Select vault type',
+            canPickMany: false,
+          });
+
+          if (!selectedType) return;
+
           const workspaceRoot = workspaceFolder.uri.fsPath;
           const vaultPath = path.join(workspaceRoot, '.architool', vaultName);
 
@@ -56,6 +69,7 @@ export class VaultCommands {
             name: vaultName,
             fsPath: vaultPath,
             description: '',
+            type: selectedType.value,
           });
 
           if (result.success) {

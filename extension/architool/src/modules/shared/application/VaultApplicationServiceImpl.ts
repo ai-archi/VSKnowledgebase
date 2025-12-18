@@ -1,6 +1,6 @@
 import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../infrastructure/di/types';
-import { VaultApplicationService, AddLocalVaultOpts, AddVaultFromGitOpts } from './VaultApplicationService';
+import { VaultApplicationService, AddLocalVaultOpts, AddVaultFromGitOpts, UpdateVaultOpts } from './VaultApplicationService';
 import { Vault } from '../domain/entity/vault';
 import { Result, VaultError, VaultErrorCode } from '../domain/errors';
 import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
@@ -290,6 +290,30 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       };
     }
     return { success: true, value: result.value };
+  }
+
+  async updateVault(vaultId: string, opts: UpdateVaultOpts): Promise<Result<Vault, VaultError>> {
+    const vaultResult = await this.vaultRepo.findById(vaultId);
+    if (!vaultResult.success || !vaultResult.value) {
+      return {
+        success: false,
+        error: new VaultError(VaultErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
+      };
+    }
+
+    const vault = vaultResult.value;
+    const updatedVault: Vault = {
+      ...vault,
+      ...opts,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const saveResult = await this.vaultRepo.save(updatedVault);
+    if (!saveResult.success) {
+      return saveResult;
+    }
+
+    return { success: true, value: updatedVault };
   }
 }
 

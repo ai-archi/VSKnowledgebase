@@ -259,7 +259,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       if (!item) {
         const selection = this.treeView.selection;
         if (selection.length === 0) {
-          vscode.window.showErrorMessage('Please select an item to edit relations');
+          vscode.window.showErrorMessage('Please select an item to edit metadata');
           return;
         }
         item = selection[0] as DocumentTreeItem;
@@ -328,7 +328,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
 
       const panel = vscode.window.createWebviewPanel(
         'editRelationsDialog',
-        `Edit Relations - ${displayName}`,
+        `Edit Metadata - ${displayName}`,
         vscode.ViewColumn.Beside,
         {
           enableScripts: true,
@@ -373,8 +373,8 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         this.treeViewProvider.refresh();
       });
     } catch (error: any) {
-      this.logger.error('Failed to show edit relations dialog', error);
-      vscode.window.showErrorMessage(`Failed to show edit relations dialog: ${error.message}`);
+      this.logger.error('Failed to show edit metadata dialog', error);
+      vscode.window.showErrorMessage(`Failed to show edit metadata dialog: ${error.message}`);
     }
   }
 }

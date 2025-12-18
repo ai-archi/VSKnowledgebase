@@ -20,6 +20,13 @@ export interface RemoveVaultOpts {
   deleteFiles?: boolean; // 是否删除本地文件
 }
 
+export interface UpdateVaultOpts {
+  name?: string;
+  type?: VaultType;
+  description?: string;
+  readonly?: boolean;
+}
+
 export interface VaultApplicationService {
   addLocalVault(opts: AddLocalVaultOpts): Promise<Result<Vault, VaultError>>;
   addVaultFromGit(opts: AddVaultFromGitOpts): Promise<Result<Vault, VaultError>>;
@@ -28,6 +35,7 @@ export interface VaultApplicationService {
   removeVault(vaultId: string, opts?: RemoveVaultOpts): Promise<Result<void, VaultError>>;
   listVaults(): Promise<Result<Vault[], VaultError>>;
   getVault(vaultId: string): Promise<Result<Vault, VaultError>>;
+  updateVault(vaultId: string, opts: UpdateVaultOpts): Promise<Result<Vault, VaultError>>;
 }
 
 

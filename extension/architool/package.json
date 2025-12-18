@@ -131,7 +131,7 @@
       },
       {
         "command": "archi.document.editRelations",
-        "title": "Edit Relations"
+        "title": "Edit Metadata"
       },
       {
         "command": "archi.viewpoint.create",
