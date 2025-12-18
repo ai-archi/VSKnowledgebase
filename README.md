@@ -234,11 +234,7 @@ VSKnowledgebase/
 │   │   └── package.json
 │   └── webview/            # Webview 前端
 ├── packages/
-│   ├── architool-mcp-server/   # MCP Server
-│   └── demo-vaults/            # 示例知识库集合
-│       ├── demo-vault-document/    # 文档类型示例
-│       ├── demo-vault-assistant/   # AI 助手类型示例
-│       └── demo-vault-task/        # 任务类型示例
+│   └── architool-mcp-server/   # MCP Server
 ├── MCP_FEATURES_PLAN.md    # MCP 功能方案文档
 └── README.md               # 本文档
 ```
