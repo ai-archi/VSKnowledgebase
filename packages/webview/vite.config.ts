@@ -11,14 +11,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['mermaid', 'codemirror', '@milkdown/core', '@milkdown/preset-commonmark', '@milkdown/plugin-listener', '@milkdown/theme-nord'],
+    include: ['mermaid', '@mermaid-js/mermaid-zenuml', 'codemirror', '@milkdown/core', '@milkdown/preset-commonmark', '@milkdown/plugin-listener', '@milkdown/theme-nord'],
   },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     assetsInlineLimit: 0, // 不内联资源，确保所有资源文件都被复制
     commonjsOptions: {
-      include: [/mermaid/, /codemirror/, /@milkdown/, /node_modules/],
+      include: [/mermaid/, /@mermaid-js/, /codemirror/, /@milkdown/, /node_modules/],
     },
     rollupOptions: {
       input: {
