@@ -65,20 +65,17 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
   }
 
   /**
-   * 过滤 vault：只显示 document 类型的 vault
+   * 过滤 vault：显示所有类型的 vault
    */
   protected filterVaults(vaults: Array<{ id: string; name: string; type?: string }>): Array<{ id: string; name: string; type?: string }> {
-    return vaults.filter(vault => vault.type === 'document');
+    return vaults; // 返回所有 vault，不再过滤
   }
 
   /**
-   * 过滤节点：文档视图排除所有 archi-* 目录
+   * 过滤节点：显示所有节点，包括 archi-* 目录
    */
   protected shouldIncludeNode(node: FileTreeNode, dirPath: string): boolean {
-    // 在 vault 根目录时，排除所有 archi-* 目录
-    if (!dirPath && node.isDirectory && node.name.startsWith('archi-')) {
-      return false;
-    }
+    // 显示所有节点，不再排除 archi-* 目录
     return true;
   }
 

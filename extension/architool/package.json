@@ -28,11 +28,6 @@
           "id": "architool.documentView",
           "name": "Documents",
           "when": "true"
-        },
-        {
-          "id": "architool.assistantsView",
-          "name": "Assistants",
-          "when": "true"
         }
       ],
       "architool": [

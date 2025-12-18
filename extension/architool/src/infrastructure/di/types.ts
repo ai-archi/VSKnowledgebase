@@ -51,7 +51,6 @@ export const TYPES = {
   DocumentTreeViewProvider: Symbol.for('DocumentTreeViewProvider'),
   TaskTreeDataProvider: Symbol.for('TaskTreeDataProvider'),
   ViewpointTreeDataProvider: Symbol.for('ViewpointTreeDataProvider'),
-  AssistantsTreeDataProvider: Symbol.for('AssistantsTreeDataProvider'),
 
   // Domain Services
   FileTreeDomainService: Symbol.for('FileTreeDomainService'),

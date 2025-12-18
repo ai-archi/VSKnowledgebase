@@ -11,11 +11,9 @@ import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { VaultCommands } from './commands/VaultCommands';
 import { DocumentCommands } from './commands/DocumentCommands';
 import { ViewpointCommands } from './commands/ViewpointCommands';
-import { AssistantsCommands } from './commands/AssistantsCommands';
 import { AICommands } from './commands/AICommands';
 import { LookupCommands } from './commands/LookupCommands';
 import { DocumentTreeViewProvider } from './views/DocumentTreeViewProvider';
-import { AssistantsTreeViewProvider } from './views/AssistantsTreeViewProvider';
 import { Logger } from './core/logger/Logger';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
 import { createContainer } from './infrastructure/di/container';
@@ -68,10 +66,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	// 初始化文档视图和命令
 	const documentTreeViewProvider = await initializeDocumentViewAndCommand(logger, context, commandAdapter, container);
-	// 初始化助手视图和命令
-	const assistantsTreeViewProvider = await initializeAssistantsViewAndCommand(logger, context, commandAdapter, container);
 	// 初始化其他命令（不依赖视图的命令）
-	initializeOtherCommands(logger, context, commandAdapter, container, documentTreeViewProvider, assistantsTreeViewProvider);
+	initializeOtherCommands(logger, context, commandAdapter, container, documentTreeViewProvider);
 	
 	// 注册自定义编辑器
 	initializeCustomEditors(logger, context);
@@ -193,47 +189,7 @@ async function initializeDocumentViewAndCommand(
 	}
 }
 
-/**
- * 初始化助手视图和命令
- * 将视图和命令一起初始化，确保命令可以访问视图实例
- */
-async function initializeAssistantsViewAndCommand(
-	logger: Logger,
-	context: vscode.ExtensionContext,
-	commandAdapter: CommandAdapter,
-	container: Container
-): Promise<AssistantsTreeViewProvider> {
-	try {
-		// 从容器获取服务实例
-		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
-		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
-		
-		// 初始化助手树视图
-		const assistantsTreeViewProvider = new AssistantsTreeViewProvider(
-			vaultService,
-			artifactService,
-			logger
-		);
-		const assistantsTreeView = vscode.window.createTreeView('architool.assistantsView', {
-			treeDataProvider: assistantsTreeViewProvider
-		});
-		context.subscriptions.push(assistantsTreeView);
-		logger.info('Assistants tree view registered');
-
-		// 初始化助手命令
-		// 注意：当前 AssistantsCommands 是空实现，将来如果需要继承 BaseFileTreeCommands，
-		// 则需要传递 assistantsTreeViewProvider 和 assistantsTreeView
-		const assistantsCommands = new AssistantsCommands();
-		assistantsCommands.register(commandAdapter);
-		logger.info('Assistants commands registered');
-		
-		return assistantsTreeViewProvider;
-	} catch (error: any) {
-		logger.error('Failed to initialize assistants view and commands:', error);
-		vscode.window.showErrorMessage(`Failed to initialize assistants view: ${error.message}`);
-		throw error;
-	}
-}
+// 助手视图已移除，所有 vault 现在在文档视图中显示
 
 /**
  * 初始化其他命令（不依赖视图的命令）
@@ -243,8 +199,7 @@ function initializeOtherCommands(
 	context: vscode.ExtensionContext,
 	commandAdapter: CommandAdapter,
 	container: Container,
-	documentTreeViewProvider?: DocumentTreeViewProvider,
-	assistantsTreeViewProvider?: AssistantsTreeViewProvider
+	documentTreeViewProvider?: DocumentTreeViewProvider
 ) {
 	try {
 		// 从容器获取服务实例（统一在函数开头获取，避免重复声明）
@@ -256,8 +211,7 @@ function initializeOtherCommands(
 			vaultService,
 			container,
 			logger,
-			documentTreeViewProvider,
-			assistantsTreeViewProvider
+			documentTreeViewProvider
 		);
 		vaultCommands.register(commandAdapter);
 

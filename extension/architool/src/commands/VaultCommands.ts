@@ -8,7 +8,6 @@ import { GitVaultAdapter } from '../modules/shared/infrastructure/storage/git/Gi
 import { Container } from 'inversify';
 import { TYPES } from '../infrastructure/di/types';
 import { DocumentTreeViewProvider } from '../views/DocumentTreeViewProvider';
-import { AssistantsTreeViewProvider } from '../views/AssistantsTreeViewProvider';
 
 /**
  * Vault 相关命令
@@ -18,8 +17,7 @@ export class VaultCommands {
     private vaultService: VaultApplicationService,
     private container: Container,
     private logger: Logger,
-    private documentTreeViewProvider?: DocumentTreeViewProvider,
-    private assistantsTreeViewProvider?: AssistantsTreeViewProvider
+    private documentTreeViewProvider?: DocumentTreeViewProvider
   ) {}
 
   /**
@@ -325,9 +323,7 @@ export class VaultCommands {
     if (this.documentTreeViewProvider) {
       this.documentTreeViewProvider.refresh();
     }
-    if (this.assistantsTreeViewProvider) {
-      this.assistantsTreeViewProvider.refresh();
-    }
+    // 助手视图已移除，所有 vault 现在在文档视图中显示
   }
 
   /**
