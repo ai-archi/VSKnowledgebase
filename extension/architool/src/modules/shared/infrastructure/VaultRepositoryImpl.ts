@@ -253,10 +253,18 @@ export class VaultRepositoryImpl implements VaultRepository {
     }
       
       // 保存 vault.yaml 到 .metadata/vault.yaml
+      // 如果 vault.yaml 已存在，则不覆盖它（保留原有内容）
       const architoolRoot = this.configManager.getArchitoolRoot();
       const vaultPath = path.join(architoolRoot, vault.name);
       const metadataDir = path.join(vaultPath, '.metadata');
       const vaultYamlPath = path.join(metadataDir, 'vault.yaml');
+      
+      // 如果 vault.yaml 已存在，跳过写入，保留原有内容
+      if (fs.existsSync(vaultYamlPath)) {
+        // vault.yaml 已存在，不覆盖它
+        this.vaultsCache.set(vault.id, vault);
+        return { success: true, value: undefined };
+      }
       
       // 确保 .metadata 目录存在
       if (!fs.existsSync(metadataDir)) {

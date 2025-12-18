@@ -1,5 +1,5 @@
 <template>
-  <div class="plantuml-editor">
+  <div class="diagram-editor">
     <!-- 工作区布局 -->
     <div class="workspace" ref="workspaceRef">
       <!-- 图表面板 -->
@@ -60,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive, watch } from 'vue';
+import { ref, onMounted, onUnmounted, reactive, watch, nextTick } from 'vue';
 import { PlantUMLEditorApp } from '../lib/plantuml-editor/PlantUMLEditorApp';
 
 const workspaceRef = ref<HTMLElement>();
@@ -90,7 +90,13 @@ watch(error, (newError) => {
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  // 等待 DOM 完全渲染
+  await nextTick();
+  
+  // 使用 requestAnimationFrame 确保浏览器完成渲染
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  
   if (
     workspaceRef.value && 
     diagramContainerRef.value && 
@@ -98,6 +104,7 @@ onMounted(() => {
     diagramPanelRef.value &&
     dividerRef.value
   ) {
+    console.log('[PlantUMLEditor] Initializing editor app...');
     editorApp = new PlantUMLEditorApp({
       workspace: workspaceRef.value,
       diagramContainer: diagramContainerRef.value,
@@ -117,6 +124,14 @@ onMounted(() => {
       zoomDisabled.in = !canZoomIn;
       zoomDisabled.out = !canZoomOut;
     };
+  } else {
+    console.error('[PlantUMLEditor] Missing required elements:', {
+      workspace: !!workspaceRef.value,
+      diagramContainer: !!diagramContainerRef.value,
+      sourceEditor: !!sourceEditorRef.value,
+      diagramPanel: !!diagramPanelRef.value,
+      divider: !!dividerRef.value,
+    });
   }
 });
 
@@ -142,6 +157,8 @@ const dismissError = () => {
 </script>
 
 <style scoped>
-@import '../styles/plantuml-editor.css';
+/* 样式已在 plantuml-editor-main.ts 中导入，确保在 CodeMirror CSS 之后加载 */
 </style>
+
+
 

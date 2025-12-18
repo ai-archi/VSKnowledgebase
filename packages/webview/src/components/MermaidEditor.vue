@@ -1,5 +1,5 @@
 <template>
-  <div class="mermaid-editor">
+  <div class="diagram-editor">
     <!-- 工作区布局 -->
     <div class="workspace" ref="workspaceRef">
       <!-- 图表面板 -->
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive, watch } from 'vue';
+import { ref, onMounted, onUnmounted, reactive, watch, nextTick } from 'vue';
 import { MermaidEditorAppV2 } from '../lib/mermaid-editor/MermaidEditorAppV2';
 
 const workspaceRef = ref<HTMLElement>();
@@ -72,8 +72,15 @@ watch(error, (newError) => {
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  // 等待 DOM 完全渲染
+  await nextTick();
+  
+  // 使用 requestAnimationFrame 确保浏览器完成渲染
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  
   if (workspaceRef.value && diagramContainerRef.value && sourceEditorRef.value) {
+    console.log('[MermaidEditor] Initializing editor app...');
     editorApp = new MermaidEditorAppV2({
       workspace: workspaceRef.value,
       diagramContainer: diagramContainerRef.value,
@@ -84,6 +91,14 @@ onMounted(() => {
       onError: (errorMessage: string | null) => {
         error.value = errorMessage;
       },
+    });
+  } else {
+    console.error('[MermaidEditor] Missing required elements:', {
+      workspace: !!workspaceRef.value,
+      diagramContainer: !!diagramContainerRef.value,
+      sourceEditor: !!sourceEditorRef.value,
+      diagramPanel: !!diagramPanelRef.value,
+      divider: !!dividerRef.value,
     });
   }
 });
@@ -110,95 +125,6 @@ const dismissError = () => {
 </script>
 
 <style scoped>
-@import '../styles/mermaid-editor.css';
-
-.mermaid-editor {
-  width: 100%;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.mermaid-editor .workspace {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-/* 底部横向错误提示弹窗 */
-.error-toast {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px 20px;
-  background: var(--vscode-errorForeground, #f48771);
-  color: var(--vscode-editor-background, #1e1e1e);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 10000;
-  font-size: 13px;
-  line-height: 1.6;
-  max-height: 50vh;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-
-.error-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.error-text {
-  flex: 1;
-  word-break: break-word;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  min-width: 0;
-}
-
-.error-close {
-  background: transparent;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  opacity: 0.8;
-  transition: opacity 0.2s;
-}
-
-.error-close:hover {
-  opacity: 1;
-}
-
-/* 滑入动画 */
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-up-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(100%);
-}
-
-.slide-up-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(100%);
-}
+/* 样式已在 mermaid-editor-main.ts 中导入，确保在 CodeMirror CSS 之后加载 */
 </style>
 

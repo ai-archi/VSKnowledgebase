@@ -167,11 +167,14 @@
     {
       "label": "Copy Webview to Architool",
       "type": "shell",
-      "command": "sh",
+      "command": "pnpm",
       "args": [
-        "-c",
-        "mkdir -p ${workspaceFolder}/extension/architool/dist/webview && cp -r ${workspaceFolder}/apps/webview/dist/* ${workspaceFolder}/extension/architool/dist/webview/ || true"
+        "run",
+        "build:webview"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}/extension/architool"
+      },
       "dependsOn": "Build Webview",
       "problemMatcher": [],
       "group": "build",

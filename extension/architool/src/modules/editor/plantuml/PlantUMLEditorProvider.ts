@@ -10,6 +10,8 @@ import { spawn, ChildProcess } from 'child_process';
 export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'architool.plantumlEditor';
   
+  // 静态缓存 jar 文件路径，避免重复查找
+  private static cachedJarPath: string | null = null;
   private jarPath: string | null = null;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -73,20 +75,26 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
           } else if (message.method === 'renderPlantUML') {
             // 渲染 PlantUML
             const { source } = message.params || {};
+            console.log('[PlantUMLEditor] Received renderPlantUML request, source length:', source?.length || 0);
             if (source) {
               try {
+                console.log('[PlantUMLEditor] Starting render...');
                 const svg = await this.renderPlantUML(source);
+                console.log('[PlantUMLEditor] Render completed, SVG length:', svg?.length || 0);
                 webviewPanel.webview.postMessage({
                   method: 'render-result',
                   params: { svg: svg },
                 });
               } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('[PlantUMLEditor] Render error:', errorMessage);
                 webviewPanel.webview.postMessage({
                   method: 'render-error',
                   params: { error: errorMessage },
                 });
               }
+            } else {
+              console.warn('[PlantUMLEditor] renderPlantUML called without source');
             }
           } else if (message.method === 'savePlantUML') {
             // 保存文档
@@ -141,7 +149,8 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
       viewStateSubscription.dispose();
     });
 
-    // 发送初始内容（使用多个延迟确保 Vue 应用已初始化）
+    // 发送初始内容（优化：减少延迟，只发送一次）
+    // 前端已经优化了初始化时序，这里只需要发送一次即可
     const sendInitialContent = () => {
       webviewPanel.webview.postMessage({
         method: 'load',
@@ -149,10 +158,9 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
       });
     };
 
-    // 使用多个延迟确保 Vue 应用已初始化（参考 MermaidEditorProvider）
-    setTimeout(sendInitialContent, 500);
-    setTimeout(sendInitialContent, 1500);
-    setTimeout(sendInitialContent, 3000);
+    // 优化：减少延迟，前端已经处理了初始化时序
+    // 只发送一次，延迟 200ms 确保 webview 基本初始化完成
+    setTimeout(sendInitialContent, 200);
   }
 
   /**
@@ -165,9 +173,10 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
     if (!jarPath) {
       const extensionPath = this.context.extensionPath;
       throw new Error(
-        `PlantUML jar file not found. Please ensure plantuml-1.2025.10.jar is placed in vendor/plantuml/ and run the build process.\n` +
+        `PlantUML jar file not found. Please ensure plantuml-1.2025.10.jar is placed in dist/vendor/plantuml/ and run the build process.\n` +
         `Extension path: ${extensionPath}\n` +
-        `Expected location:\n` +
+        `Expected locations:\n` +
+        `  - ${path.join(extensionPath, 'dist', 'vendor', 'plantuml', 'plantuml-1.2025.10.jar')}\n` +
         `  - ${path.join(extensionPath, 'vendor', 'plantuml', 'plantuml-1.2025.10.jar')}`
       );
     }
@@ -306,24 +315,41 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
    * 查找 PlantUML jar 文件路径
    */
   private async findJarPath(): Promise<string | null> {
-    // 如果已经找到，直接返回
+    // 首先检查静态缓存（跨实例共享）
+    if (PlantUMLEditorProvider.cachedJarPath && fs.existsSync(PlantUMLEditorProvider.cachedJarPath)) {
+      this.jarPath = PlantUMLEditorProvider.cachedJarPath;
+      return this.jarPath;
+    }
+    
+    // 如果实例级别的缓存存在，也检查一下
     if (this.jarPath && fs.existsSync(this.jarPath)) {
+      PlantUMLEditorProvider.cachedJarPath = this.jarPath;
       return this.jarPath;
     }
 
     const extensionPath = this.context.extensionPath;
     
-    // 优先：新位置 vendor/plantuml/plantuml-1.2025.10.jar（打包后的位置）
-    const newJarPath = path.join(extensionPath, 'vendor', 'plantuml', 'plantuml-1.2025.10.jar');
-    if (fs.existsSync(newJarPath)) {
-      this.jarPath = newJarPath;
-        return this.jarPath;
-      }
+    // 优先：打包后的位置 dist/vendor/plantuml/plantuml-1.2025.10.jar
+    const distJarPath = path.join(extensionPath, 'dist', 'vendor', 'plantuml', 'plantuml-1.2025.10.jar');
+    if (fs.existsSync(distJarPath)) {
+      this.jarPath = distJarPath;
+      PlantUMLEditorProvider.cachedJarPath = distJarPath; // 更新静态缓存
+      return this.jarPath;
+    }
 
-    // 备选：开发环境中的位置（项目根目录）
+    // 备选：vendor/plantuml/plantuml-1.2025.10.jar（如果直接放在扩展根目录）
+    const vendorJarPath = path.join(extensionPath, 'vendor', 'plantuml', 'plantuml-1.2025.10.jar');
+    if (fs.existsSync(vendorJarPath)) {
+      this.jarPath = vendorJarPath;
+      PlantUMLEditorProvider.cachedJarPath = vendorJarPath; // 更新静态缓存
+      return this.jarPath;
+    }
+
+    // 开发环境：项目根目录的 vendor/plantuml/plantuml-1.2025.10.jar
     const devJarPath = path.join(extensionPath, '..', '..', 'vendor', 'plantuml', 'plantuml-1.2025.10.jar');
     if (fs.existsSync(devJarPath)) {
       this.jarPath = devJarPath;
+      PlantUMLEditorProvider.cachedJarPath = devJarPath; // 更新静态缓存
       return this.jarPath;
     }
 

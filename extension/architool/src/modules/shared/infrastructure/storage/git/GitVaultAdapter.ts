@@ -85,17 +85,26 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
 
   async cloneRepository(remote: RemoteEndpoint, targetPath: string): Promise<Result<void, VaultError>> {
     try {
+      // Check if .metadata/vault.yaml exists and preserve it
+      const vaultYamlPath = path.join(targetPath, '.metadata', 'vault.yaml');
+      let existingVaultYamlContent: string | null = null;
+      
+      if (fs.existsSync(vaultYamlPath)) {
+        try {
+          existingVaultYamlContent = fs.readFileSync(vaultYamlPath, 'utf-8');
+        } catch (readError: any) {
+          // If we can't read it, we'll proceed without preserving it
+          // This is not a critical error
+        }
+      }
+
       // Ensure target directory doesn't exist or is empty
       if (fs.existsSync(targetPath)) {
         const files = fs.readdirSync(targetPath);
         if (files.length > 0) {
-          return {
-            success: false,
-            error: {
-              code: 'DIRECTORY_NOT_EMPTY',
-              message: `Target directory is not empty: ${targetPath}`,
-            },
-          };
+          // If directory is not empty, we need to remove it to allow clone
+          // But first, we've already saved vault.yaml if it exists
+          fs.rmSync(targetPath, { recursive: true, force: true });
         }
       } else {
         // Create parent directory if it doesn't exist
@@ -123,6 +132,20 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
         // If submodule update fails, it might be because there are no submodules
         // This is not a critical error, so we log it but don't fail the clone
         // The clone itself was successful
+      }
+
+      // Restore .metadata/vault.yaml if it existed before
+      if (existingVaultYamlContent !== null) {
+        try {
+          const metadataDir = path.join(targetPath, '.metadata');
+          if (!fs.existsSync(metadataDir)) {
+            fs.mkdirSync(metadataDir, { recursive: true });
+          }
+          fs.writeFileSync(vaultYamlPath, existingVaultYamlContent, 'utf-8');
+        } catch (restoreError: any) {
+          // If we can't restore it, log but don't fail the clone
+          // The clone itself was successful
+        }
       }
 
       return { success: true, value: undefined };
