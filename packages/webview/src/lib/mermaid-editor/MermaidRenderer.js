@@ -125,10 +125,7 @@ export class MermaidRenderer {
       // 渲染前清理 body 中可能存在的错误 div
       this.cleanupMermaidErrorDivs();
       
-      // 清空容器
-      this.container.innerHTML = '';
-      
-      // 使用 mermaid 渲染
+      // 使用 mermaid 渲染（在清空容器之前先渲染，减少空白期）
       const id = `mermaid-${Date.now()}`;
       const { svg } = await mermaid.render(id, source);
       
@@ -144,40 +141,67 @@ export class MermaidRenderer {
         throw new Error('Mermaid syntax error detected');
       }
       
-      // 注入 SVG（Mermaid 11.x 可能会返回包含 div 包装器的 HTML）
-      this.container.innerHTML = svg;
+      // 解析 SVG（Mermaid 11.x 可能会返回包含 div 包装器的 HTML）
+      let svgElement = null;
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = svg;
       
       // 移除容器内 Mermaid 自动添加的 div 包装器（id="dmermaid-xxxx"）
-      const dmermaidDiv = this.container.querySelector('div[id^="dmermaid-"]');
+      const dmermaidDiv = tempDiv.querySelector('div[id^="dmermaid-"]');
       if (dmermaidDiv) {
         // 提取内部的 SVG 元素
-        const svgElement = dmermaidDiv.querySelector('svg');
-        if (svgElement) {
-          // 移除 div 包装器，直接使用 SVG
-          dmermaidDiv.parentNode?.removeChild(dmermaidDiv);
-          this.container.appendChild(svgElement);
-        }
+        svgElement = dmermaidDiv.querySelector('svg');
+      } else {
+        // 如果没有包装器，直接获取 SVG
+        svgElement = tempDiv.querySelector('svg');
       }
+      
+      if (!svgElement) {
+        throw new Error('Failed to extract SVG from mermaid render result');
+      }
+      
+      // 使用 requestAnimationFrame 确保平滑过渡，避免闪烁
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
+      // 临时隐藏容器内容，准备替换（使用 opacity 而不是清空，避免闪烁）
+      const oldSVG = this.container.querySelector('svg');
+      if (oldSVG) {
+        oldSVG.style.opacity = '0';
+        oldSVG.style.transition = 'opacity 0.1s';
+      }
+      
+      // 清空容器并注入新 SVG（在 requestAnimationFrame 之后，减少可见的空白期）
+      this.container.innerHTML = '';
+      this.container.appendChild(svgElement);
       
       // 再次清理 body（防止异步追加）
       this.cleanupMermaidErrorDivs();
       
-      this.currentSVG = this.container.querySelector('svg');
-      
-      if (!this.currentSVG) {
-        throw new Error('Failed to render mermaid diagram');
-      }    
+      this.currentSVG = svgElement;
       
       // 后处理增强
       this.enhanceSVG(this.currentSVG);
       
-      // 应用当前缩放和平移
+      // 应用当前缩放和平移（在增强之后）
       this.applyZoom();
       
-      // 设置鼠标滚轮缩放
-      this.setupWheelZoom();
+      // 淡入新 SVG（如果之前有旧 SVG）
+      if (oldSVG) {
+        this.currentSVG.style.opacity = '0';
+        this.currentSVG.style.transition = 'opacity 0.15s ease-in';
+        // 使用 requestAnimationFrame 确保样式已应用
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        this.currentSVG.style.opacity = '1';
+        // 淡入完成后移除 transition，避免影响后续操作
+        setTimeout(() => {
+          if (this.currentSVG) {
+            this.currentSVG.style.transition = '';
+          }
+        }, 150);
+      }
       
-      // 设置画布拖动
+      // 设置事件监听器（方法内部会处理重复调用的情况）
+      this.setupWheelZoom();
       this.setupPan();
       
       return this.currentSVG;
