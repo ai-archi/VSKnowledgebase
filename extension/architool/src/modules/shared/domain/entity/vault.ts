@@ -21,6 +21,9 @@ export interface Vault {
   // Git 集成
   remote?: RemoteEndpoint; // Git 远程仓库，可选
   
+  // 权限控制
+  readonly?: boolean; // 是否只读，从 git clone 的 vault 默认为 true，本地创建的默认为 false
+  
   // 时间戳
   createdAt?: string; // ISO 8601 格式
   updatedAt?: string; // ISO 8601 格式

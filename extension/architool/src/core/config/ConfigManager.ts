@@ -88,10 +88,58 @@ export class ConfigManager {
   }
 
   async removeVault(vaultId: string): Promise<void> {
+    this.logger?.info(`[ConfigManager] removeVault called with vaultId: ${vaultId}`);
     const config = await this.getGlobalConfig();
-    if (config.workspace?.vaults) {
-      config.workspace.vaults = config.workspace.vaults.filter((v: any) => (v.name || v.fsPath) !== vaultId);
+    const beforeCount = config.workspace?.vaults?.length || 0;
+    this.logger?.info(`[ConfigManager] Before removal: ${beforeCount} vaults in config`);
+    
+    if (!config.workspace) {
+      config.workspace = {};
+    }
+    if (!config.workspace.vaults) {
+      config.workspace.vaults = [];
+    }
+    
+    // 记录所有 vault 信息用于调试
+    config.workspace.vaults.forEach((v: any, index: number) => {
+      this.logger?.info(`[ConfigManager] Vault ${index}: name=${v.name}, fsPath=${v.fsPath}`);
+    });
+    
+    let removed = false;
+    config.workspace.vaults = config.workspace.vaults.filter((v: any) => {
+      // 优先比较 name
+      if (v.name === vaultId) {
+        this.logger?.info(`[ConfigManager] Matched vault by name: ${v.name}`);
+        removed = true;
+        return false; // 匹配，需要删除
+      }
+      // 比较 fsPath（可能是完整路径）
+      if (v.fsPath === vaultId) {
+        this.logger?.info(`[ConfigManager] Matched vault by fsPath: ${v.fsPath}`);
+        removed = true;
+        return false; // 匹配，需要删除
+      }
+      // 从 fsPath 中提取目录名来比较
+      if (v.fsPath) {
+        const fsPathDirName = path.basename(v.fsPath);
+        if (fsPathDirName === vaultId) {
+          this.logger?.info(`[ConfigManager] Matched vault by fsPath basename: ${fsPathDirName}`);
+          removed = true;
+          return false; // 匹配，需要删除
+        }
+      }
+      // 都不匹配，保留
+      return true;
+    });
+    
+    const afterCount = config.workspace.vaults.length;
+    this.logger?.info(`[ConfigManager] After removal: ${afterCount} vaults in config (removed ${beforeCount - afterCount})`);
+    
+    if (removed || beforeCount !== afterCount) {
       await this.saveGlobalConfig(config);
+      this.logger?.info(`[ConfigManager] Config saved successfully`);
+    } else {
+      this.logger?.warn(`[ConfigManager] No matching vault found in config for vaultId: ${vaultId}. Vault may only exist in file system.`);
     }
   }
 

@@ -6,6 +6,7 @@ import { Result, VaultError, VaultErrorCode } from '../domain/errors';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 import { SecretStorageService } from '../../../core/secret/SecretStorageService';
 import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
+import { Logger } from '../../../core/logger/Logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -14,14 +15,17 @@ import * as yaml from 'js-yaml';
 export class VaultRepositoryImpl implements VaultRepository {
   private configManager: ConfigManager;
   private secretStorage?: SecretStorageService;
+  private logger?: Logger;
   private vaultsCache: Map<string, Vault> = new Map();
 
   constructor(
     @inject(TYPES.ConfigManager) configManager: ConfigManager,
-    @inject(TYPES.SecretStorageService) @optional() secretStorage?: SecretStorageService
+    @inject(TYPES.SecretStorageService) @optional() secretStorage?: SecretStorageService,
+    @inject(TYPES.Logger) @optional() logger?: Logger
   ) {
     this.configManager = configManager;
     this.secretStorage = secretStorage;
+    this.logger = logger;
   }
 
   async findById(vaultId: string): Promise<Result<Vault | null, VaultError>> {
@@ -156,6 +160,7 @@ export class VaultRepositoryImpl implements VaultRepository {
           type: this.validateVaultType(vaultData.type) || this.inferVaultType(vaultPath),
           description: vaultData.description,
           remote: vaultData.remote,
+          readonly: vaultData.readonly !== undefined ? vaultData.readonly : (vaultData.remote ? true : false), // 如果有 remote 且未明确设置，默认为 true
           createdAt: vaultData.createdAt,
           updatedAt: vaultData.updatedAt,
         };
@@ -288,6 +293,11 @@ export class VaultRepositoryImpl implements VaultRepository {
         };
       }
       
+      // 保存 readonly 属性（如果明确设置）
+      if (vault.readonly !== undefined) {
+        vaultData.readonly = vault.readonly;
+      }
+      
       if (vault.createdAt) {
         vaultData.createdAt = vault.createdAt;
       }
@@ -322,13 +332,18 @@ export class VaultRepositoryImpl implements VaultRepository {
   }
 
   async delete(vaultId: string): Promise<Result<void, VaultError>> {
+    this.logger?.info(`[VaultRepository] delete called with vaultId: ${vaultId}`);
+    
     // 删除 SecretStorage 中的认证信息
     if (this.secretStorage) {
       await this.secretStorage.deleteVaultCredentials(vaultId);
+      this.logger?.info(`[VaultRepository] Deleted vault credentials from SecretStorage`);
     }
     
     await this.configManager.removeVault(vaultId);
     this.vaultsCache.delete(vaultId);
+    this.logger?.info(`[VaultRepository] Deleted vault from cache and config`);
+    
     return { success: true, value: undefined };
   }
 }

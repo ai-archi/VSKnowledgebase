@@ -8,6 +8,7 @@ import { GitVaultAdapter } from '../modules/shared/infrastructure/storage/git/Gi
 import { Container } from 'inversify';
 import { TYPES } from '../infrastructure/di/types';
 import { DocumentTreeViewProvider } from '../views/DocumentTreeViewProvider';
+import { ConfigManager } from '../core/config/ConfigManager';
 
 /**
  * Vault 相关命令
@@ -289,18 +290,36 @@ export class VaultCommands {
 
           if (confirm !== 'Yes') return;
 
-          const deleteFiles = await vscode.window.showQuickPick(
-            ['Yes', 'No'],
-            {
-              placeHolder: 'Delete vault files from disk?',
-            }
-          );
+          // 检查 vault 是否在配置中
+          // 如果不在配置中（只存在于文件系统），直接删除文件，不询问用户
+          // 如果在配置中，询问用户是否删除文件
+          const configManager = this.container.get<ConfigManager>(TYPES.ConfigManager);
+          const configVaultsResult = await configManager.getVaults();
+          const configVaults = configVaultsResult.success ? configVaultsResult.value : [];
+          const vaultInConfig = configVaults.some((v: any) => v.id === selectedVault.id || v.name === selectedVault.id);
+          
+          let deleteFiles: boolean | undefined = undefined;
+          if (vaultInConfig) {
+            // 在配置中，询问用户是否删除文件
+            const deleteFilesChoice = await vscode.window.showQuickPick(
+              ['Yes', 'No'],
+              {
+                placeHolder: 'Delete vault files from disk?',
+              }
+            );
+            if (!deleteFilesChoice) return; // 用户取消
+            deleteFiles = deleteFilesChoice === 'Yes';
+          } else {
+            // 不在配置中，自动删除文件（不询问用户）
+            deleteFiles = true;
+            this.logger.info(`Vault '${selectedVault.label}' only exists in file system. Will automatically delete files.`);
+          }
 
           const result = await this.vaultService.removeVault(selectedVault.id, {
-            deleteFiles: deleteFiles === 'Yes',
+            deleteFiles: deleteFiles,
           });
           if (result.success) {
-            if (deleteFiles === 'Yes') {
+            if (deleteFiles) {
               vscode.window.showInformationMessage(`Vault '${selectedVault.label}' and its files have been removed.`);
             } else {
               vscode.window.showInformationMessage(`Vault '${selectedVault.label}' removed from configuration.`);

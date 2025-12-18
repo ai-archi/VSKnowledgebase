@@ -7,6 +7,7 @@ import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
 import { VaultRepository } from '../infrastructure/VaultRepository';
 import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
 import { GitVaultAdapter } from '../infrastructure/storage/git/GitVaultAdapter';
+import { ConfigManager } from '../../../core/config/ConfigManager';
 import { ArchitoolDirectoryManager } from '../../../core/storage/ArchitoolDirectoryManager';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,6 +20,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     @inject(TYPES.VaultRepository) private vaultRepo: VaultRepository,
     @inject(TYPES.VaultFileSystemAdapter) private fileAdapter: VaultFileSystemAdapter,
     @inject(TYPES.GitVaultAdapter) private gitAdapter: GitVaultAdapter,
+    @inject(TYPES.ConfigManager) private configManager: ConfigManager,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
@@ -28,6 +30,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       name: opts.name,
       type: opts.type || 'document',
       description: opts.description,
+      readonly: false, // 本地创建的 vault 默认允许修改
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -48,6 +51,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       type: opts.type || 'document',
       description: opts.description,
       remote: opts.remote,
+      readonly: true, // 从 git clone 的 vault 默认不允许修改
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -109,6 +113,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
         name: newVaultName,
         type: sourceVault.type || 'document',
         description: `Forked from ${sourceVault.name}`,
+        readonly: false, // Fork 的 vault 是本地创建的，允许修改
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -207,9 +212,12 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
   }
 
   async removeVault(vaultId: string, opts?: { deleteFiles?: boolean }): Promise<Result<void, VaultError>> {
+    this.logger.info(`[VaultApplicationService] removeVault called with vaultId: ${vaultId}, deleteFiles: ${opts?.deleteFiles}`);
+    
     // 获取 Vault 信息（用于删除文件）
     const vaultResult = await this.vaultRepo.findById(vaultId);
     if (!vaultResult.success || !vaultResult.value) {
+      this.logger.error(`[VaultApplicationService] Vault not found: ${vaultId}`);
       return {
         success: false,
         error: new VaultError(VaultErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
@@ -217,16 +225,32 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     }
 
     const vault = vaultResult.value;
+    this.logger.info(`[VaultApplicationService] Found vault: id=${vault.id}, name=${vault.name}`);
 
-    // 如果指定删除文件，先删除文件目录
-    if (opts?.deleteFiles) {
+    // 检查 vault 是否在配置中
+    const configVaultsResult = await this.configManager.getVaults();
+    const configVaults = configVaultsResult.success ? configVaultsResult.value : [];
+    const vaultInConfig = configVaults.some((v: Vault) => v.id === vaultId || v.name === vaultId);
+    
+    // 如果 vault 不在配置中（只存在于文件系统），自动删除文件系统目录
+    const shouldDeleteFiles = opts?.deleteFiles !== undefined 
+      ? opts.deleteFiles 
+      : !vaultInConfig; // 如果不在配置中，自动删除文件
+    
+    if (!vaultInConfig) {
+      this.logger.info(`[VaultApplicationService] Vault ${vaultId} only exists in file system. Will automatically delete files.`);
+    }
+
+    // 如果指定删除文件（或自动删除），先删除文件目录
+    if (shouldDeleteFiles) {
       const vaultPath = this.fileAdapter.getVaultPath(vault.id);
+      this.logger.info(`[VaultApplicationService] Attempting to delete vault directory: ${vaultPath}`);
       if (fs.existsSync(vaultPath)) {
         try {
           fs.rmSync(vaultPath, { recursive: true, force: true });
-          this.logger.info(`Vault directory deleted: ${vaultPath}`);
+          this.logger.info(`[VaultApplicationService] Vault directory deleted: ${vaultPath}`);
         } catch (error: any) {
-          this.logger.error(`Failed to delete vault directory: ${vaultPath}`, error);
+          this.logger.error(`[VaultApplicationService] Failed to delete vault directory: ${vaultPath}`, error);
           return {
             success: false,
             error: new VaultError(
@@ -237,11 +261,20 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
             ),
           };
         }
+      } else {
+        this.logger.warn(`[VaultApplicationService] Vault directory does not exist: ${vaultPath}`);
       }
     }
 
-    // 从配置中删除 Vault
-    return this.vaultRepo.delete(vaultId);
+    // 从配置中删除 Vault（如果存在）
+    this.logger.info(`[VaultApplicationService] Calling vaultRepo.delete with vaultId: ${vaultId}`);
+    const deleteResult = await this.vaultRepo.delete(vaultId);
+    if (deleteResult.success) {
+      this.logger.info(`[VaultApplicationService] Vault deleted successfully: ${vaultId}`);
+    } else {
+      this.logger.error(`[VaultApplicationService] Failed to delete vault: ${deleteResult.error.message}`);
+    }
+    return deleteResult;
   }
 
   async listVaults(): Promise<Result<Vault[], VaultError>> {
