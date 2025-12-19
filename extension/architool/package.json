@@ -85,6 +85,11 @@
         "title": "Sync Vault"
       },
       {
+        "command": "archi.vault.updateFromRemote",
+        "title": "Update from Remote",
+        "icon": "$(sync)"
+      },
+      {
         "command": "archi.vault.remove",
         "title": "Remove Vault"
       },
@@ -216,32 +221,37 @@
       "view/item/context": [
         {
           "command": "archi.document.addFile",
-          "when": "view == architool.documentView && viewItem == vault",
+          "when": "view == architool.documentView && (viewItem == vault || viewItem == vault-git)",
           "group": "1_actions"
         },
         {
           "command": "archi.document.addFolder",
-          "when": "view == architool.documentView && viewItem == vault",
+          "when": "view == architool.documentView && (viewItem == vault || viewItem == vault-git)",
           "group": "1_actions"
         },
         {
           "command": "archi.document.addPlantUMLDesign",
-          "when": "view == architool.documentView && viewItem == vault",
+          "when": "view == architool.documentView && (viewItem == vault || viewItem == vault-git)",
           "group": "1_actions"
         },
         {
           "command": "archi.document.addMermaidDesign",
-          "when": "view == architool.documentView && viewItem == vault",
+          "when": "view == architool.documentView && (viewItem == vault || viewItem == vault-git)",
           "group": "1_actions"
         },
         {
           "command": "archi.document.editRelations",
-          "when": "view == architool.documentView && viewItem == vault",
+          "when": "view == architool.documentView && (viewItem == vault || viewItem == vault-git)",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.vault.updateFromRemote",
+          "when": "view == architool.documentView && viewItem == vault-git",
           "group": "1_actions"
         },
         {
           "command": "archi.document.delete",
-          "when": "view == architool.documentView && viewItem == vault",
+          "when": "view == architool.documentView && (viewItem == vault || viewItem == vault-git)",
           "group": "2_actions"
         },
         {

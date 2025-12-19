@@ -157,9 +157,10 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         return;
       }
 
-      const result = await this.vaultService.removeVault(vault.id);
+      // 直接删除文件和配置，不询问用户
+      const result = await this.vaultService.removeVault(vault.id, { deleteFiles: true });
       if (result.success) {
-        vscode.window.showInformationMessage(`Vault '${vaultName}' deleted`);
+        vscode.window.showInformationMessage(`Vault '${vaultName}' and its files have been deleted`);
         this.treeViewProvider.refresh();
       } else {
         vscode.window.showErrorMessage(`Failed to delete vault: ${result.error.message}`);

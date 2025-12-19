@@ -99,13 +99,37 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
     );
   }
 
+  protected async getRootVaults(): Promise<DocumentTreeItem[]> {
+    const vaultsResult = await this.vaultService.listVaults();
+    if (!vaultsResult.success || vaultsResult.value.length === 0) {
+      return [];
+    }
+    
+    // 默认返回所有 vault，不再过滤
+    const filteredVaults = this.filterVaults(vaultsResult.value);
+    
+    return filteredVaults.map(vault =>
+      this.createTreeItem(
+        vault.name,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        vault.name,
+        vault.id,
+        undefined,
+        undefined,
+        this.getItemContextValue(undefined, 'vault', vault)
+      )
+    );
+  }
+
   protected getItemContextValue(
     item: DocumentTreeItem | undefined,
-    type: 'vault' | 'folder' | 'file'
+    type: 'vault' | 'folder' | 'file',
+    vault?: { id?: string; name?: string; remote?: any }
   ): string {
     switch (type) {
       case 'vault':
-        return 'vault';
+        // 如果 vault 有 remote，返回 'vault-git'，否则返回 'vault'
+        return vault?.remote ? 'vault-git' : 'vault';
       case 'folder':
         return 'folder';
       case 'file':

@@ -63,7 +63,7 @@ export function buildAuthenticatedUrl(remote: RemoteEndpoint): string {
 
 export interface GitVaultAdapter {
   cloneRepository(remote: RemoteEndpoint, targetPath: string): Promise<Result<void, VaultError>>;
-  pullRepository(vaultPath: string): Promise<Result<void, VaultError>>;
+  pullRepository(vaultPath: string, remote?: RemoteEndpoint): Promise<Result<void, VaultError>>;
   pushRepository(vaultPath: string): Promise<Result<void, VaultError>>;
   getRemoteUrl(vaultPath: string): Promise<Result<string, VaultError>>;
   getCurrentBranch(vaultPath: string): Promise<Result<string, VaultError>>;
@@ -160,7 +160,7 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
     }
   }
 
-  async pullRepository(vaultPath: string): Promise<Result<void, VaultError>> {
+  async pullRepository(vaultPath: string, remote?: RemoteEndpoint): Promise<Result<void, VaultError>> {
     try {
       if (!(await this.isGitRepository(vaultPath))) {
         return {
@@ -173,8 +173,65 @@ export class GitVaultAdapterImpl implements GitVaultAdapter {
       }
 
       const git = this.getGitInstance(vaultPath);
-      // Pull with submodule updates
-      await git.pull(['--recurse-submodules']);
+      
+      // 获取当前分支
+      const branchResult = await this.getCurrentBranch(vaultPath);
+      if (!branchResult.success) {
+        return {
+          success: false,
+          error: {
+            code: 'GET_BRANCH_FAILED',
+            message: `Failed to get current branch: ${branchResult.error.message}`,
+          },
+        };
+      }
+      const currentBranch = branchResult.value;
+
+      // 检查是否有 upstream 设置
+      let hasUpstream = false;
+      try {
+        const upstream = await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+        hasUpstream = upstream.trim().length > 0;
+      } catch {
+        // 没有 upstream，需要设置
+        hasUpstream = false;
+      }
+
+      // 如果没有 upstream，尝试设置或使用明确的 pull 命令
+      if (!hasUpstream) {
+        // 获取远程名称（通常是 origin）
+        const remotes = await git.getRemotes(true);
+        const originRemote = remotes.find(r => r.name === 'origin');
+        
+        if (originRemote) {
+          // 如果有 remote 信息，使用指定的分支，否则使用当前分支
+          const branchToPull = remote?.branch || currentBranch;
+          
+          try {
+            // 先尝试设置 upstream（使用 -u 参数，如果远程分支不存在会失败）
+            await git.raw(['branch', '--set-upstream-to', `origin/${branchToPull}`, currentBranch]);
+          } catch (setUpstreamError: any) {
+            // 如果设置 upstream 失败（可能因为远程分支不存在），继续尝试 pull
+            // 使用明确的 pull 命令可能仍然会成功
+          }
+          
+          // 使用明确的 pull 命令：git pull origin <branch>
+          // 这样可以避免 upstream 未设置的问题
+          try {
+            await git.raw(['pull', 'origin', branchToPull, '--recurse-submodules']);
+          } catch (pullError: any) {
+            // 如果明确的 pull 也失败，尝试不带分支名的 pull（使用默认行为）
+            // 这可能会失败，但至少我们尝试了
+            throw pullError;
+          }
+        } else {
+          // 没有 origin remote，尝试直接 pull（可能会失败，但至少尝试）
+          await git.pull(['--recurse-submodules']);
+        }
+      } else {
+        // 有 upstream，直接 pull
+        await git.pull(['--recurse-submodules']);
+      }
       
       // Update submodules to ensure they are up to date
       try {

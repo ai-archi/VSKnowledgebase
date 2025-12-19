@@ -7,7 +7,7 @@ import { RemoteEndpoint } from '../modules/shared/domain/value_object/RemoteEndp
 import { GitVaultAdapter } from '../modules/shared/infrastructure/storage/git/GitVaultAdapter';
 import { Container } from 'inversify';
 import { TYPES } from '../infrastructure/di/types';
-import { DocumentTreeViewProvider } from '../views/DocumentTreeViewProvider';
+import { DocumentTreeViewProvider, DocumentTreeItem } from '../views/DocumentTreeViewProvider';
 import { ConfigManager } from '../core/config/ConfigManager';
 
 /**
@@ -271,6 +271,49 @@ export class VaultCommands {
             this.refreshViews();
           } else {
             vscode.window.showErrorMessage(`Failed to sync vault: ${result.error.message}`);
+          }
+        },
+      },
+      {
+        command: 'archi.vault.updateFromRemote',
+        callback: async (item?: DocumentTreeItem) => {
+          // 从右键菜单传入的 item 获取 vaultId
+          // VS Code 会自动将选中的 tree item 作为参数传递
+          if (!item || !item.vaultId) {
+            vscode.window.showErrorMessage('Please select a vault to update.');
+            return;
+          }
+
+          const vaultId = item.vaultId;
+
+          // 获取 vault 信息，检查是否有 remote
+          const vaultResult = await this.vaultService.listVaults();
+          if (!vaultResult.success) {
+            vscode.window.showErrorMessage('Failed to get vault information.');
+            return;
+          }
+
+          const vault = vaultResult.value.find(v => v.id === vaultId);
+          if (!vault) {
+            vscode.window.showErrorMessage('Vault not found.');
+            return;
+          }
+
+          if (!vault.remote) {
+            vscode.window.showWarningMessage(`Vault '${vault.name}' is not a Git vault. Cannot update from remote.`);
+            return;
+          }
+
+          // 显示进度提示
+          vscode.window.showInformationMessage(`Updating vault '${vault.name}' from remote...`);
+          
+          // 调用 syncVault 方法更新
+          const result = await this.vaultService.syncVault(vaultId);
+          if (result.success) {
+            vscode.window.showInformationMessage(`Vault '${vault.name}' updated successfully from remote.`);
+            this.refreshViews();
+          } else {
+            vscode.window.showErrorMessage(`Failed to update vault: ${result.error.message}`);
           }
         },
       },

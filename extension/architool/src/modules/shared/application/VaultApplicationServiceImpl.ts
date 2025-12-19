@@ -185,7 +185,8 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
         this.logger.warn(`Failed to update remote URL: ${updateRemoteResult.error.message}`);
       }
       
-      const pullResult = await this.gitAdapter.pullRepository(vaultPath);
+      // 传递 remote 信息以便正确设置 upstream
+      const pullResult = await this.gitAdapter.pullRepository(vaultPath, vault.remote);
       if (!pullResult.success) {
         return {
           success: false,
@@ -228,17 +229,36 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     this.logger.info(`[VaultApplicationService] Found vault: id=${vault.id}, name=${vault.name}`);
 
     // 检查 vault 是否在配置中
+    // 需要同时匹配 id 和 name，因为 config 中的 name 可能是目录名，而 vault.yaml 中的 name 可能是显示名称
     const configVaultsResult = await this.configManager.getVaults();
     const configVaults = configVaultsResult.success ? configVaultsResult.value : [];
-    const vaultInConfig = configVaults.some((v: Vault) => v.id === vaultId || v.name === vaultId);
+    const vaultInConfig = configVaults.some((v: Vault) => {
+      // 匹配 id
+      if (v.id === vaultId || v.id === vault.id) {
+        return true;
+      }
+      // 匹配 name（可能是目录名或显示名称）
+      if (v.name === vaultId || v.name === vault.name || v.name === vault.id) {
+        return true;
+      }
+      // 匹配 vault 的 id 和 name
+      if (v.id === vault.name || v.name === vault.id) {
+        return true;
+      }
+      return false;
+    });
     
-    // 如果 vault 不在配置中（只存在于文件系统），自动删除文件系统目录
+    // 如果指定了 deleteFiles，使用指定值
+    // 否则，如果 vault 在配置中，默认不删除文件（需要用户明确指定）
+    // 如果 vault 不在配置中，自动删除文件
     const shouldDeleteFiles = opts?.deleteFiles !== undefined 
       ? opts.deleteFiles 
       : !vaultInConfig; // 如果不在配置中，自动删除文件
     
     if (!vaultInConfig) {
       this.logger.info(`[VaultApplicationService] Vault ${vaultId} only exists in file system. Will automatically delete files.`);
+    } else {
+      this.logger.info(`[VaultApplicationService] Vault ${vaultId} found in config. deleteFiles=${shouldDeleteFiles}`);
     }
 
     // 如果指定删除文件（或自动删除），先删除文件目录
