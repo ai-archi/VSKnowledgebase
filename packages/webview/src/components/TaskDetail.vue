@@ -10,7 +10,7 @@
             <el-button
               type="primary"
               size="small"
-              @click="() => handleGeneratePrompt(selectedFormData)"
+              @click="handleTriggerGeneratePrompt"
               v-if="selectedStepId && hasForm"
             >
               生成提示词
@@ -54,6 +54,7 @@
         <div class="step-detail-area-wrapper">
           <StepDetailArea
             v-if="selectedStepId"
+            ref="stepDetailAreaRef"
             :step-id="selectedStepId"
             :step-name="selectedStepName"
             :step-type="selectedStepType"
@@ -109,6 +110,7 @@ const selectedFormSchema = ref<Record<string, any>>({});
 const selectedFormData = ref<Record<string, any>>({});
 const canGoNext = ref<boolean>(false);
 const canGoPrev = ref<boolean>(false);
+const stepDetailAreaRef = ref<InstanceType<typeof StepDetailArea> | null>(null);
 
 // 计算是否有表单（用于显示生成提示词按钮）
 const hasForm = computed(() => {
@@ -315,13 +317,64 @@ async function handleStepSave(data: Record<string, any>) {
   }
 }
 
+/**
+ * 触发生成提示词（从按钮点击）
+ */
+function handleTriggerGeneratePrompt() {
+  if (stepDetailAreaRef.value) {
+    // 调用子组件的 handleGeneratePrompt 方法
+    stepDetailAreaRef.value.handleGeneratePrompt();
+  } else {
+    console.warn('[TaskDetail] stepDetailAreaRef is not available');
+  }
+}
+
 async function handleGeneratePrompt(data: Record<string, any>) {
   if (!props.task || !selectedStepId.value) return;
   try {
-    // 清理 formData，确保可序列化（Vue 响应式对象可能包含不可序列化的内容）
-    const cleanFormData = JSON.parse(JSON.stringify(data || {}));
+    // 确保 data 是纯 JSON 对象
+    // 使用 JSON 序列化/反序列化来确保是纯对象
+    let cleanFormData: Record<string, any>;
+    try {
+      // 先序列化为 JSON 字符串，再反序列化，确保是纯对象
+      const jsonString = JSON.stringify(data);
+      cleanFormData = JSON.parse(jsonString);
+      
+      // 验证是普通对象
+      if (!cleanFormData || typeof cleanFormData !== 'object' || Array.isArray(cleanFormData)) {
+        throw new Error('Data is not a plain object');
+      }
+    } catch (e) {
+      console.warn('[TaskDetail] Failed to serialize received data, using manual extraction:', e);
+      // 如果序列化失败，手动提取
+      cleanFormData = {};
+      for (const key in data) {
+        const value = data[key];
+        // 只包含可序列化的值
+        if (value !== undefined) {
+          try {
+            JSON.stringify(value);
+            cleanFormData[key] = value;
+          } catch (err) {
+            console.warn(`[TaskDetail] Skipping non-serializable value for key ${key}:`, value);
+          }
+        }
+      }
+    }
     
-    // 调用后端生成提示词
+    // 调试日志
+    console.log('[TaskDetail] Generating prompt with formData:', {
+      receivedData: data,
+      receivedDataKeys: Object.keys(data),
+      receivedDataEntries: Object.entries(data),
+      cleanFormData,
+      cleanFormDataKeys: Object.keys(cleanFormData),
+      cleanFormDataEntries: Object.entries(cleanFormData),
+      cleanFormDataJson: JSON.stringify(cleanFormData),
+      isPlainObject: cleanFormData.constructor === Object
+    });
+    
+    // 调用后端生成提示词，确保传递的是纯 JSON 对象
     const result = await extensionService.call<string>('generateStepPrompt', {
       taskId: props.task.id,
       stepId: selectedStepId.value,

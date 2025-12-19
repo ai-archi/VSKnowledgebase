@@ -1332,11 +1332,27 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
         throw new Error(`Step ${stepId} does not have a prompt template`);
       }
 
-      // 构建方案路径
-      const solutionPath = task.artifactPath.replace(/\.yml$/, '.solution.md').replace(/\.yaml$/, '.solution.md');
+      // 构建方案路径（从 .architool 开始）
+      const solutionFileName = task.artifactPath.replace(/\.yml$/, '.solution.md').replace(/\.yaml$/, '.solution.md');
+      const solutionPath = `.architool/${task.vaultId}/${solutionFileName}`;
 
       // 确保 formData 是可序列化的（深拷贝并移除不可序列化的属性）
       const serializableFormData = this.sanitizeForSerialization(formData || {});
+
+      // 将 formData 转换为适合 Jinja2 循环的格式（数组格式，每个元素包含 key 和 value）
+      // 这样模板可以使用 {% for item in formDataItems %} {{ item.key }}: {{ item.value }}
+      const formDataForTemplate = Object.entries(serializableFormData).map(([key, value]) => ({
+        key,
+        value: typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value || '')
+      }));
+
+      // 调试日志
+      this.logger.info('FormData for template', {
+        originalFormData: formData,
+        serializableFormData,
+        formDataForTemplate,
+        formDataEntriesCount: formDataForTemplate.length
+      });
 
       // 确保 task 对象是可序列化的
       const serializableTask = {
@@ -1368,7 +1384,8 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
         // 自定义上下文信息（task, formData, solutionPath 等）
         custom: {
         task: serializableTask,
-        formData: serializableFormData,
+        formData: serializableFormData, // 保持对象格式，Jinja2 应该支持 {% for key, value in formData.items() %}
+        formDataItems: formDataForTemplate, // 数组格式，用于 {% for item in formDataItems %}
         solutionPath: String(solutionPath),
         },
       };
