@@ -436,7 +436,33 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         };
       }
 
-      this.logger.info('Task deleted', { taskId, artifactPath: task.artifactPath, vaultId: task.vaultId });
+      // 删除方案文件（将 .yml 或 .yaml 替换为 .solution.md）
+      const solutionPath = task.artifactPath
+        .replace(/\.yml$/, '.solution.md')
+        .replace(/\.yaml$/, '.solution.md');
+      
+      // 检查方案文件是否存在
+      const solutionExistsResult = await this.artifactService.exists(
+        { id: vault.id, name: vault.name },
+        solutionPath
+      );
+      
+      if (solutionExistsResult.success && solutionExistsResult.value) {
+        // 方案文件存在，删除它
+        const deleteSolutionResult = await this.artifactService.deleteArtifact(task.vaultId, solutionPath);
+        if (!deleteSolutionResult.success) {
+          // 方案文件删除失败，记录警告但不影响任务删除
+          this.logger.warn('Failed to delete solution file', {
+            taskId,
+            solutionPath,
+            error: deleteSolutionResult.error
+          });
+        } else {
+          this.logger.info('Solution file deleted', { taskId, solutionPath });
+        }
+      }
+
+      this.logger.info('Task deleted', { taskId, artifactPath: task.artifactPath, solutionPath, vaultId: task.vaultId });
       return {
         success: true,
         value: undefined,

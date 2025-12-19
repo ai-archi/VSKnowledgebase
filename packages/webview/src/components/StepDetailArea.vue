@@ -389,7 +389,7 @@ const addArrayItem = (key: string, field: FormField) => {
 const removeArrayItem = (key: string, index: number) => {
   if (formData.value[key] && Array.isArray(formData.value[key])) {
     formData.value[key].splice(index, 1);
-  }
+    }
 };
 
 /**
