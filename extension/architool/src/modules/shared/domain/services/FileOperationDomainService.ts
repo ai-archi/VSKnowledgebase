@@ -279,6 +279,13 @@ Rel_Serving(appService1, tech1, "部署在")
       // 构建变量映射（支持嵌套对象结构）
       const variables = this.buildVariableMap(artifact);
       
+      // 调试日志：检查 formDataItems 是否正确传递
+      if (variables.formDataItems) {
+        console.log('FormDataItems in variables:', JSON.stringify(variables.formDataItems, null, 2));
+      } else {
+        console.warn('FormDataItems not found in variables. Available keys:', Object.keys(variables));
+      }
+      
       // 渲染模板
       const rendered = template.render(variables);
       
@@ -399,17 +406,32 @@ Rel_Serving(appService1, tech1, "部署在")
     // 直接使用 selectedFiles（增强后）
     variables['selectedFiles'] = enhancedSelectedFiles;
 
-    // ========== context.xxx - 其他上下文信息 ==========
-    // 将 artifact.custom 中的自定义属性放入 context 对象（供模板使用）
-    const contextVars: Record<string, any> = {};
-    
+    // ========== 将 custom 中的变量提升到顶层 ==========
+    // 这样模板可以直接使用 task.name, formData, solutionPath 等变量
     if (artifact.custom) {
       for (const [key, value] of Object.entries(artifact.custom)) {
-        contextVars[key] = value !== undefined && value !== null ? value : '';
+        // 确保数组和对象正确传递
+        if (Array.isArray(value)) {
+          variables[key] = value;
+        } else if (typeof value === 'object' && value !== null) {
+          variables[key] = value;
+        } else {
+          variables[key] = value !== undefined && value !== null ? value : '';
+        }
       }
     }
-    
-    variables['context'] = contextVars;
+
+    // 调试日志：检查关键变量
+    if (variables.formDataItems) {
+      console.log('[FileOperationDomainService] formDataItems in variables:', {
+        type: typeof variables.formDataItems,
+        isArray: Array.isArray(variables.formDataItems),
+        length: Array.isArray(variables.formDataItems) ? variables.formDataItems.length : 'N/A',
+        value: JSON.stringify(variables.formDataItems, null, 2)
+      });
+    } else {
+      console.warn('[FileOperationDomainService] formDataItems not found in variables. Custom keys:', artifact.custom ? Object.keys(artifact.custom) : 'no custom');
+    }
 
     return variables;
   }
