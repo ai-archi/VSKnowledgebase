@@ -468,7 +468,7 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
     // 获取 webview 构建产物路径
     const extensionPath = this.context.extensionPath;
     const webviewPath = path.join(extensionPath, 'dist', 'webview');
-    const mermaidEditorHtmlPath = path.join(webviewPath, 'mermaid-editor.html');
+    const mermaidEditorHtmlPath = path.join(webviewPath, 'index.html');
     
     // 检查构建产物是否存在
     if (!fs.existsSync(mermaidEditorHtmlPath)) {
@@ -531,11 +531,15 @@ Please run: cd packages/webview && pnpm build`;
       }
     );
 
-    // 注入 VSCode API
+    // 注入 VSCode API 和视图名称
     const vscodeScript = `
       <script>
         const vscode = acquireVsCodeApi();
         window.acquireVsCodeApi = () => vscode;
+        if (!window.initialData) {
+          window.initialData = {};
+        }
+        window.initialData.view = 'mermaid-editor';
       </script>
     `;
     htmlContent = htmlContent.replace('</head>', `${vscodeScript}</head>`);

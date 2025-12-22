@@ -93,7 +93,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { Plus, Loading, ArrowRight, Delete } from '@element-plus/icons-vue';
-import type { Task } from '../types';
+import type { Task } from '@/types';
 
 interface Props {
   tasks: Task[];

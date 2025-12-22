@@ -10,7 +10,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { Loading } from '@element-plus/icons-vue';
-import type { Task } from '../types';
+import type { Task } from '@/types';
 
 interface Props {
   task: Task;

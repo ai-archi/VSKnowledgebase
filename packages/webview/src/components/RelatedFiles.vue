@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { Document, Picture, Loading } from '@element-plus/icons-vue';
-import type { RelatedFile } from '../types';
+import type { RelatedFile } from '@/types';
 
 interface Props {
   files: RelatedFile[];

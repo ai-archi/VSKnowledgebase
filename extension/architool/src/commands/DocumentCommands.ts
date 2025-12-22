@@ -356,11 +356,12 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       // 加载 webview 内容
       const htmlContent = await this.getWebviewContent(
         panel.webview,
-        'edit-relations-dialog.html',
+        'index.html',
         vaultId,
         undefined,
         undefined,
         {
+          view: 'edit-relations-dialog',
           vaultId,
           targetId,
           targetType,

@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, reactive, watch, nextTick } from 'vue';
-import { PlantUMLEditorApp } from '../lib/plantuml-editor/PlantUMLEditorApp';
+import { PlantUMLEditorApp } from '@/features/plantuml-editor/PlantUMLEditorApp';
 
 const workspaceRef = ref<HTMLElement>();
 const diagramPanelRef = ref<HTMLElement>();
@@ -97,6 +97,16 @@ onMounted(async () => {
   // 使用 requestAnimationFrame 确保浏览器完成渲染
   await new Promise(resolve => requestAnimationFrame(resolve));
   
+  // 源码面板样式由 CSS 文件统一管理，这里只做验证
+  const sourcePanel = sourceEditorRef.value?.closest('.source-panel') as HTMLElement;
+  if (sourcePanel) {
+    console.log('[PlantUMLEditor] Source panel found:', {
+      width: sourcePanel.style.width || 'from CSS',
+      display: sourcePanel.style.display || 'from CSS',
+      visibility: sourcePanel.style.visibility || 'from CSS'
+    });
+  }
+  
   if (
     workspaceRef.value && 
     diagramContainerRef.value && 
@@ -124,6 +134,15 @@ onMounted(async () => {
       zoomDisabled.in = !canZoomIn;
       zoomDisabled.out = !canZoomOut;
     };
+    
+    // 等待 CodeMirror 初始化后，强制刷新（样式由 CSS 文件统一管理）
+    setTimeout(() => {
+      // 如果 CodeMirror 已初始化，强制刷新以确保样式正确应用
+      if (editorApp && (editorApp as any).editor) {
+        (editorApp as any).editor.refresh();
+        console.log('[PlantUMLEditor] CodeMirror editor refreshed');
+      }
+    }, 100);
   } else {
     console.error('[PlantUMLEditor] Missing required elements:', {
       workspace: !!workspaceRef.value,
@@ -155,10 +174,6 @@ const dismissError = () => {
   error.value = null;
 };
 </script>
-
-<style scoped>
-/* 样式已在 plantuml-editor-main.ts 中导入，确保在 CodeMirror CSS 之后加载 */
-</style>
 
 
 

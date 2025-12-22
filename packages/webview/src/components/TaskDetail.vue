@@ -86,8 +86,8 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { ElEmpty, ElMessage } from 'element-plus';
 import TaskWorkflowDiagram from './TaskWorkflowDiagram.vue';
 import StepDetailArea from './StepDetailArea.vue';
-import type { Task } from '../types';
-import { extensionService } from '../services/ExtensionService';
+import type { Task } from '@/types';
+import { extensionService } from '@/services/ExtensionService';
 
 interface Props {
   task: Task | null;

@@ -60,7 +60,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       this.logger.info(`[ViewpointWebviewViewProvider] Webview dist exists: ${fs.existsSync(webviewDistPath)}`);
       
       // 检查关键文件
-      const htmlPath = path.join(webviewDistPath, 'viewpoint-panel.html');
+      const htmlPath = path.join(webviewDistPath, 'index.html');
       this.logger.info(`[ViewpointWebviewViewProvider] HTML path: ${htmlPath}`);
       this.logger.info(`[ViewpointWebviewViewProvider] HTML file exists: ${fs.existsSync(htmlPath)}`);
       
@@ -892,7 +892,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
    */
   private async openCreateTaskDialog(): Promise<void> {
     const webviewDistPath = this.getWebviewDistPath();
-    const htmlPath = path.join(webviewDistPath, 'create-task-dialog.html');
+    const htmlPath = path.join(webviewDistPath, 'index.html');
 
     if (!fs.existsSync(htmlPath)) {
       vscode.window.showErrorMessage('创建任务弹窗未构建，请先运行: cd packages/webview && pnpm build');
@@ -965,7 +965,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       <script>
         const vscode = acquireVsCodeApi();
         window.acquireVsCodeApi = () => vscode;
-        window.initialData = ${JSON.stringify({ vaultId: initialVaultId })};
+        window.initialData = ${JSON.stringify({ view: 'create-task-dialog', vaultId: initialVaultId })};
       </script>
     `;
     html = html.replace('</head>', `${vscodeScript}</head>`);
@@ -1130,7 +1130,7 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
   private getWebviewContent(webview: vscode.Webview): string {
     try {
       const webviewDistPath = this.getWebviewDistPath();
-      const htmlPath = path.join(webviewDistPath, 'viewpoint-panel.html');
+        const htmlPath = path.join(webviewDistPath, 'index.html');
 
       this.logger.info(`[ViewpointWebviewViewProvider] Reading HTML from: ${htmlPath}`);
 
@@ -1159,6 +1159,17 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
 
       let html = fs.readFileSync(htmlPath, 'utf-8');
       this.logger.info(`[ViewpointWebviewViewProvider] HTML file read successfully, length: ${html.length}`);
+
+      // 注入视图名称到 initialData
+      const initialDataScript = `
+        <script>
+          if (!window.initialData) {
+            window.initialData = {};
+          }
+          window.initialData.view = 'viewpoint-panel';
+        </script>
+      `;
+      html = html.replace('</head>', `${initialDataScript}</head>`);
 
       // 替换资源路径为 webview URI
       let resourceReplaceCount = 0;

@@ -368,7 +368,7 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
     // 获取 webview 的路径
     const extensionPath = this.context.extensionPath;
     const webviewPath = path.join(extensionPath, 'dist', 'webview');
-    const htmlPath = path.join(webviewPath, 'plantuml-editor.html');
+    const htmlPath = path.join(webviewPath, 'index.html');
     
     // 检查构建产物是否存在
     if (!fs.existsSync(htmlPath)) {
@@ -434,13 +434,17 @@ Please run: pnpm run build:webview`;
       }
     );
     
-    // 3. 注入 VSCode API 脚本（在 </head> 标签前）
+    // 3. 注入 VSCode API 脚本和视图名称（在 </head> 标签前）
     // 调用一次 acquireVsCodeApi() 并保存，然后重写 acquireVsCodeApi 以避免重复调用
     const vscodeApiScript = `
     <script>
         const vscode = acquireVsCodeApi();
         window.vscode = vscode;
       window.acquireVsCodeApi = () => vscode;
+      if (!window.initialData) {
+        window.initialData = {};
+      }
+      window.initialData.view = 'plantuml-editor';
     </script>
     `;
     htmlContent = htmlContent.replace('</head>', vscodeApiScript + '</head>');

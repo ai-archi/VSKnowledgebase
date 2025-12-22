@@ -639,9 +639,11 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     // 加载 webview 内容
     const htmlContent = await this.getWebviewContent(
       panel.webview,
-      'create-file-dialog.html',
+      'index.html',
       initialVaultId,
-      initialFolderPath
+      initialFolderPath,
+      undefined,
+      { view: 'create-file-dialog' }
     );
     panel.webview.html = htmlContent;
 
@@ -733,9 +735,11 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     // 加载 webview 内容
     const htmlContent = await this.getWebviewContent(
       panel.webview,
-      'create-folder-dialog.html',
+      'index.html',
       initialVaultId,
-      initialFolderPath
+      initialFolderPath,
+      undefined,
+      { view: 'create-folder-dialog' }
     );
     panel.webview.html = htmlContent;
 
@@ -861,10 +865,11 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     // 加载 webview 内容
     const htmlContent = await this.getWebviewContent(
       panel.webview,
-      'create-design-dialog.html',
+      'index.html',
       initialVaultId,
       initialFolderPath,
-      designType
+      designType,
+      { view: 'create-design-dialog' }
     );
     panel.webview.html = htmlContent;
 
@@ -977,7 +982,14 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     }
 
     // 如果构建文件不存在，返回一个简单的 HTML
-    const title = htmlFileName === 'create-folder-dialog.html' ? 'Create Folder' : 'Create File';
+    const viewName = additionalData?.view || 'unknown';
+    const titleMap: Record<string, string> = {
+      'create-folder-dialog': 'Create Folder',
+      'create-file-dialog': 'Create File',
+      'create-design-dialog': 'Create Design',
+      'edit-relations-dialog': 'Edit Relations',
+    };
+    const title = titleMap[viewName] || 'Webview';
     return `
       <!DOCTYPE html>
       <html>

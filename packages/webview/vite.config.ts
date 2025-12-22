@@ -21,23 +21,30 @@ export default defineConfig({
       include: [/mermaid/, /@mermaid-js/, /codemirror/, /@milkdown/, /node_modules/],
     },
     rollupOptions: {
-      input: {
-        'create-file-dialog': resolve(__dirname, 'create-file-dialog.html'),
-        'create-folder-dialog': resolve(__dirname, 'create-folder-dialog.html'),
-        'create-design-dialog': resolve(__dirname, 'create-design-dialog.html'),
-        'edit-relations-dialog': resolve(__dirname, 'edit-relations-dialog.html'),
-        'create-task-dialog': resolve(__dirname, 'create-task-dialog.html'),
-        'viewpoint-panel': resolve(__dirname, 'viewpoint-panel.html'),
-        'mermaid-editor': resolve(__dirname, 'mermaid-editor.html'),
-        'plantuml-editor': resolve(__dirname, 'plantuml-editor.html'),
-        'solution-editor': resolve(__dirname, 'solution-editor.html'),
-      },
+      // 单入口构建：统一使用 index.html
+      input: resolve(__dirname, 'index.html'),
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
         // 确保使用 ES 模块格式（默认）
         format: 'es',
+        // 共享chunk配置，减少代码重复
+        manualChunks: (id) => {
+          // 将node_modules中的依赖打包到vendor chunk
+          if (id.includes('node_modules')) {
+            if (id.includes('vue') || id.includes('@vue')) {
+              return 'vendor-vue';
+            }
+            if (id.includes('element-plus')) {
+              return 'vendor-element-plus';
+            }
+            if (id.includes('mermaid')) {
+              return 'vendor-mermaid';
+            }
+            return 'vendor';
+          }
+        },
       },
     },
   },
