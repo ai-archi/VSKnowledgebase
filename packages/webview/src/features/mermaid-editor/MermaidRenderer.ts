@@ -4,31 +4,61 @@
 import mermaid from 'mermaid';
 import zenuml from '@mermaid-js/mermaid-zenuml';
 
+export interface NodeInfo {
+  id: string;
+  element: SVGGElement;
+  bbox: DOMRect;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface EdgeInfo {
+  index: number;
+  element: SVGElement;
+  path: SVGPathElement;
+  pathData: string | null;
+  label: string;
+}
+
+export interface ExtendedSVGElement extends SVGSVGElement {
+  _selectionBox?: SVGRectElement;
+}
+
 export class MermaidRenderer {
-  constructor(container) {
+  public container: HTMLElement; // 改为 public，供外部访问
+  private currentSVG: ExtendedSVGElement | null = null;
+  private currentSource: string = '';
+  private nodeMap: Map<string, NodeInfo> = new Map();
+  private edgeMap: Map<number, EdgeInfo> = new Map();
+  
+  // 缩放相关
+  private scale: number = 1.0;
+  public minScale: number = 0.1; // 改为 public，供外部访问
+  public maxScale: number = 5.0; // 改为 public，供外部访问
+  private scaleStep: number = 0.1;
+  
+  // 平移相关
+  private translateX: number = 0;
+  private translateY: number = 0;
+  private isDragging: boolean = false;
+  private isPanning: boolean = false; // 是否正在平移（用于区分拖动和点击）
+  private dragStartX: number = 0;
+  private dragStartY: number = 0;
+  private dragStartTranslateX: number = 0;
+  private dragStartTranslateY: number = 0;
+  private dragThreshold: number = 5; // 拖动阈值（像素）
+  
+  // 事件处理器引用（用于清理）
+  private wheelHandler: ((e: WheelEvent) => void) | null = null;
+  private panMouseDownHandler: ((e: MouseEvent) => void) | null = null;
+  private panMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+  private panMouseUpHandler: ((e: MouseEvent) => void) | null = null;
+  
+  constructor(container: HTMLElement) {
     this.container = container;
-    this.currentSVG = null;
-    this.currentSource = '';
-    this.nodeMap = new Map();
-    this.edgeMap = new Map();
-    
-    // 缩放相关
-    this.scale = 1.0;
-    this.minScale = 0.1;
-    this.maxScale = 5.0;
-    this.scaleStep = 0.1;
-    
-    // 平移相关
-    this.translateX = 0;
-    this.translateY = 0;
-    this.isDragging = false;
-    this.isPanning = false; // 是否正在平移（用于区分拖动和点击）
-    this.dragStartX = 0;
-    this.dragStartY = 0;
-    this.dragStartTranslateX = 0;
-    this.dragStartTranslateY = 0;
-    this.dragThreshold = 5; // 拖动阈值（像素）
-    
     this.init();
   }
   
@@ -36,7 +66,7 @@ export class MermaidRenderer {
    * 检测当前 VSCode 主题（dark 或 light）
    * 通过检查背景色的亮度来判断
    */
-  detectVSCodeTheme() {
+  private detectVSCodeTheme(): 'dark' | 'light' {
     if (typeof document === 'undefined') {
       return 'dark'; // 默认返回 dark
     }
@@ -51,7 +81,7 @@ export class MermaidRenderer {
     }
     
     // 解析颜色值（支持 hex、rgb、rgba）
-    let r, g, b;
+    let r: number, g: number, b: number;
     
     if (bgColor.startsWith('#')) {
       // Hex 格式：#1e1e1e 或 #fff
@@ -87,7 +117,7 @@ export class MermaidRenderer {
     return luminance < 0.5 ? 'dark' : 'light';
   }
   
-  async init() {
+  async init(): Promise<void> {
     // 注册 ZenUML 外部图表类型
     try {
       await mermaid.registerExternalDiagrams([zenuml]);
@@ -118,7 +148,7 @@ export class MermaidRenderer {
   /**
    * 渲染 mermaid 图表
    */
-  async render(source) {
+  async render(source: string): Promise<ExtendedSVGElement> {
     try {
       this.currentSource = source;
       
@@ -134,15 +164,24 @@ export class MermaidRenderer {
       
       // 检查 SVG 是否包含错误信息
       if (this.isErrorSVG(svg)) {
-        // 如果是错误 SVG，清空容器并抛出错误
-        this.container.innerHTML = '';
+        // 如果是错误 SVG，淡出旧内容后清空容器并抛出错误
+        const oldSVG = this.container.querySelector('svg');
+        if (oldSVG) {
+          oldSVG.style.transition = 'opacity 0.1s ease-out';
+          oldSVG.style.opacity = '0';
+          setTimeout(() => {
+            this.container.innerHTML = '';
+          }, 100);
+        } else {
+          this.container.innerHTML = '';
+        }
         // 再次清理，确保 body 中没有残留的错误 div
         this.cleanupMermaidErrorDivs();
         throw new Error('Mermaid syntax error detected');
       }
       
       // 解析 SVG（Mermaid 11.x 可能会返回包含 div 包装器的 HTML）
-      let svgElement = null;
+      let svgElement: SVGSVGElement | null = null;
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = svg;
       
@@ -163,21 +202,18 @@ export class MermaidRenderer {
       // 使用 requestAnimationFrame 确保平滑过渡，避免闪烁
       await new Promise(resolve => requestAnimationFrame(resolve));
       
-      // 临时隐藏容器内容，准备替换（使用 opacity 而不是清空，避免闪烁）
+      // 获取旧 SVG（如果存在）
       const oldSVG = this.container.querySelector('svg');
-      if (oldSVG) {
-        oldSVG.style.opacity = '0';
-        oldSVG.style.transition = 'opacity 0.1s';
-      }
       
-      // 清空容器并注入新 SVG（在 requestAnimationFrame 之后，减少可见的空白期）
-      this.container.innerHTML = '';
+      // 先添加新 SVG（设置为透明），避免容器空白导致的闪烁
+      svgElement.style.opacity = '0';
+      svgElement.style.transition = 'opacity 0.15s ease-in';
       this.container.appendChild(svgElement);
       
       // 再次清理 body（防止异步追加）
       this.cleanupMermaidErrorDivs();
       
-      this.currentSVG = svgElement;
+      this.currentSVG = svgElement as ExtendedSVGElement;
       
       // 后处理增强
       this.enhanceSVG(this.currentSVG);
@@ -185,20 +221,31 @@ export class MermaidRenderer {
       // 应用当前缩放和平移（在增强之后）
       this.applyZoom();
       
-      // 淡入新 SVG（如果之前有旧 SVG）
-      if (oldSVG) {
-        this.currentSVG.style.opacity = '0';
-        this.currentSVG.style.transition = 'opacity 0.15s ease-in';
-        // 使用 requestAnimationFrame 确保样式已应用
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        this.currentSVG.style.opacity = '1';
-        // 淡入完成后移除 transition，避免影响后续操作
+      // 使用 requestAnimationFrame 确保新 SVG 已添加到 DOM
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
+      // 淡出旧 SVG（如果存在）
+      if (oldSVG && oldSVG !== svgElement) {
+        oldSVG.style.transition = 'opacity 0.1s ease-out';
+        oldSVG.style.opacity = '0';
+        // 等待淡出完成后再移除，避免闪烁
         setTimeout(() => {
-          if (this.currentSVG) {
-            this.currentSVG.style.transition = '';
+          if (oldSVG.parentNode && oldSVG !== this.currentSVG) {
+            oldSVG.parentNode.removeChild(oldSVG);
           }
-        }, 150);
+        }, 100);
       }
+      
+      // 淡入新 SVG
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      this.currentSVG.style.opacity = '1';
+      
+      // 淡入完成后移除 transition，避免影响后续操作
+      setTimeout(() => {
+        if (this.currentSVG) {
+          this.currentSVG.style.transition = '';
+        }
+      }, 150);
       
       // 设置事件监听器（方法内部会处理重复调用的情况）
       this.setupWheelZoom();
@@ -209,8 +256,17 @@ export class MermaidRenderer {
       console.error('Mermaid render error:', error);
       // 错误时清理 body 中的错误 div
       this.cleanupMermaidErrorDivs();
-      // 清空容器
-      this.container.innerHTML = '';
+      // 淡出旧内容后清空容器
+      const oldSVG = this.container.querySelector('svg');
+      if (oldSVG) {
+        oldSVG.style.transition = 'opacity 0.1s ease-out';
+        oldSVG.style.opacity = '0';
+        setTimeout(() => {
+          this.container.innerHTML = '';
+        }, 100);
+      } else {
+        this.container.innerHTML = '';
+      }
       throw error;
     }
   }
@@ -220,7 +276,7 @@ export class MermaidRenderer {
    * Mermaid 在渲染错误时会在 body 下追加 div#dmermaid-xxxx
    * 这是 Mermaid 的默认错误处理行为，我们需要主动清理
    */
-  cleanupMermaidErrorDivs() {
+  private cleanupMermaidErrorDivs(): void {
     if (typeof document === 'undefined' || !document.body) {
       return;
     }
@@ -246,7 +302,7 @@ export class MermaidRenderer {
   /**
    * 检查 SVG 是否包含错误信息
    */
-  isErrorSVG(svgString) {
+  private isErrorSVG(svgString: string): boolean {
     if (!svgString || typeof svgString !== 'string') {
       return false;
     }
@@ -267,7 +323,7 @@ export class MermaidRenderer {
   /**
    * 增强 SVG，添加交互功能
    */
-  enhanceSVG(svg) {
+  private enhanceSVG(svg: ExtendedSVGElement): void {
     // 1. 添加数据属性
     this.addDataAttributes(svg);
     
@@ -284,23 +340,23 @@ export class MermaidRenderer {
   /**
    * 添加数据属性，便于识别元素
    */
-  addDataAttributes(svg) {
+  private addDataAttributes(svg: ExtendedSVGElement): void {
     // 为节点添加 data-node-id
     svg.querySelectorAll('.node').forEach((nodeGroup, index) => {
-      const nodeId = this.extractNodeId(nodeGroup, index);
+      const nodeId = this.extractNodeId(nodeGroup as SVGGElement, index);
       nodeGroup.setAttribute('data-node-id', nodeId);
       nodeGroup.setAttribute('data-mermaid-type', 'node');
     });
     
     // 为边添加 data-edge-index
     svg.querySelectorAll('.edgePath').forEach((path, index) => {
-      path.setAttribute('data-edge-index', index);
+      path.setAttribute('data-edge-index', index.toString());
       path.setAttribute('data-mermaid-type', 'edge');
     });
     
     // 为子图添加标识
     svg.querySelectorAll('.cluster').forEach((cluster, index) => {
-      cluster.setAttribute('data-subgraph-index', index);
+      cluster.setAttribute('data-subgraph-index', index.toString());
       cluster.setAttribute('data-mermaid-type', 'subgraph');
     });
   }
@@ -308,11 +364,11 @@ export class MermaidRenderer {
   /**
    * 提取节点 ID
    */
-  extractNodeId(nodeGroup, fallbackIndex) {
+  private extractNodeId(nodeGroup: SVGGElement, fallbackIndex: number): string {
     // 方法1: 从文本内容推断（如果文本就是 ID）
     const textEl = nodeGroup.querySelector('text');
     if (textEl) {
-      const text = textEl.textContent.trim();
+      const text = textEl.textContent?.trim() || '';
       // 如果文本看起来像 ID（短且无空格），使用它
       if (text.length < 20 && !text.includes(' ')) {
         return text;
@@ -333,30 +389,30 @@ export class MermaidRenderer {
   /**
    * 添加交互层
    */
-  addInteractionLayer(svg) {
+  private addInteractionLayer(svg: ExtendedSVGElement): void {
     // 为节点添加交互样式
     svg.querySelectorAll('.node').forEach(node => {
-      node.style.cursor = 'pointer';
+      (node as HTMLElement).style.cursor = 'pointer';
       node.setAttribute('data-interactive', 'true');
     });
     
     // 为边添加交互样式
     svg.querySelectorAll('.edgePath').forEach(edge => {
-      edge.style.cursor = 'pointer';
+      (edge as HTMLElement).style.cursor = 'pointer';
       edge.setAttribute('data-interactive', 'true');
       
       // 增加边的点击区域（通过 stroke-width）
       const path = edge.querySelector('path');
       if (path) {
         const currentWidth = path.getAttribute('stroke-width') || '2';
-        path.setAttribute('stroke-width', Math.max(parseFloat(currentWidth), 4));
+        path.setAttribute('stroke-width', Math.max(parseFloat(currentWidth), 4).toString());
         path.setAttribute('data-original-stroke-width', currentWidth);
       }
     });
     
     // 为子图添加交互样式
     svg.querySelectorAll('.cluster').forEach(cluster => {
-      cluster.style.cursor = 'pointer';
+      (cluster as HTMLElement).style.cursor = 'pointer';
       cluster.setAttribute('data-interactive', 'true');
     });
   }
@@ -364,7 +420,7 @@ export class MermaidRenderer {
   /**
    * 添加选择框元素
    */
-  addSelectionBox(svg) {
+  private addSelectionBox(svg: ExtendedSVGElement): void {
     // 创建选择框
     const selectionBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     selectionBox.setAttribute('class', 'mermaid-selection-box');
@@ -382,7 +438,7 @@ export class MermaidRenderer {
   /**
    * 提取节点和边的映射关系
    */
-  extractNodeEdgeMap(svg) {
+  private extractNodeEdgeMap(svg: ExtendedSVGElement): void {
     this.nodeMap.clear();
     this.edgeMap.clear();
     
@@ -390,14 +446,14 @@ export class MermaidRenderer {
     svg.querySelectorAll('.node').forEach(nodeGroup => {
       const nodeId = nodeGroup.getAttribute('data-node-id');
       if (nodeId) {
-        const bbox = nodeGroup.getBBox();
+        const bbox = (nodeGroup as SVGGElement).getBBox();
         const textEl = nodeGroup.querySelector('text');
         
         this.nodeMap.set(nodeId, {
           id: nodeId,
-          element: nodeGroup,
+          element: nodeGroup as SVGGElement,
           bbox: bbox,
-          label: textEl ? textEl.textContent.trim() : '',
+          label: textEl ? (textEl.textContent?.trim() || '') : '',
           x: bbox.x + bbox.width / 2,
           y: bbox.y + bbox.height / 2,
           width: bbox.width,
@@ -415,10 +471,10 @@ export class MermaidRenderer {
         
         this.edgeMap.set(index, {
           index: index,
-          element: edgePath,
+          element: edgePath as SVGElement,
           path: path,
           pathData: pathData,
-          label: labelEl ? labelEl.textContent.trim() : ''
+          label: labelEl ? (labelEl.textContent?.trim() || '') : ''
         });
       }
     });
@@ -427,35 +483,35 @@ export class MermaidRenderer {
   /**
    * 获取节点信息
    */
-  getNode(nodeId) {
+  getNode(nodeId: string): NodeInfo | undefined {
     return this.nodeMap.get(nodeId);
   }
   
   /**
    * 获取所有节点
    */
-  getAllNodes() {
+  getAllNodes(): NodeInfo[] {
     return Array.from(this.nodeMap.values());
   }
   
   /**
    * 获取边信息
    */
-  getEdge(index) {
+  getEdge(index: number): EdgeInfo | undefined {
     return this.edgeMap.get(index);
   }
   
   /**
    * 获取所有边
    */
-  getAllEdges() {
+  getAllEdges(): EdgeInfo[] {
     return Array.from(this.edgeMap.values());
   }
   
   /**
    * 高亮元素
    */
-  highlightElement(element, type) {
+  highlightElement(element: Element, type: 'node' | 'edge'): void {
     this.clearHighlight();
     
     if (type === 'node') {
@@ -468,7 +524,7 @@ export class MermaidRenderer {
   /**
    * 清除高亮
    */
-  clearHighlight() {
+  clearHighlight(): void {
     if (this.currentSVG) {
       this.currentSVG.querySelectorAll('.mermaid-selected-node, .mermaid-selected-edge').forEach(el => {
         el.classList.remove('mermaid-selected-node', 'mermaid-selected-edge');
@@ -479,23 +535,23 @@ export class MermaidRenderer {
   /**
    * 显示选择框
    */
-  showSelectionBox(element) {
+  showSelectionBox(element: SVGGElement): void {
     if (!this.currentSVG || !this.currentSVG._selectionBox) return;
     
     const bbox = element.getBBox();
     const selectionBox = this.currentSVG._selectionBox;
     
-    selectionBox.setAttribute('x', bbox.x - 4);
-    selectionBox.setAttribute('y', bbox.y - 4);
-    selectionBox.setAttribute('width', bbox.width + 8);
-    selectionBox.setAttribute('height', bbox.height + 8);
+    selectionBox.setAttribute('x', (bbox.x - 4).toString());
+    selectionBox.setAttribute('y', (bbox.y - 4).toString());
+    selectionBox.setAttribute('width', (bbox.width + 8).toString());
+    selectionBox.setAttribute('height', (bbox.height + 8).toString());
     selectionBox.style.display = 'block';
   }
   
   /**
    * 隐藏选择框
    */
-  hideSelectionBox() {
+  hideSelectionBox(): void {
     if (this.currentSVG && this.currentSVG._selectionBox) {
       this.currentSVG._selectionBox.style.display = 'none';
     }
@@ -504,21 +560,21 @@ export class MermaidRenderer {
   /**
    * 获取当前源代码
    */
-  getCurrentSource() {
+  getCurrentSource(): string {
     return this.currentSource;
   }
   
   /**
    * 获取当前 SVG
    */
-  getCurrentSVG() {
+  getCurrentSVG(): ExtendedSVGElement | null {
     return this.currentSVG;
   }
   
   /**
    * 设置鼠标滚轮缩放
    */
-  setupWheelZoom() {
+  setupWheelZoom(): void {
     if (!this.container) return;
     
     // 移除旧的监听器（如果存在）
@@ -527,7 +583,7 @@ export class MermaidRenderer {
     }
     
     // 添加新的滚轮监听器
-    this.wheelHandler = (e) => {
+    this.wheelHandler = (e: WheelEvent) => {
       // 如果按住 Ctrl 或 Cmd 键，进行缩放
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
@@ -542,27 +598,29 @@ export class MermaidRenderer {
   /**
    * 应用缩放和平移
    */
-  applyZoom() {
+  applyZoom(): void {
     if (!this.currentSVG) return;
     
     // 获取原始尺寸
-    const originalWidth = this.currentSVG.getAttribute('width') || this.currentSVG.viewBox?.baseVal?.width || this.currentSVG.clientWidth;
-    const originalHeight = this.currentSVG.getAttribute('height') || this.currentSVG.viewBox?.baseVal?.height || this.currentSVG.clientHeight;
+    const originalWidth = this.currentSVG.getAttribute('width') || 
+                         (this.currentSVG.viewBox?.baseVal?.width || this.currentSVG.clientWidth);
+    const originalHeight = this.currentSVG.getAttribute('height') || 
+                          (this.currentSVG.viewBox?.baseVal?.height || this.currentSVG.clientHeight);
     
     // 应用缩放和平移变换
     this.currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
     
     // 更新 SVG 尺寸以触发正确的滚动
     if (originalWidth && originalHeight) {
-      this.currentSVG.style.width = `${originalWidth * this.scale}px`;
-      this.currentSVG.style.height = `${originalHeight * this.scale}px`;
+      this.currentSVG.style.width = `${Number(originalWidth) * this.scale}px`;
+      this.currentSVG.style.height = `${Number(originalHeight) * this.scale}px`;
     }
   }
   
   /**
    * 设置缩放级别
    */
-  setZoom(newScale) {
+  setZoom(newScale: number): number {
     this.scale = Math.max(this.minScale, Math.min(this.maxScale, newScale));
     this.applyZoom();
     return this.scale;
@@ -571,35 +629,35 @@ export class MermaidRenderer {
   /**
    * 放大
    */
-  zoomIn() {
+  zoomIn(): number {
     return this.setZoom(this.scale + this.scaleStep);
   }
   
   /**
    * 缩小
    */
-  zoomOut() {
+  zoomOut(): number {
     return this.setZoom(this.scale - this.scaleStep);
   }
   
   /**
    * 重置缩放
    */
-  zoomReset() {
+  zoomReset(): number {
     return this.setZoom(1.0);
   }
   
   /**
    * 获取当前缩放级别
    */
-  getZoom() {
+  getZoom(): number {
     return this.scale;
   }
   
   /**
    * 设置画布拖动功能
    */
-  setupPan() {
+  setupPan(): void {
     if (!this.container) return;
     
     // 移除旧的监听器（如果存在）
@@ -614,9 +672,9 @@ export class MermaidRenderer {
     }
     
     // 鼠标按下事件
-    this.panMouseDownHandler = (e) => {
+    this.panMouseDownHandler = (e: MouseEvent) => {
       // 如果点击的是交互元素（节点、边等），不处理拖动
-      const target = e.target;
+      const target = e.target as Element;
       if (target.closest('.node[data-mermaid-type="node"]') ||
           target.closest('.edgePath[data-mermaid-type="edge"]') ||
           target.closest('.cluster[data-mermaid-type="subgraph"]') ||
@@ -650,7 +708,7 @@ export class MermaidRenderer {
     };
     
     // 鼠标移动事件
-    this.panMouseMoveHandler = (e) => {
+    this.panMouseMoveHandler = (e: MouseEvent) => {
       if (!this.isDragging) return;
       
       const deltaX = e.clientX - this.dragStartX;
@@ -673,7 +731,7 @@ export class MermaidRenderer {
     };
     
     // 鼠标释放事件
-    this.panMouseUpHandler = (e) => {
+    this.panMouseUpHandler = (e: MouseEvent) => {
       if (this.isDragging) {
         const wasPanning = this.isPanning;
         this.isDragging = false;
@@ -702,7 +760,7 @@ export class MermaidRenderer {
   /**
    * 重置平移
    */
-  resetPan() {
+  resetPan(): void {
     this.translateX = 0;
     this.translateY = 0;
     this.applyZoom();

@@ -1,26 +1,43 @@
 // Mermaid 交互层
 // 处理节点/边的选择、点击等交互事件
 
+import type { MermaidRenderer, NodeInfo, EdgeInfo } from './MermaidRenderer';
+
+export interface InteractionCallbacks {
+  onNodeSelect?: (nodeId: string, nodeInfo: NodeInfo | undefined, element: Element) => void;
+  onEdgeSelect?: (edgeIndex: number, edgeInfo: EdgeInfo | undefined, element: Element) => void;
+  onElementClick?: (type: string, id: string | number, element: Element) => void;
+  onElementDblClick?: (type: 'node' | 'edge', id: string | number, element: Element) => void;
+  onCanvasClick?: () => void;
+  onCanvasDblClick?: (e: MouseEvent) => void;
+  onNodeCtrlClick?: (nodeId: string, e: MouseEvent) => void;
+  onMultiSelect?: (selection: { nodes: string[]; edges: number[] }) => void;
+}
+
 export class MermaidInteractionLayer {
-  constructor(renderer, callbacks = {}) {
+  private renderer: MermaidRenderer;
+  private callbacks: Required<InteractionCallbacks>;
+  private selectedNodeId: string | null = null;
+  private selectedEdgeIndex: number | null = null;
+  private selectedNodeIds: Set<string> = new Set(); // 多选节点集合
+  private selectedEdgeIndices: Set<number> = new Set(); // 多选边集合
+  
+  constructor(renderer: MermaidRenderer, callbacks: InteractionCallbacks = {}) {
     this.renderer = renderer;
     this.callbacks = {
       onNodeSelect: callbacks.onNodeSelect || (() => {}),
       onEdgeSelect: callbacks.onEdgeSelect || (() => {}),
       onElementClick: callbacks.onElementClick || (() => {}),
       onElementDblClick: callbacks.onElementDblClick || (() => {}),
-      onCanvasClick: callbacks.onCanvasClick || (() => {})
+      onCanvasClick: callbacks.onCanvasClick || (() => {}),
+      onCanvasDblClick: callbacks.onCanvasDblClick || (() => {}),
+      onNodeCtrlClick: callbacks.onNodeCtrlClick || (() => {}),
+      onMultiSelect: callbacks.onMultiSelect || (() => {})
     };
-    
-    this.selectedNodeId = null;
-    this.selectedEdgeIndex = null;
-    this.selectedNodeIds = new Set(); // 多选节点集合
-    this.selectedEdgeIndices = new Set(); // 多选边集合
-    
     this.setup();
   }
   
-  setup() {
+  private setup(): void {
     const svg = this.renderer.getCurrentSVG();
     if (!svg) return;
     
@@ -30,10 +47,8 @@ export class MermaidInteractionLayer {
     
     // 绑定画布双击事件
     svg.addEventListener('dblclick', (e) => {
-      if (e.target === svg || e.target.tagName === 'svg') {
-        if (this.callbacks.onCanvasDblClick) {
-          this.callbacks.onCanvasDblClick(e);
-        }
+      if (e.target === svg || (e.target as Element).tagName === 'svg') {
+        this.callbacks.onCanvasDblClick(e);
       }
     });
   }
@@ -41,13 +56,14 @@ export class MermaidInteractionLayer {
   /**
    * 处理点击事件
    */
-  handleClick(e) {
-    const target = e.target;
+  private handleClick(e: MouseEvent): void {
+    const target = e.target as Element;
     
     // 检查是否点击了节点
     const nodeElement = target.closest('.node[data-mermaid-type="node"]');
     if (nodeElement) {
       const nodeId = nodeElement.getAttribute('data-node-id');
+      if (!nodeId) return;
       
       // Ctrl/Cmd + 点击：多选或开始连接
       if (e.ctrlKey || e.metaKey) {
@@ -56,9 +72,7 @@ export class MermaidInteractionLayer {
           this.toggleNodeSelection(nodeId, nodeElement);
         } else {
           // Ctrl/Cmd 单独：开始连接
-          if (this.callbacks.onNodeCtrlClick) {
-            this.callbacks.onNodeCtrlClick(nodeId, e);
-          }
+          this.callbacks.onNodeCtrlClick(nodeId, e);
         }
         e.stopPropagation();
         return;
@@ -80,7 +94,9 @@ export class MermaidInteractionLayer {
     // 检查是否点击了边
     const edgeElement = target.closest('.edgePath[data-mermaid-type="edge"]');
     if (edgeElement) {
-      const edgeIndex = parseInt(edgeElement.getAttribute('data-edge-index'));
+      const edgeIndexAttr = edgeElement.getAttribute('data-edge-index');
+      if (!edgeIndexAttr) return;
+      const edgeIndex = parseInt(edgeIndexAttr);
       
       // Ctrl/Cmd 或 Shift + 点击：多选
       if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -94,7 +110,8 @@ export class MermaidInteractionLayer {
     }
     
     // 点击空白处，取消选择
-    if (target === this.renderer.getCurrentSVG() || target.tagName === 'svg') {
+    const svg = this.renderer.getCurrentSVG();
+    if (target === svg || target.tagName === 'svg') {
       this.clearSelection();
       this.callbacks.onCanvasClick();
     }
@@ -103,37 +120,42 @@ export class MermaidInteractionLayer {
   /**
    * 处理双击事件
    */
-  handleDblClick(e) {
-    const target = e.target;
+  private handleDblClick(e: MouseEvent): void {
+    const target = e.target as Element;
     
     const nodeElement = target.closest('.node[data-mermaid-type="node"]');
     if (nodeElement) {
       const nodeId = nodeElement.getAttribute('data-node-id');
-      this.callbacks.onElementDblClick('node', nodeId, nodeElement);
-      e.stopPropagation();
-      return;
+      if (nodeId) {
+        this.callbacks.onElementDblClick('node', nodeId, nodeElement);
+        e.stopPropagation();
+        return;
+      }
     }
     
     const edgeElement = target.closest('.edgePath[data-mermaid-type="edge"]');
     if (edgeElement) {
-      const edgeIndex = parseInt(edgeElement.getAttribute('data-edge-index'));
-      this.callbacks.onElementDblClick('edge', edgeIndex, edgeElement);
-      e.stopPropagation();
-      return;
+      const edgeIndexAttr = edgeElement.getAttribute('data-edge-index');
+      if (edgeIndexAttr) {
+        const edgeIndex = parseInt(edgeIndexAttr);
+        this.callbacks.onElementDblClick('edge', edgeIndex, edgeElement);
+        e.stopPropagation();
+        return;
+      }
     }
   }
   
   /**
    * 选择节点（单选）
    */
-  selectNode(nodeId, element) {
+  public selectNode(nodeId: string, element: Element): void {
     this.clearSelection();
     
     this.selectedNodeId = nodeId;
     this.selectedNodeIds.clear();
     this.selectedNodeIds.add(nodeId);
     this.renderer.highlightElement(element, 'node');
-    this.renderer.showSelectionBox(element);
+    this.renderer.showSelectionBox(element as SVGGElement);
     
     const nodeInfo = this.renderer.getNode(nodeId);
     this.callbacks.onNodeSelect(nodeId, nodeInfo, element);
@@ -142,7 +164,7 @@ export class MermaidInteractionLayer {
   /**
    * 切换节点选择（多选）
    */
-  toggleNodeSelection(nodeId, element) {
+  private toggleNodeSelection(nodeId: string, element: Element): void {
     if (this.selectedNodeIds.has(nodeId)) {
       // 取消选择
       this.selectedNodeIds.delete(nodeId);
@@ -161,23 +183,21 @@ export class MermaidInteractionLayer {
       // 如果当前没有单选，设置这个为单选
       if (!this.selectedNodeId) {
         this.selectedNodeId = nodeId;
-        this.renderer.showSelectionBox(element);
+        this.renderer.showSelectionBox(element as SVGGElement);
       }
     }
     
     // 更新多选回调
-    if (this.callbacks.onMultiSelect) {
-      this.callbacks.onMultiSelect({
-        nodes: Array.from(this.selectedNodeIds),
-        edges: Array.from(this.selectedEdgeIndices)
-      });
-    }
+    this.callbacks.onMultiSelect({
+      nodes: Array.from(this.selectedNodeIds),
+      edges: Array.from(this.selectedEdgeIndices)
+    });
   }
   
   /**
    * 选择边（单选）
    */
-  selectEdge(edgeIndex, element) {
+  private selectEdge(edgeIndex: number, element: Element): void {
     this.clearSelection();
     
     this.selectedEdgeIndex = edgeIndex;
@@ -192,7 +212,7 @@ export class MermaidInteractionLayer {
   /**
    * 切换边选择（多选）
    */
-  toggleEdgeSelection(edgeIndex, element) {
+  private toggleEdgeSelection(edgeIndex: number, element: Element): void {
     if (this.selectedEdgeIndices.has(edgeIndex)) {
       // 取消选择
       this.selectedEdgeIndices.delete(edgeIndex);
@@ -214,18 +234,16 @@ export class MermaidInteractionLayer {
     }
     
     // 更新多选回调
-    if (this.callbacks.onMultiSelect) {
-      this.callbacks.onMultiSelect({
-        nodes: Array.from(this.selectedNodeIds),
-        edges: Array.from(this.selectedEdgeIndices)
-      });
-    }
+    this.callbacks.onMultiSelect({
+      nodes: Array.from(this.selectedNodeIds),
+      edges: Array.from(this.selectedEdgeIndices)
+    });
   }
   
   /**
    * 清除选择
    */
-  clearSelection() {
+  clearSelection(): void {
     this.selectedNodeId = null;
     this.selectedEdgeIndex = null;
     this.selectedNodeIds.clear();
@@ -237,21 +255,21 @@ export class MermaidInteractionLayer {
   /**
    * 获取多选节点 ID 列表
    */
-  getSelectedNodeIds() {
+  getSelectedNodeIds(): string[] {
     return Array.from(this.selectedNodeIds);
   }
   
   /**
    * 获取多选边索引列表
    */
-  getSelectedEdgeIndices() {
+  getSelectedEdgeIndices(): number[] {
     return Array.from(this.selectedEdgeIndices);
   }
   
   /**
    * 获取所有选中的元素
    */
-  getAllSelected() {
+  getAllSelected(): { nodes: string[]; edges: number[] } {
     return {
       nodes: this.getSelectedNodeIds(),
       edges: this.getSelectedEdgeIndices()
@@ -261,34 +279,26 @@ export class MermaidInteractionLayer {
   /**
    * 获取当前选中的节点 ID
    */
-  getSelectedNodeId() {
+  getSelectedNodeId(): string | null {
     return this.selectedNodeId;
   }
   
   /**
    * 获取当前选中的边索引
    */
-  getSelectedEdgeIndex() {
+  getSelectedEdgeIndex(): number | null {
     return this.selectedEdgeIndex;
   }
   
   /**
    * 更新（当 SVG 重新渲染后调用）
    */
-  update() {
+  update(): void {
     this.setup();
     
     // 恢复选择状态
     const svg = this.renderer.getCurrentSVG();
     if (!svg) return;
-    
-    // 确保 selectedNodeIds 和 selectedEdgeIndices 已初始化
-    if (!this.selectedNodeIds) {
-      this.selectedNodeIds = new Set();
-    }
-    if (!this.selectedEdgeIndices) {
-      this.selectedEdgeIndices = new Set();
-    }
     
     // 恢复多选节点
     if (this.selectedNodeIds && this.selectedNodeIds.size > 0) {
@@ -305,7 +315,7 @@ export class MermaidInteractionLayer {
       const nodeElement = svg.querySelector(`[data-node-id="${this.selectedNodeId}"]`);
       if (nodeElement) {
         this.renderer.highlightElement(nodeElement, 'node');
-        this.renderer.showSelectionBox(nodeElement);
+        this.renderer.showSelectionBox(nodeElement as SVGGElement);
       }
     }
     
@@ -328,5 +338,4 @@ export class MermaidInteractionLayer {
     }
   }
 }
-
 

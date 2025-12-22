@@ -1,12 +1,72 @@
 // Mermaid 源代码解析器
 // 解析 mermaid 源代码为 AST，用于编辑操作
 
+export interface ParsedNode {
+  id: string;
+  label: string;
+  shape: string;
+  lineNumber?: number;
+}
+
+export interface ParsedEdge {
+  from: string;
+  to: string;
+  label: string;
+  type: string;
+  index?: number;
+  lineNumber?: number;
+}
+
+export interface ClassDef {
+  name: string;
+  styles: Record<string, string>;
+  lineNumber: number;
+}
+
+export interface ClassApplication {
+  nodes: string[];
+  className: string;
+  lineNumber: number;
+}
+
+export interface NodeStyle {
+  nodeId: string;
+  styles: Record<string, string>;
+  lineNumber: number;
+}
+
+export interface LinkStyle {
+  styles: Record<string, string>;
+  lineNumber: number;
+}
+
+export interface Subgraph {
+  id: string;
+  label: string;
+  nodes: string[];
+  lineNumber: number;
+}
+
+export interface MermaidAST {
+  type: string;
+  direction: string;
+  nodes: ParsedNode[];
+  edges: ParsedEdge[];
+  classDefs: ClassDef[];
+  linkStyles: LinkStyle[];
+  subgraphs: Subgraph[];
+  classApplications: ClassApplication[];
+  nodeStyles: NodeStyle[];
+  styles: Record<string, string>;
+  source: string;
+}
+
 export class MermaidParser {
   /**
    * 解析 mermaid 源代码
    */
-  parse(source) {
-    const ast = {
+  parse(source: string): MermaidAST {
+    const ast: MermaidAST = {
       type: this.detectDiagramType(source),
       direction: this.extractDirection(source),
       nodes: [],
@@ -15,14 +75,14 @@ export class MermaidParser {
       linkStyles: [],
       subgraphs: [],
       classApplications: [],
-      nodeStyles: [], // 使用 style 指令的节点样式
+      nodeStyles: [],
       styles: this.extractStyles(source),
       source: source
     };
     
     const lines = source.split('\n');
     let inSubgraph = false;
-    let currentSubgraph = null;
+    let currentSubgraph: Subgraph | null = null;
     let edgeIndex = 0;
     
     lines.forEach((line, lineIndex) => {
@@ -34,7 +94,7 @@ export class MermaidParser {
       // 解析节点
       const nodeMatch = this.parseNode(trimmed);
       if (nodeMatch) {
-        const node = {
+        const node: ParsedNode = {
           ...nodeMatch,
           lineNumber: lineIndex
         };
@@ -110,8 +170,8 @@ export class MermaidParser {
         inSubgraph = true;
         const subgraphMatch = trimmed.match(/subgraph\s+(\w+)?\[?([^\]]*)\]?/);
         currentSubgraph = {
-          id: subgraphMatch[1] || `subgraph-${ast.subgraphs.length}`,
-          label: subgraphMatch[2] || '',
+          id: subgraphMatch?.[1] || `subgraph-${ast.subgraphs.length}`,
+          label: subgraphMatch?.[2] || '',
           nodes: [],
           lineNumber: lineIndex
         };
@@ -128,7 +188,7 @@ export class MermaidParser {
   /**
    * 解析节点
    */
-  parseNode(line) {
+  parseNode(line: string): ParsedNode | null {
     const patterns = [
       { regex: /^(\w+)\[([^\]]*)\]$/, shape: 'rectangle' },
       { regex: /^(\w+)\(([^)]*)\)$/, shape: 'stadium' },
@@ -157,7 +217,7 @@ export class MermaidParser {
   /**
    * 解析边
    */
-  parseEdge(line) {
+  parseEdge(line: string): Omit<ParsedEdge, 'index' | 'lineNumber'> | null {
     const patterns = [
       { regex: /^(\w+)\s*-->\s*(\w+)(?:\s*\|\s*([^|]+)\s*\|)?$/, type: 'arrow' },
       { regex: /^(\w+)\s*---\s*(\w+)(?:\s*\|\s*([^|]+)\s*\|)?$/, type: 'line' },
@@ -185,8 +245,8 @@ export class MermaidParser {
   /**
    * 解析样式字符串
    */
-  parseStyles(styleString) {
-    const styles = {};
+  parseStyles(styleString: string): Record<string, string> {
+    const styles: Record<string, string> = {};
     const pairs = styleString.split(',');
     
     pairs.forEach(pair => {
@@ -202,7 +262,7 @@ export class MermaidParser {
   /**
    * 检测图表类型
    */
-  detectDiagramType(source) {
+  detectDiagramType(source: string): string {
     if (source.match(/^graph\s+/)) return 'flowchart';
     if (source.match(/^sequenceDiagram/)) return 'sequence';
     if (source.match(/^classDiagram/)) return 'class';
@@ -214,7 +274,7 @@ export class MermaidParser {
   /**
    * 提取方向
    */
-  extractDirection(source) {
+  extractDirection(source: string): string {
     const match = source.match(/^graph\s+(TD|LR|BT|RL)/);
     return match ? match[1] : 'TD';
   }
@@ -222,8 +282,8 @@ export class MermaidParser {
   /**
    * 提取样式配置
    */
-  extractStyles(source) {
-    const styles = {};
+  extractStyles(source: string): Record<string, string> {
+    const styles: Record<string, string> = {};
     const initMatch = source.match(/%%\{init:\s*\{([^}]+)\}\}%%/);
     if (initMatch) {
       // 简单解析 themeVariables

@@ -68,7 +68,26 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
       async (message) => {
         try {
           // 使用 ExtensionService 的消息格式
-          if (message.method === 'fetchDiagram') {
+          if (message.method === 'loadMermaid') {
+            // 返回文档内容，通过事件推送（参考 PlantUML 的方式）
+            webviewPanel.webview.postMessage({
+              method: 'load',
+              params: { source: document.getText() },
+            });
+          } else if (message.method === 'renderMermaid') {
+            // 渲染 Mermaid（前端渲染，这里只返回源码用于验证）
+            // 注意：Mermaid 渲染在前端进行，后端只负责提供源码
+            const { source } = message.params || {};
+            console.log('[MermaidEditor] Received renderMermaid request, source length:', source?.length || 0);
+            if (source) {
+              // 前端会自己渲染，这里只返回成功确认
+              webviewPanel.webview.postMessage({
+                method: 'render-result',
+                params: { source: source }, // 返回源码，前端自己渲染
+              });
+            }
+          } else if (message.method === 'fetchDiagram') {
+            // 保留用于兼容性，返回 diagram 数据（用于交互功能）
             const source = document.getText();
             const diagram = mermaidToDiagramData(source, document.uri.fsPath);
             console.log('[MermaidEditor] Generated diagram data:', {
@@ -85,6 +104,17 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
             const { diagram } = message.params || {};
             if (diagram) {
               const mermaidSource = diagramDataToMermaid(diagram);
+              const currentDocumentText = document.getText();
+              
+              console.log('[MermaidEditorProvider] saveDiagram: START', {
+                sourceLength: mermaidSource?.length || 0,
+                sourcePreview: mermaidSource?.substring(0, 50) || '',
+                currentDocumentLength: currentDocumentText?.length || 0,
+                currentDocumentPreview: currentDocumentText?.substring(0, 50) || '',
+                documentUri: document.uri.toString(),
+                timestamp: new Date().toISOString()
+              });
+              
               const edit = new vscode.WorkspaceEdit();
               edit.replace(
                 document.uri,
@@ -92,21 +122,32 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                 mermaidSource
               );
               await vscode.workspace.applyEdit(edit);
-              await document.save();
+              console.log('[MermaidEditorProvider] saveDiagram: edit applied');
               
+              await document.save();
+              console.log('[MermaidEditorProvider] saveDiagram: document saved');
+              
+              const savedDocumentText = document.getText();
+              console.log('[MermaidEditorProvider] saveDiagram: after save, document length:', savedDocumentText?.length || 0);
+              
+              // 发送响应（用于 call 方法的 Promise resolve）
               webviewPanel.webview.postMessage({
                 id: message.id,
                 method: message.method,
                 result: { success: true },
               });
+              console.log('[MermaidEditorProvider] saveDiagram: success message sent');
               
-              // 发送更新后的图表数据
-              const updatedSource = document.getText();
-              const updatedDiagram = mermaidToDiagramData(updatedSource, document.uri.fsPath);
+              // 发送 save-success 事件（与 PlantUML 保持一致）
+              // 前端可以监听此事件来更新状态
               webviewPanel.webview.postMessage({
-                method: 'load',
-                params: { diagram: updatedDiagram },
+                method: 'save-success',
               });
+              console.log('[MermaidEditorProvider] saveDiagram: save-success event sent');
+              
+              // 不在这里发送 load 事件，让 onDidChangeTextDocument 自然触发
+              // 这样可以避免保存后立即覆盖编辑器内容
+              // 参考 PlantUML 的方式：保存后只发送 save-success，不发送 load
             }
           }
         } catch (error) {
@@ -406,16 +447,24 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
       }
     );
 
-    // 监听文档变更：发送加载消息
+    // 监听文档变更：发送加载消息（参考 PlantUML 的方式）
     const changeDocumentSubscription2 = vscode.workspace.onDidChangeTextDocument(
       (e) => {
         if (e.document.uri.toString() === document.uri.toString()) {
           const source = e.document.getText();
-          const diagram = mermaidToDiagramData(source, document.uri.fsPath);
+          console.log('[MermaidEditorProvider] onDidChangeTextDocument: document changed', {
+            sourceLength: source?.length || 0,
+            sourcePreview: source?.substring(0, 50) || '',
+            reason: e.reason?.toString() || 'unknown',
+            documentUri: e.document.uri.toString(),
+            timestamp: new Date().toISOString()
+          });
+          
           webviewPanel.webview.postMessage({
             method: 'load',
-            params: { diagram },
+            params: { source: source },
           });
+          console.log('[MermaidEditorProvider] onDidChangeTextDocument: load message sent');
         }
       }
     );
@@ -426,35 +475,34 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
       changeDocumentSubscription2.dispose();
     });
 
-    // 发送初始内容的函数
+    // 发送初始内容的函数（参考 PlantUML 的方式）
     const sendInitialContent = () => {
-      const source = document.getText();
-      const diagram = mermaidToDiagramData(source, document.uri.fsPath);
-      console.log('[MermaidEditor] Sending initial load message with diagram:', {
-        nodes: diagram.nodes.length,
-        edges: diagram.edges.length,
-        sourceLength: diagram.source.length,
-      });
       webviewPanel.webview.postMessage({
         method: 'load',
-        params: { diagram },
+        params: { source: document.getText() },
       });
     };
 
-    // 监听 webview 可见性变化，确保在 webview 可见时发送消息
-    webviewPanel.onDidChangeViewState((e) => {
+    // 监听 webview 可见性变化（参考 PlantUML 的方式）
+    const viewStateSubscription = webviewPanel.onDidChangeViewState((e) => {
       if (e.webviewPanel.visible) {
-        console.log('[MermaidEditor] Webview became visible, sending initial content');
-        // 延迟发送，确保 React 应用已加载
-        setTimeout(sendInitialContent, 500);
+        // webview 变为可见时，发送初始内容
+        webviewPanel.webview.postMessage({
+          method: 'load',
+          params: { source: document.getText() },
+        });
       }
     });
 
-    // 等待 webview 加载完成后发送初始内容
-    // 使用多个延迟确保 React 应用完全初始化
-    setTimeout(sendInitialContent, 500);
-    setTimeout(sendInitialContent, 1500);
-    setTimeout(sendInitialContent, 3000);
+    // 清理订阅
+    webviewPanel.onDidDispose(() => {
+      changeDocumentSubscription.dispose();
+      changeDocumentSubscription2.dispose();
+      viewStateSubscription.dispose();
+    });
+
+    // 发送初始内容（参考 PlantUML，只发送一次，延迟 200ms）
+    setTimeout(sendInitialContent, 200);
   }
 
   /**

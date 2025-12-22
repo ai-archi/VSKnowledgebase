@@ -1,6 +1,8 @@
 // Utility functions
 
-export function formatByteSize(bytes) {
+import { MAX_IMAGE_FILE_BYTES } from './types';
+
+export function formatByteSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 B";
   }
@@ -15,7 +17,7 @@ export function formatByteSize(bytes) {
   return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }
 
-export function blobToBase64(blob) {
+export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -38,7 +40,7 @@ export function blobToBase64(blob) {
   });
 }
 
-export function loadImageFromBlob(blob) {
+export function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
     const image = new Image();
@@ -54,7 +56,17 @@ export function loadImageFromBlob(blob) {
   });
 }
 
-export async function resizeImageToLimit(image, sourceBlob, maxBytes) {
+export interface ResizeResult {
+  blob: Blob;
+  resized: boolean;
+  fits: boolean;
+}
+
+export async function resizeImageToLimit(
+  image: HTMLImageElement,
+  sourceBlob: Blob,
+  maxBytes: number
+): Promise<ResizeResult> {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
   if (!context) {
@@ -75,7 +87,7 @@ export async function resizeImageToLimit(image, sourceBlob, maxBytes) {
   currentScale = Math.min(currentScale, 0.95);
   currentScale = Math.max(currentScale, MIN_SCALE);
 
-  let blob = null;
+  let blob: Blob | null = null;
   let fits = false;
   let attempts = 0;
 
@@ -89,7 +101,7 @@ export async function resizeImageToLimit(image, sourceBlob, maxBytes) {
     context.clearRect(0, 0, targetWidth, targetHeight);
     context.drawImage(image, 0, 0, targetWidth, targetHeight);
 
-    blob = await new Promise((resolve) =>
+    blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/png")
     );
 
@@ -113,7 +125,17 @@ export async function resizeImageToLimit(image, sourceBlob, maxBytes) {
   return { blob, resized: true, fits };
 }
 
-export async function ensureImageWithinLimit(file, maxBytes) {
+export interface ImageProcessResult {
+  base64: string;
+  resized: boolean;
+  originalSize: number;
+  finalSize: number;
+}
+
+export async function ensureImageWithinLimit(
+  file: File,
+  maxBytes: number = MAX_IMAGE_FILE_BYTES
+): Promise<ImageProcessResult> {
   if (file.size <= maxBytes) {
     const base64 = await blobToBase64(file);
     return {
@@ -150,7 +172,7 @@ export async function ensureImageWithinLimit(file, maxBytes) {
   };
 }
 
-export function formatPaddingValue(value) {
+export function formatPaddingValue(value: number): string {
   if (!Number.isFinite(value)) {
     return "0";
   }
@@ -160,7 +182,7 @@ export function formatPaddingValue(value) {
   return trimmed;
 }
 
-export function normalizePadding(value) {
+export function normalizePadding(value: number): number {
   if (!Number.isFinite(value) || Number.isNaN(value) || value < 0) {
     return 0;
   }
@@ -168,7 +190,7 @@ export function normalizePadding(value) {
   return Math.round(clamped * 1000) / 1000;
 }
 
-export function resolveColor(value, fallback) {
+export function resolveColor(value: string | null | undefined, fallback: string): string {
   const HEX_COLOR_RE = /^#([0-9a-f]{6})$/i;
   const base = value ?? fallback;
   if (HEX_COLOR_RE.test(base)) {
@@ -180,19 +202,24 @@ export function resolveColor(value, fallback) {
   return "#000000";
 }
 
-export function normalizeColorInput(value) {
+export function normalizeColorInput(value: string): string {
   return value.trim().toLowerCase();
 }
 
-export function midpoint(a, b) {
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export function midpoint(a: Point, b: Point): Point {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
-export function isClose(a, b, epsilon = 0.5) {
+export function isClose(a: Point, b: Point, epsilon: number = 0.5): boolean {
   return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
 }
 
-export function centroid(points) {
+export function centroid(points: Point[]): Point {
   if (points.length === 0) {
     return { x: 0, y: 0 };
   }
@@ -205,7 +232,7 @@ export function centroid(points) {
   return { x: sumX / points.length, y: sumY / points.length };
 }
 
-export function distanceToSegment(point, start, end) {
+export function distanceToSegment(point: Point, start: Point, end: Point): number {
   const vx = end.x - start.x;
   const vy = end.y - start.y;
   const wx = point.x - start.x;
@@ -228,13 +255,18 @@ export function distanceToSegment(point, start, end) {
   return Math.hypot(point.x - projectionX, point.y - projectionY);
 }
 
-export function normalizeLabelLines(label) {
+export function normalizeLabelLines(label: string): string[] {
   return label
     .split("\n")
     .map((line) => (line.length === 0 ? "\u00A0" : line));
 }
 
-export function measureLabelBox(lines) {
+export interface LabelBox {
+  width: number;
+  height: number;
+}
+
+export function measureLabelBox(lines: string[]): LabelBox {
   const EDGE_LABEL_MIN_WIDTH = 36;
   const EDGE_LABEL_HORIZONTAL_PADDING = 16;
   const EDGE_LABEL_MIN_HEIGHT = 28;
@@ -258,18 +290,18 @@ export function measureLabelBox(lines) {
   return { width, height };
 }
 
-export function snapToGrid(value, gridSize = 10) {
+export function snapToGrid(value: number, gridSize: number = 10): number {
   if (gridSize <= 0) {
     return value;
   }
   return Math.round(value / gridSize) * gridSize;
 }
 
-export function svgSafeId(prefix, id) {
+export function svgSafeId(prefix: string, id: string): string {
   return `${prefix}${id.replace(/[^a-zA-Z0-9_:-]/g, "_")}`;
 }
 
-export function polygonPoints(points) {
+export function polygonPoints(points: Array<[number, number]>): string {
   return points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
 }
 

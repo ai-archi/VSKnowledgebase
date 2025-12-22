@@ -2,18 +2,19 @@
  * Mermaid Editor App V2 - Vue 适配版
  * 适配 Vue 3 组件，接收 DOM 元素引用而非通过 getElementById 获取
  */
-import { StateManager } from './StateManager.js';
-import { MermaidRenderer } from './MermaidRenderer.js';
-import { MermaidInteractionLayer } from './MermaidInteractionLayer.js';
-import { MermaidLabelEditor } from './MermaidLabelEditor.js';
-import { MermaidNodeAdder } from './MermaidNodeAdder.js';
-import { MermaidNodeConnector } from './MermaidNodeConnector.js';
-import { MermaidCodeEditor } from './MermaidCodeEditor.js';
-import { MermaidParser } from './MermaidParser.js';
-import { MermaidCodeGenerator } from './MermaidCodeGenerator.js';
+import { StateManager } from './StateManager';
+import { MermaidRenderer } from './MermaidRenderer';
+import { MermaidInteractionLayer } from './MermaidInteractionLayer';
+import { MermaidLabelEditor } from './MermaidLabelEditor';
+import { MermaidNodeAdder } from './MermaidNodeAdder';
+import { MermaidNodeConnector } from './MermaidNodeConnector';
+import { MermaidCodeEditor } from './MermaidCodeEditor';
+import { MermaidParser } from './MermaidParser';
+import { MermaidCodeGenerator } from './MermaidCodeGenerator';
 import {
-  fetchDiagram,
   saveDiagram,
+  loadMermaid,
+  renderMermaid,
   isVSCodeWebview,
 } from './vscodeApiAdapter';
 import { extensionService } from '@/services/ExtensionService';
@@ -42,12 +43,14 @@ export class MermaidEditorAppV2 {
   private codeGenerator: MermaidCodeGenerator;
   
   private elements: EditorElements;
-  private saveTimer: NodeJS.Timeout | null = null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private isSaving = false;
   private selectedNodeId: string | null = null;
   private selectedEdgeIndex: number | null = null;
   private boundHandleKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  private messageHandler: ((event: MessageEvent) => void) | null = null;
+  private isSettingValue: boolean = false; // 标志：是否正在通过 setValue 设置值，防止触发 change 事件
+  private isWaitingForInitialLoad = false; // 是否正在等待初始加载
+  private renderTimer: ReturnType<typeof setTimeout> | null = null; // 渲染定时器
 
   constructor(elements: EditorElements) {
     this.elements = elements;
@@ -93,13 +96,13 @@ export class MermaidEditorAppV2 {
     
     // 初始化交互层
     this.interactionLayer = new MermaidInteractionLayer(this.renderer, {
-      onNodeSelect: (nodeId, nodeInfo, element) => this.handleNodeSelect(nodeId, nodeInfo),
-      onEdgeSelect: (edgeIndex, edgeInfo, element) => this.handleEdgeSelect(edgeIndex, edgeInfo),
-      onElementDblClick: (type, id, element) => this.handleElementDblClick(type, id, element),
+      onNodeSelect: (nodeId, nodeInfo, _element) => this.handleNodeSelect(nodeId, nodeInfo),
+      onEdgeSelect: (edgeIndex, edgeInfo, _element) => this.handleEdgeSelect(edgeIndex, edgeInfo),
+      onElementDblClick: (type, id, _element) => this.handleElementDblClick(type, String(id), _element),
       onCanvasClick: () => this.handleCanvasClick(),
       onCanvasDblClick: (e) => this.handleCanvasDblClick(e),
       onNodeCtrlClick: (nodeId, e) => this.handleNodeCtrlClick(nodeId, e),
-      onMultiSelect: (selection) => this.handleMultiSelect(selection),
+      onMultiSelect: (_selection) => this.handleMultiSelect(_selection),
     });
     
     // 订阅状态变化
@@ -107,7 +110,11 @@ export class MermaidEditorAppV2 {
     
     // 初始化代码编辑器
     this.codeEditor = new MermaidCodeEditor(this.elements.sourceEditor, {
-      onChange: (value) => {
+      onChange: (_value) => {
+        // 如果正在通过 setValue 设置值，不触发 handleSourceChange（避免循环和重复渲染）
+        if (this.isSettingValue) {
+          return;
+        }
         this.handleSourceChange();
       },
       onError: (error) => {
@@ -120,24 +127,29 @@ export class MermaidEditorAppV2 {
     
     // 设置 VSCode 消息监听
     if (isVSCodeWebview) {
-      // 监听 ExtensionService 的消息事件
-      this.messageHandler = (event: MessageEvent) => {
-        const data = event.data;
-        // 处理来自后端的 load 消息（通过 ExtensionService 转发）
-        if (data.method === 'load' && data.params?.diagram) {
-          if (this.isSaving) return;
-          this.handleDiagramLoad(data.params.diagram);
-        }
-      };
-      
-      window.addEventListener('message', this.messageHandler);
-      
-      // 监听 ExtensionService 的事件
-      extensionService.on('load', (diagram: any) => {
+      // 只使用 ExtensionService 的事件监听，避免重复处理
+      // ExtensionService 已经监听了 window.addEventListener('message')
+      // 监听源码加载事件
+      extensionService.on('load', (data: { source?: string; diagram?: any }) => {
         if (this.isSaving) return;
-        if (diagram) {
-          this.handleDiagramLoad(diagram);
+        // 兼容新旧格式：新格式是 { source: string }，旧格式是 { diagram: { source: string } }
+        if (data?.source !== undefined) {
+          this.handleSourceLoad(data.source);
+        } else if (data?.diagram) {
+          // 兼容旧格式
+          const source = data.diagram?.source || '';
+          this.handleSourceLoad(source);
         }
+      });
+      
+      // 监听渲染结果事件（前端渲染，这里只用于确认）
+      extensionService.on('render-result', (_data: any) => {
+        console.log('[MermaidEditorAppV2] Received render-result confirmation');
+      });
+      
+      // 监听保存成功事件（与 PlantUML 保持一致）
+      extensionService.on('save-success', () => {
+        this.handleSaveSuccess();
       });
       
       // 加载初始图表
@@ -149,7 +161,7 @@ export class MermaidEditorAppV2 {
 
   setupEventListeners() {
     // 源代码编辑器变化（如果使用原生编辑器）
-    if (!this.codeEditor.editor) {
+    if (!this.codeEditor?.editor) {
       this.elements.sourceEditor.addEventListener('input', () => {
         this.handleSourceChange();
       });
@@ -204,6 +216,46 @@ export class MermaidEditorAppV2 {
   }
 
   handleKeyDown(event: KeyboardEvent) {
+    // 处理 Cmd+S / Ctrl+S 保存快捷键
+    if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+      event.preventDefault();
+      // 清除保存定时器（与 PlantUML 的 saveImmediately 保持一致）
+      if (this.saveTimer) {
+        clearTimeout(this.saveTimer);
+        this.saveTimer = null;
+      }
+      
+      // 获取最新的源码（优先从编辑器获取，确保获取最新内容）
+      let source: string;
+      if (this.codeEditor) {
+        source = this.codeEditor.getValue() || '';
+      } else {
+        source = this.elements.sourceEditor.value || '';
+      }
+      
+      // 如果内容为空，不保存
+      if (!source || source.trim() === '') {
+        console.log('[MermaidEditorAppV2] handleKeyDown: source is empty, skipping save');
+        return;
+      }
+      
+      // 更新状态（确保状态与编辑器内容一致）
+      // 注意：只更新 source，不更新 sourceDraft，让 handleSaveSuccess 中的渲染能正确触发
+      // 因为 renderDiagram 会检查 sourceDraft 来判断是否需要渲染
+      if (source !== this.stateManager.getSource()) {
+        this.stateManager.setState({ source });
+      }
+      
+      console.log('[MermaidEditorAppV2] handleKeyDown: cmd+s pressed, calling saveSource', {
+        sourceLength: source.length,
+        lastSavedSourceLength: this.stateManager.getLastSavedSource()?.length || 0
+      });
+      
+      // 立即保存（不使用防抖，与 PlantUML 的 saveImmediately 保持一致）
+      this.saveSource(source);
+      return;
+    }
+    
     const key = event.key;
     if (key !== 'Delete' && key !== 'Backspace') {
       return;
@@ -297,7 +349,7 @@ export class MermaidEditorAppV2 {
       if (this.codeEditor?.editor && typeof this.codeEditor.editor.refresh === 'function') {
         // 使用 requestAnimationFrame 确保 DOM 更新完成后再刷新
         requestAnimationFrame(() => {
-          this.codeEditor.editor.refresh();
+          this.codeEditor?.editor?.refresh();
         });
       }
     };
@@ -320,74 +372,225 @@ export class MermaidEditorAppV2 {
   async loadDiagram() {
     try {
       this.stateManager.setState({ loading: true });
-      const diagram = await fetchDiagram();
-      this.handleDiagramLoad(diagram);
+      // 请求加载源码（参考 PlantUML 的方式）
+      await loadMermaid();
+      // 源码会通过 'load' 事件推送，不需要在这里处理
     } catch (error: any) {
       console.error('Load diagram error:', error);
       this.stateManager.setState({
         loading: false,
         error: error.message || '加载图表失败'
       });
+      this.isWaitingForInitialLoad = false;
     }
   }
-
-  handleDiagramLoad(diagram: any) {
-    // 确保 diagram 有 source 字段，如果没有则从原始文档获取或使用空字符串
-    const source = diagram?.source || '';
+  
+  handleSourceLoad(source: string) {
+    // 参考 PlantUML 的 loadSource 逻辑，保持一致
+    const wasWaitingForInitialLoad = this.isWaitingForInitialLoad;
+    if (this.isWaitingForInitialLoad) {
+      this.isWaitingForInitialLoad = false;
+      console.log('[MermaidEditorAppV2] Initial content loaded, source length:', source.length);
+    }
     
-    // 如果内容没有变化，不更新编辑器（避免重置滚动位置）
-    const currentSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+    // 获取当前编辑器内容（参考 PlantUML 的方式）
+    const currentSource = this.codeEditor ? this.codeEditor.getValue() : 
+                        (this.elements.sourceEditor ? this.elements.sourceEditor.value : '');
+    
+    // 判断是否是首次加载（参考 PlantUML，使用 lastSavedSource 判断）
+    const isInitialLoad = this.stateManager.getLastSavedSource() === null;
+    
+    // 如果内容没有变化，不更新编辑器（避免触发 change 事件和循环加载）
+    // 参考 PlantUML 的方式
     if (currentSource === source) {
       // 内容相同，只更新状态，不更新编辑器
-      this.stateManager.setState({
-        diagram: diagram,
-        source: source,
-        sourceDraft: source,
-        loading: false,
-        error: null
-      });
+      this.stateManager.setState({ source, loading: false, error: null });
+      // 如果是首次加载，设置 sourceDraft 和 lastSavedSource
+      if (isInitialLoad) {
+        this.stateManager.setState({ sourceDraft: source, lastSavedSource: source });
+      }
+      // 如果是首次加载且内容不为空，立即触发渲染（不使用防抖）
+      if (wasWaitingForInitialLoad && source && source.trim() !== '' && 
+          this.stateManager.getSourceDraft() === '') {
+        console.log('[MermaidEditorAppV2] Triggering initial render for loaded content (same source)');
+        this.renderDiagram(source);
+      }
       return;
     }
     
-    this.stateManager.setState({
-      diagram: diagram,
-      source: source,
-      sourceDraft: source,
-      loading: false,
-      error: null
-    });
-    
-    // 更新代码编辑器
-    if (this.codeEditor) {
-      this.codeEditor.setValue(source);
-    } else {
-      this.elements.sourceEditor.value = source;
+    // 内容不同，更新编辑器（参考 PlantUML 的方式）
+    this.isSettingValue = true; // 设置标志，防止触发 change 事件
+    try {
+      if (this.codeEditor) {
+        this.codeEditor.setValue(source);
+      } else if (this.elements.sourceEditor) {
+        this.elements.sourceEditor.value = source;
+      }
+      this.stateManager.setState({ source, loading: false, error: null });
+      // 如果是首次加载，设置 sourceDraft 和 lastSavedSource
+      if (isInitialLoad) {
+        this.stateManager.setState({ sourceDraft: source, lastSavedSource: source });
+      }
+    } finally {
+      // 使用 setTimeout 确保 change 事件已经处理完毕
+      setTimeout(() => {
+        this.isSettingValue = false;
+      }, 0);
     }
     
-    // 只有当 source 不为空时才渲染图表
-    if (source.trim()) {
+    // 如果是首次加载且内容不为空，立即触发渲染（不使用防抖）
+    if (wasWaitingForInitialLoad && source && source.trim() !== '') {
+      console.log('[MermaidEditorAppV2] Triggering initial render immediately (different source)');
       this.renderDiagram(source);
     } else {
-      // 如果 source 为空，清除渲染错误
-      this.stateManager.setState({ error: null });
+      // 其他情况使用防抖
+      this.scheduleRender(source);
     }
   }
+  
+  scheduleRender(source?: string) {
+    // 参考 PlantUML 的方式：如果没有提供 source，从状态管理器获取
+    const renderSource = source || this.stateManager.getSource();
+    if (!renderSource || renderSource.trim() === '') {
+      return;
+    }
+    
+    // 清除之前的渲染定时器
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+    }
+    
+    // 设置新的渲染定时器（防抖：500ms后自动渲染）
+    // Mermaid 是前端渲染，比 PlantUML 的后端渲染快，所以可以使用更短的延迟
+    this.renderTimer = setTimeout(() => {
+      // 从状态管理器获取最新的 source，确保使用最新值
+      const latestSource = this.stateManager.getSource();
+      if (latestSource && latestSource.trim() !== '') {
+        this.renderDiagram(latestSource);
+      }
+      this.renderTimer = null;
+    }, 500);
+  }
+
+  scheduleSave(source: string) {
+    // 参考 PlantUML 的 scheduleSave 方式
+    if (!source || source.trim() === '') {
+      return;
+    }
+    
+    // 清除之前的保存定时器
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+    }
+    
+    // 设置新的保存定时器（防抖：1秒后自动保存，参考 PlantUML）
+    this.saveTimer = setTimeout(async () => {
+      await this.saveSource(source);
+      this.saveTimer = null;
+      
+      // 保存成功后，再触发渲染（Mermaid 需要先保存再渲染）
+      // 注意：这里不直接调用 scheduleRender，而是从状态管理器获取最新值
+      // 因为 scheduleRender 已经在 handleSourceChange 中调用了
+      // 这里只需要确保保存成功后，如果还没有渲染，就触发渲染
+      const latestSource = this.stateManager.getSource();
+      if (latestSource && latestSource.trim() !== '') {
+        // 检查是否已经有渲染定时器，如果没有，才触发渲染
+        // 这样可以避免重复渲染
+        if (!this.renderTimer) {
+          this.scheduleRender(latestSource);
+        }
+      }
+    }, 1000);
+  }
+
 
   async renderDiagram(source: string) {
+    // 保存渲染前的 sourceDraft，以便渲染失败时还原
+    const previousSourceDraft = this.stateManager.getSourceDraft();
+    
+    console.log('[MermaidEditorAppV2] renderDiagram: START', {
+      sourceLength: source?.length || 0,
+      sourcePreview: source?.substring(0, 50) || '',
+      previousSourceDraftLength: previousSourceDraft?.length || 0,
+      previousSourceDraftPreview: previousSourceDraft?.substring(0, 50) || '',
+      timestamp: new Date().toISOString()
+    });
+    
     try {
-      if (!this.renderer) return;
+      if (!this.renderer) {
+        console.log('[MermaidEditorAppV2] renderDiagram: renderer not available, returning');
+        return;
+      }
+      
+      // 检查是否与当前渲染的内容相同，避免重复渲染
+      // 注意：使用 sourceDraft 来跟踪已渲染的内容
+      const currentRenderedSource = this.stateManager.getSourceDraft();
+      if (source === currentRenderedSource && this.renderer.getCurrentSVG()) {
+        console.log('[MermaidEditorAppV2] renderDiagram: Source unchanged, skipping render');
+        return;
+      }
+      
+      // 在渲染前，先更新 sourceDraft 为即将渲染的内容
+      // 这样可以避免在渲染过程中，如果用户继续编辑，导致重复渲染检查失败
+      // 同时也能确保后续的检查使用最新的 sourceDraft
+      console.log('[MermaidEditorAppV2] renderDiagram: updating sourceDraft before render');
+      this.stateManager.setState({ sourceDraft: source });
       
       // 如果 source 为空或只包含空白字符，不渲染
       if (!source || !source.trim()) {
-        // 清空容器但不显示错误
-        if (this.renderer.container) {
-          this.renderer.container.innerHTML = '';
+        // 淡出旧内容后清空容器，避免闪烁
+        if (this.renderer?.container) {
+          const oldSVG = this.renderer.container.querySelector('svg');
+          if (oldSVG) {
+            oldSVG.style.transition = 'opacity 0.1s ease-out';
+            oldSVG.style.opacity = '0';
+            setTimeout(() => {
+              if (this.renderer?.container) {
+                this.renderer.container.innerHTML = '';
+              }
+            }, 100);
+          } else {
+            this.renderer.container.innerHTML = '';
+          }
         }
         this.stateManager.setState({ error: null });
         return;
       }
       
+      console.log('[MermaidEditorAppV2] renderDiagram: calling renderer.render');
       await this.renderer.render(source);
+      console.log('[MermaidEditorAppV2] renderDiagram: renderer.render success');
+      
+      // 渲染成功后，验证编辑器内容是否仍然正确
+      // 如果编辑器内容被清空，恢复它（参考 PlantUML 的逻辑，渲染后不应该影响编辑器内容）
+      // 但只在渲染过程中（isSettingValue 为 true）才恢复，避免覆盖用户的编辑
+      const actualSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+      if (actualSource !== source && source.trim() !== '' && this.isSettingValue) {
+        console.warn('[MermaidEditorAppV2] Editor content lost after render, restoring...', {
+          expectedLength: source.length,
+          actualLength: actualSource.length
+        });
+        // 恢复编辑器内容，使用 isSettingValue 标志防止触发 change 事件
+        // 注意：此时 isSettingValue 应该还是 true（从 handleSourceLoad 设置的）
+        if (this.codeEditor) {
+          this.codeEditor.setValue(source);
+        } else {
+          this.elements.sourceEditor.value = source;
+        }
+      }
+      
+      // sourceDraft 已经在渲染前更新了，这里不需要再次更新
+      // 但为了确保一致性，再次验证（防止渲染过程中 sourceDraft 被其他地方修改）
+      if (this.stateManager.getSourceDraft() !== source) {
+        this.stateManager.setState({ sourceDraft: source });
+      }
+      
+      // 通知后端渲染完成（用于确认，参考 PlantUML 的方式）
+      if (isVSCodeWebview) {
+        renderMermaid(source).catch(err => {
+          console.warn('[MermaidEditorAppV2] Failed to notify render completion:', err);
+        });
+      }
       
       // 渲染成功后，再次检查并移除可能的错误信息
       if (this.renderer.container) {
@@ -401,16 +604,41 @@ export class MermaidEditorAppV2 {
       this.updateZoomButtons();
       
       this.stateManager.setState({ error: null });
+      console.log('[MermaidEditorAppV2] renderDiagram: SUCCESS');
     } catch (error: any) {
-      console.error('Render error:', error);
+      console.error('[MermaidEditorAppV2] renderDiagram: ERROR', {
+        error: error.message || error,
+        errorStack: error.stack,
+        sourceLength: source?.length || 0,
+        previousSourceDraftLength: previousSourceDraft?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      // 渲染失败时，还原 sourceDraft 到之前的值
+      // 这样可以确保状态一致：如果渲染失败，sourceDraft 不应该被更新
+      // 否则会导致 handleSourceChange 中的检查逻辑出现问题
+      console.log('[MermaidEditorAppV2] renderDiagram: restoring sourceDraft to previous value');
+      this.stateManager.setState({ sourceDraft: previousSourceDraft });
       
       // 清理 body 中 Mermaid 可能追加的错误 div
       this.cleanupMermaidErrorDivsFromBody();
       
-      // 确保容器被清空，移除所有错误信息
+      // 淡出旧内容后清空容器，移除所有错误信息，避免闪烁
       if (this.renderer?.container) {
-        this.renderer.container.innerHTML = '';
-        this.removeErrorElementsFromContainer(this.renderer.container);
+        const oldSVG = this.renderer.container.querySelector('svg');
+        if (oldSVG) {
+          oldSVG.style.transition = 'opacity 0.1s ease-out';
+          oldSVG.style.opacity = '0';
+          setTimeout(() => {
+            if (this.renderer?.container) {
+              this.renderer.container.innerHTML = '';
+              this.removeErrorElementsFromContainer(this.renderer.container);
+            }
+          }, 100);
+        } else {
+          this.renderer.container.innerHTML = '';
+          this.removeErrorElementsFromContainer(this.renderer.container);
+        }
       }
       
       // 显示错误消息（包括 UnknownDiagramError 和 No diagram type detected）
@@ -521,26 +749,24 @@ export class MermaidEditorAppV2 {
   }
 
   handleSourceChange() {
-    const source = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
-    
-    // 如果内容没有变化，不更新状态（避免触发重新加载）
-    if (source === this.stateManager.sourceDraft) {
+    // 参考 PlantUML 的 onChange 逻辑，保持一致
+    // 如果正在通过 setValue 设置值，不触发渲染和保存（避免循环和重复渲染）
+    if (this.isSettingValue) {
       return;
     }
     
-    this.stateManager.setState({ sourceDraft: source });
+    const source = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
     
-    // 防抖重新渲染和保存
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-    }
-    this.saveTimer = setTimeout(async () => {
-      await this.renderDiagram(source);
-      await this.saveSource(source);
-    }, 500);
+    // 更新状态（参考 PlantUML 的方式：直接更新状态）
+    this.stateManager.setState({ source, sourceDraft: source });
+    
+    // 调度渲染和保存（参考 PlantUML 的方式）
+    // 注意：Mermaid 需要先保存再渲染，所以 scheduleSave 内部会在保存成功后触发渲染
+    this.scheduleRender(source);
+    this.scheduleSave(source);
   }
 
-  handleNodeSelect(nodeId: string, nodeInfo: any) {
+  handleNodeSelect(nodeId: string, _nodeInfo: any) {
     this.selectedNodeId = nodeId;
     this.selectedEdgeIndex = null;
     
@@ -550,7 +776,7 @@ export class MermaidEditorAppV2 {
     });
   }
 
-  handleEdgeSelect(edgeIndex: number, edgeInfo: any) {
+  handleEdgeSelect(edgeIndex: number, _edgeInfo: any) {
     this.selectedEdgeIndex = edgeIndex;
     this.selectedNodeId = null;
     
@@ -560,7 +786,7 @@ export class MermaidEditorAppV2 {
     });
   }
 
-  handleElementDblClick(type: string, id: string, element: any) {
+  handleElementDblClick(type: string, id: string, _element: any) {
     if (type === 'node') {
       this.startLabelEdit(id, 'node');
     } else if (type === 'edge') {
@@ -627,7 +853,12 @@ export class MermaidEditorAppV2 {
         await this.saveSource(newSource);
       });
     } else if (type === 'edge') {
-      this.labelEditor?.startEdgeLabelEdit(id, async (newSource) => {
+      const edgeIndex = typeof id === 'string' ? parseInt(id, 10) : id;
+      if (isNaN(edgeIndex)) {
+        console.error('[MermaidEditorAppV2] Invalid edge index:', id);
+        return;
+      }
+      this.labelEditor?.startEdgeLabelEdit(edgeIndex, async (newSource) => {
         if (this.codeEditor) {
           this.codeEditor.setValue(newSource);
         } else {
@@ -706,7 +937,7 @@ export class MermaidEditorAppV2 {
     this.clearSelection();
   }
 
-  handleMultiSelect(selection: any) {
+  handleMultiSelect(_selection: any) {
     // 多选处理逻辑
   }
 
@@ -777,25 +1008,90 @@ export class MermaidEditorAppV2 {
     });
   }
 
-  async saveSource(source: string) {
-    // 如果内容没有变化，不保存（避免触发重新加载）
-    if (source === this.stateManager.source) {
-      return;
+  async saveSource(source: string): Promise<boolean> {
+    // 保存时，从编辑器获取最新的内容，而不是使用传入的参数
+    // 这样可以确保保存的是用户当前编辑的内容
+    const currentEditorSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+    const sourceToSave = currentEditorSource || source;
+    const lastSavedSource = this.stateManager.getLastSavedSource();
+    
+    console.log('[MermaidEditorAppV2] saveSource: START', {
+      paramSourceLength: source?.length || 0,
+      paramSourcePreview: source?.substring(0, 50) || '',
+      editorSourceLength: currentEditorSource?.length || 0,
+      sourceToSaveLength: sourceToSave?.length || 0,
+      lastSavedSourceLength: lastSavedSource?.length || 0,
+      isSame: sourceToSave === lastSavedSource
+    });
+    
+    // 如果内容没有变化（与已保存的内容相同），不保存（避免触发重新加载）
+    // 使用 lastSavedSource 而不是 currentStateSource，与 PlantUML 保持一致
+    if (sourceToSave === lastSavedSource) {
+      console.log('[MermaidEditorAppV2] saveSource: content unchanged (same as last saved), skipping save');
+      return true; // 返回 true 表示"保存成功"（因为内容没有变化）
     }
     
     this.isSaving = true;
+    console.log('[MermaidEditorAppV2] saveSource: starting save, isSaving=true');
     try {
       const diagram = {
-        ...this.stateManager.diagram,
-        source: source
+        ...this.stateManager.getDiagram(),
+        source: sourceToSave
       };
       await saveDiagram(diagram);
-      // 只更新 source，不更新 sourceDraft（避免触发状态变化）
-      this.stateManager.setState({ source: source });
+      // 注意：状态更新应该在 handleSaveSuccess 中完成，这里只等待保存完成
+      // 这样可以确保与 PlantUML 的逻辑保持一致
+      console.log('[MermaidEditorAppV2] saveSource: save request sent, waiting for save-success event');
+      
+      // 设置超时，防止保存失败时标志未重置（5秒超时，与 PlantUML 保持一致）
+      setTimeout(() => {
+        if (this.isSaving) {
+          console.warn('[MermaidEditorAppV2] Save timeout, resetting isSaving flag');
+          this.isSaving = false;
+        }
+      }, 5000);
+      
+      return true;
     } catch (error) {
-      console.error('Save error:', error);
-    } finally {
-      this.isSaving = false;
+      console.error('[MermaidEditorAppV2] saveSource: save failed:', error);
+      this.isSaving = false; // 保存失败时立即清除标志
+      return false;
+    }
+    // 注意：isSaving 标志的清除应该在 handleSaveSuccess 中完成
+    // 这样可以确保只有在后端确认保存成功后才清除标志
+  }
+
+  handleSaveSuccess() {
+    // 保存成功，更新状态并重置标志（与 PlantUML 保持一致）
+    const currentSource = this.stateManager.getSource();
+    
+    // 更新 lastSavedSource 为当前已保存的内容
+    this.stateManager.setState({ 
+      source: currentSource,
+      lastSavedSource: currentSource
+    });
+    this.isSaving = false;
+    console.log('[MermaidEditorAppV2] handleSaveSuccess: state updated, lastSavedSource updated, isSaving=false');
+    
+    // 如果内容不为空，触发渲染（确保图表更新）
+    // 注意：Mermaid 是前端渲染，保存成功后需要主动触发渲染
+    // 为了强制触发渲染，临时清空 sourceDraft，这样 renderDiagram 就不会跳过渲染
+    if (currentSource && currentSource.trim() !== '') {
+      const currentSourceDraft = this.stateManager.getSourceDraft();
+      // 检查是否需要渲染：如果 sourceDraft 与 source 不同，或者 sourceDraft 为空，说明需要渲染
+      if (currentSourceDraft !== currentSource || !currentSourceDraft) {
+        console.log('[MermaidEditorAppV2] handleSaveSuccess: triggering render after save');
+        this.scheduleRender(currentSource);
+      } else {
+        // sourceDraft 与 source 相同，说明可能已经渲染过了
+        // 但为了确保图表是最新的（特别是保存后），强制触发一次渲染
+        // 临时清空 sourceDraft，强制 renderDiagram 执行渲染
+        console.log('[MermaidEditorAppV2] handleSaveSuccess: triggering render after save (force update)');
+        // 临时清空 sourceDraft，这样 renderDiagram 会认为内容有变化，执行渲染
+        this.stateManager.setState({ sourceDraft: '' });
+        // 立即调用 renderDiagram，它会更新 sourceDraft 为 currentSource
+        this.renderDiagram(currentSource);
+      }
     }
   }
 
@@ -822,11 +1118,8 @@ export class MermaidEditorAppV2 {
       this.boundHandleKeyDown = null;
     }
     
-    if (this.messageHandler) {
-      window.removeEventListener('message', this.messageHandler);
-      extensionService.off('load');
-      this.messageHandler = null;
-    }
+    // 移除 ExtensionService 的事件监听
+    extensionService.off('load');
     
     // 清理编辑器
     if (this.codeEditor) {
@@ -859,7 +1152,7 @@ export class MermaidEditorAppV2 {
   }
 
   // 分隔条拖拽
-  startResize(e: MouseEvent) {
+  startResize(_e: MouseEvent) {
     // 已在 setupWorkspaceResizer 中处理
   }
 }

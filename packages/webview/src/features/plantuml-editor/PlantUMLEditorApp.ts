@@ -2,7 +2,7 @@
  * PlantUML Editor App - Vue 适配版
  * 适配 Vue 3 组件，接收 DOM 元素引用而非通过 getElementById 获取
  */
-import { StateManager } from './StateManager.js';
+import { StateManager, type PlantUMLState } from './StateManager';
 import { postMessage, setupMessageHandlers, isVSCodeWebview } from './vscodeApiAdapter';
 import CodeMirror from 'codemirror';
 
@@ -20,6 +20,7 @@ export class PlantUMLEditorApp {
   private editor: any = null; // CodeMirror 实例
   private elements: EditorElements;
   private currentSVG: SVGElement | null = null;
+  private isSettingValue: boolean = false; // 标志：是否正在通过 setValue 设置值，防止触发 change 事件
   
   // 缩放相关
   private scale = 1.0;
@@ -49,10 +50,11 @@ export class PlantUMLEditorApp {
   private panMouseUpHandler: ((e: MouseEvent) => void) | null = null;
   
   // 保存定时器（防抖）
-  private saveTimer: NodeJS.Timeout | null = null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
   // 防止循环加载的标志
   private isSaving = false;
-  // 是否已初始化完成
+  // 是否已初始化完成（保留用于未来扩展）
+  // @ts-ignore - 保留用于未来扩展
   private isInitialized = false;
   // 是否正在等待初始加载
   private isWaitingForInitialLoad = false;
@@ -88,6 +90,10 @@ export class PlantUMLEditorApp {
       // 样式由 CSS 文件统一管理，这里只刷新编辑器以确保样式正确应用
 
       this.editor.on('change', () => {
+        // 如果正在通过 setValue 设置值，不触发渲染和保存（避免循环和重复渲染）
+        if (this.isSettingValue) {
+          return;
+        }
         const source = this.editor.getValue();
         this.stateManager.setState({ source });
         this.scheduleRender();
@@ -156,7 +162,7 @@ export class PlantUMLEditorApp {
     }
     
     // 订阅状态变化
-    this.stateManager.subscribe((state) => {
+    this.stateManager.subscribe((state: PlantUMLState) => {
       this.updateUI(state);
     });
     
@@ -211,7 +217,7 @@ export class PlantUMLEditorApp {
                         (this.elements.sourceEditor ? this.elements.sourceEditor.value : '');
     
     // 判断是否是首次加载
-    const isInitialLoad = this.stateManager.lastSavedSource === null;
+    const isInitialLoad = this.stateManager.getLastSavedSource() === null;
     
     // 如果内容没有变化，不更新编辑器（避免触发 change 事件和循环加载）
     if (currentSource === source) {
@@ -219,11 +225,11 @@ export class PlantUMLEditorApp {
       this.stateManager.setState({ source });
       // 如果是首次加载，设置 lastSavedSource
       if (isInitialLoad) {
-        this.stateManager.lastSavedSource = source;
+        this.stateManager.setState({ lastSavedSource: source });
       }
       // 如果是首次加载且内容不为空，立即触发渲染（不使用防抖）
       if (wasWaitingForInitialLoad && source && source.trim() !== '' && 
-          this.stateManager.lastRenderedSource === null) {
+          this.stateManager.getLastRenderedSource() === null) {
         console.log('[PlantUMLEditorApp] Triggering initial render for loaded content (same source)');
         this.render();
       }
@@ -231,15 +237,23 @@ export class PlantUMLEditorApp {
     }
     
     // 内容不同，更新编辑器
-    if (this.editor) {
-      this.editor.setValue(source);
-    } else if (this.elements.sourceEditor) {
-      this.elements.sourceEditor.value = source;
-    }
-    this.stateManager.setState({ source });
-    // 如果是首次加载，设置 lastSavedSource
-    if (isInitialLoad) {
-      this.stateManager.lastSavedSource = source;
+    this.isSettingValue = true; // 设置标志，防止触发 change 事件
+    try {
+      if (this.editor) {
+        this.editor.setValue(source);
+      } else if (this.elements.sourceEditor) {
+        this.elements.sourceEditor.value = source;
+      }
+      this.stateManager.setState({ source });
+      // 如果是首次加载，设置 lastSavedSource
+      if (isInitialLoad) {
+        this.stateManager.setState({ lastSavedSource: source });
+      }
+    } finally {
+      // 使用 setTimeout 确保 change 事件已经处理完毕
+      setTimeout(() => {
+        this.isSettingValue = false;
+      }, 0);
     }
     
     // 如果是首次加载且内容不为空，立即触发渲染（不使用防抖）
@@ -253,7 +267,7 @@ export class PlantUMLEditorApp {
   }
 
   scheduleRender() {
-    const source = this.stateManager.source;
+    const source = this.stateManager.getSource();
     if (!source || source.trim() === '') {
       return;
     }
@@ -282,7 +296,7 @@ export class PlantUMLEditorApp {
   }
 
   render() {
-    const source = this.stateManager.source;
+    const source = this.stateManager.getSource();
     console.log('[PlantUMLEditorApp] render() called, source length:', source?.length || 0);
     
     if (!source || source.trim() === '') {
@@ -291,7 +305,7 @@ export class PlantUMLEditorApp {
       return;
     }
     
-    if (source === this.stateManager.lastRenderedSource) {
+    if (source === this.stateManager.getLastRenderedSource()) {
       console.log('[PlantUMLEditorApp] Source unchanged, skipping render');
       return;
     }
@@ -331,7 +345,7 @@ export class PlantUMLEditorApp {
       renderState: 'idle',
       error: null,
       svg: svg,
-      lastRenderedSource: this.stateManager.source
+      lastRenderedSource: this.stateManager.getSource()
     });
     
     this.hideError();
@@ -360,11 +374,12 @@ export class PlantUMLEditorApp {
       return;
     }
     
-    console.log('[PlantUMLEditorApp] Clearing diagram container');
-    // 清空容器
-    this.elements.diagramContainer.innerHTML = '';
+    console.log('[PlantUMLEditorApp] Updating diagram container');
     
-    // 解析并注入 SVG（直接添加到容器，不使用包装器，因为 CSS 会隐藏非 SVG 元素）
+    // 获取旧 SVG（如果存在）
+    const oldSVG = this.elements.diagramContainer.querySelector('svg');
+    
+    // 解析新 SVG
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = svg;
     const svgElement = tempDiv.querySelector('svg');
@@ -387,10 +402,39 @@ export class PlantUMLEditorApp {
       svgElement.style.margin = 'auto';
       svgElement.style.cursor = 'grab';
       svgElement.style.visibility = 'visible';
-      svgElement.style.opacity = '1';
+      
+      // 先添加新 SVG（设置为透明），避免容器空白导致的闪烁
+      svgElement.style.opacity = '0';
+      svgElement.style.transition = 'opacity 0.15s ease-in';
       
       // 直接添加到容器（不使用包装器，因为 CSS 会隐藏非 SVG 元素）
       this.elements.diagramContainer.appendChild(svgElement);
+      
+      // 使用 requestAnimationFrame 确保新 SVG 已添加到 DOM
+      requestAnimationFrame(() => {
+        // 淡出旧 SVG（如果存在）
+        if (oldSVG && oldSVG !== svgElement) {
+          oldSVG.style.transition = 'opacity 0.1s ease-out';
+          oldSVG.style.opacity = '0';
+          // 等待淡出完成后再移除，避免闪烁
+          setTimeout(() => {
+            if (oldSVG.parentNode && oldSVG !== svgElement) {
+              oldSVG.parentNode.removeChild(oldSVG);
+            }
+          }, 100);
+        }
+        
+        // 淡入新 SVG
+        requestAnimationFrame(() => {
+          svgElement.style.opacity = '1';
+          // 淡入完成后移除 transition，避免影响后续操作
+          setTimeout(() => {
+            if (svgElement === this.currentSVG) {
+              svgElement.style.transition = '';
+            }
+          }, 150);
+        });
+      });
       
       this.currentSVG = svgElement;
       
@@ -414,8 +458,8 @@ export class PlantUMLEditorApp {
           clientHeight: this.elements.diagramContainer.clientHeight
         });
         console.log('[PlantUMLEditorApp] SVG dimensions:', {
-          offsetWidth: addedSvg.offsetWidth,
-          offsetHeight: addedSvg.offsetHeight,
+          width: addedSvg.width?.baseVal?.value || addedSvg.clientWidth,
+          height: addedSvg.height?.baseVal?.value || addedSvg.clientHeight,
           clientWidth: addedSvg.clientWidth,
           clientHeight: addedSvg.clientHeight
         });
@@ -430,16 +474,28 @@ export class PlantUMLEditorApp {
 
   clearPreview() {
     if (this.elements.diagramContainer) {
-      this.elements.diagramContainer.innerHTML = '';
+      const oldSVG = this.elements.diagramContainer.querySelector('svg');
+      if (oldSVG) {
+        // 淡出后清空，避免闪烁
+        oldSVG.style.transition = 'opacity 0.1s ease-out';
+        oldSVG.style.opacity = '0';
+        setTimeout(() => {
+          if (this.elements.diagramContainer) {
+            this.elements.diagramContainer.innerHTML = '';
+          }
+        }, 100);
+      } else {
+        this.elements.diagramContainer.innerHTML = '';
+      }
     }
     this.currentSVG = null;
   }
 
   save() {
-    const source = this.stateManager.source;
+    const source = this.stateManager.getSource();
     
     // 如果内容没有变化，不保存（避免触发重新加载）
-    if (source === this.stateManager.lastSavedSource) {
+    if (source === this.stateManager.getLastSavedSource()) {
       return;
     }
     
@@ -477,16 +533,16 @@ export class PlantUMLEditorApp {
     } else if (this.elements.sourceEditor) {
       source = this.elements.sourceEditor.value;
     } else {
-      source = this.stateManager.source;
+      source = this.stateManager.getSource();
     }
     
     // 如果内容没有变化，不保存（避免触发重新加载）
-    if (source === this.stateManager.lastSavedSource) {
+    if (source === this.stateManager.getLastSavedSource()) {
       return;
     }
     
     // 更新状态
-    if (source !== this.stateManager.source) {
+    if (source !== this.stateManager.getSource()) {
       this.stateManager.setState({ source });
     }
     
@@ -509,7 +565,9 @@ export class PlantUMLEditorApp {
 
   handleSaveSuccess() {
     // 保存成功，记录已保存的内容并重置标志
-    this.stateManager.lastSavedSource = this.stateManager.source;
+    this.stateManager.setState({ 
+      lastSavedSource: this.stateManager.getSource() 
+    });
     this.isSaving = false;
   }
 
@@ -525,7 +583,7 @@ export class PlantUMLEditorApp {
     }
   }
 
-  updateUI(state: any) {
+  updateUI(_state: PlantUMLState) {
     this.updateZoomButtons();
   }
 
@@ -699,7 +757,7 @@ export class PlantUMLEditorApp {
     });
   }
 
-  startResize(e: MouseEvent) {
+  startResize(_e: MouseEvent) {
     // 这个方法由 Vue 组件调用，实际逻辑在 setupWorkspaceResizer 中
   }
 
@@ -744,10 +802,12 @@ export class PlantUMLEditorApp {
       // 1. 容器本身
       // 2. SVG 元素
       // 3. SVG 内的空白区域（g 元素、背景等）
+      const isSVGElement = target instanceof SVGElement;
+      const closestSvg = target.closest('svg');
       const canDrag = target === this.elements.diagramContainer ||
-                      target === this.currentSVG ||
+                      (isSVGElement && target === this.currentSVG) ||
                       target.tagName === 'svg' ||
-                      (target.closest('svg') === this.currentSVG && 
+                      (isSVGElement && closestSvg === this.currentSVG && 
                        (target.tagName === 'g' || target.tagName === 'rect' || target === this.currentSVG));
       
       if (canDrag) {

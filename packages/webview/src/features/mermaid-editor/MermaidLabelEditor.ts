@@ -1,29 +1,46 @@
 // Mermaid 标签编辑器
 // 实现节点和边标签的内联编辑功能
 
+import type { MermaidRenderer } from './MermaidRenderer';
+import type { MermaidParser } from './MermaidParser';
+import type { MermaidCodeGenerator } from './MermaidCodeGenerator';
+
+interface EditState {
+  foreignObject: SVGForeignObjectElement;
+  input: HTMLInputElement;
+  textElement: SVGTextElement;
+  originalText: string;
+  onComplete: (newText: string) => void;
+}
+
 export class MermaidLabelEditor {
-  constructor(renderer, parser, codeGenerator) {
+  private renderer: MermaidRenderer;
+  private parser: MermaidParser;
+  private codeGenerator: MermaidCodeGenerator;
+  private currentEdit: EditState | null = null;
+  
+  constructor(renderer: MermaidRenderer, parser: MermaidParser, codeGenerator: MermaidCodeGenerator) {
     this.renderer = renderer;
     this.parser = parser;
     this.codeGenerator = codeGenerator;
-    this.currentEdit = null;
   }
   
   /**
    * 开始编辑节点标签
    */
-  startNodeLabelEdit(nodeId, onComplete) {
+  startNodeLabelEdit(nodeId: string, onComplete?: (newSource: string) => void): void {
     const nodeInfo = this.renderer.getNode(nodeId);
     if (!nodeInfo) return;
     
     const svg = this.renderer.getCurrentSVG();
+    if (!svg) return;
     const nodeElement = svg.querySelector(`[data-node-id="${nodeId}"]`);
     if (!nodeElement) return;
     
     const textElement = nodeElement.querySelector('text');
     if (!textElement) return;
     
-    const currentLabel = textElement.textContent.trim();
+    const currentLabel = textElement.textContent?.trim() || '';
     this.startEdit(textElement, nodeElement, currentLabel, (newLabel) => {
       this.updateNodeLabel(nodeId, newLabel, onComplete);
     });
@@ -32,11 +49,12 @@ export class MermaidLabelEditor {
   /**
    * 开始编辑边标签
    */
-  startEdgeLabelEdit(edgeIndex, onComplete) {
+  startEdgeLabelEdit(edgeIndex: number, onComplete?: (newSource: string) => void): void {
     const edgeInfo = this.renderer.getEdge(edgeIndex);
     if (!edgeInfo) return;
     
     const svg = this.renderer.getCurrentSVG();
+    if (!svg) return;
     const edgeElement = svg.querySelector(`[data-edge-index="${edgeIndex}"]`);
     if (!edgeElement) return;
     
@@ -51,7 +69,7 @@ export class MermaidLabelEditor {
     }
     
     const currentLabel = labelElement.textContent?.trim() || '';
-    this.startEdit(labelElement, edgeElement, currentLabel, (newLabel) => {
+    this.startEdit(labelElement as SVGTextElement, edgeElement, currentLabel, (newLabel) => {
       this.updateEdgeLabel(edgeIndex, newLabel, onComplete);
     });
   }
@@ -59,7 +77,12 @@ export class MermaidLabelEditor {
   /**
    * 开始编辑（通用方法）
    */
-  startEdit(textElement, parentElement, currentText, onComplete) {
+  private startEdit(
+    textElement: SVGTextElement, 
+    _parentElement: Element, 
+    currentText: string, 
+    onComplete: (newText: string) => void
+  ): void {
     // 如果正在编辑，先取消
     if (this.currentEdit) {
       this.cancelEdit();
@@ -67,13 +90,14 @@ export class MermaidLabelEditor {
     
     const bbox = textElement.getBBox();
     const svg = this.renderer.getCurrentSVG();
+    if (!svg) return;
     
     // 创建输入框容器
     const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-    foreignObject.setAttribute('x', bbox.x - 10);
-    foreignObject.setAttribute('y', bbox.y - 5);
-    foreignObject.setAttribute('width', Math.max(bbox.width + 20, 150));
-    foreignObject.setAttribute('height', bbox.height + 10);
+    foreignObject.setAttribute('x', (bbox.x - 10).toString());
+    foreignObject.setAttribute('y', (bbox.y - 5).toString());
+    foreignObject.setAttribute('width', Math.max(bbox.width + 20, 150).toString());
+    foreignObject.setAttribute('height', (bbox.height + 10).toString());
     foreignObject.setAttribute('class', 'mermaid-label-editor');
     
     // 创建输入框
@@ -140,7 +164,7 @@ export class MermaidLabelEditor {
   /**
    * 取消编辑
    */
-  cancelEdit() {
+  cancelEdit(): void {
     if (this.currentEdit) {
       const svg = this.renderer.getCurrentSVG();
       if (svg && svg.contains(this.currentEdit.foreignObject)) {
@@ -153,7 +177,7 @@ export class MermaidLabelEditor {
   /**
    * 更新节点标签
    */
-  updateNodeLabel(nodeId, newLabel, onComplete) {
+  private updateNodeLabel(nodeId: string, newLabel: string, onComplete?: (newSource: string) => void): void {
     const source = this.renderer.getCurrentSource();
     const ast = this.parser.parse(source);
     
@@ -178,7 +202,7 @@ export class MermaidLabelEditor {
   /**
    * 更新边标签
    */
-  updateEdgeLabel(edgeIndex, newLabel, onComplete) {
+  private updateEdgeLabel(edgeIndex: number, newLabel: string, onComplete?: (newSource: string) => void): void {
     const source = this.renderer.getCurrentSource();
     const ast = this.parser.parse(source);
     
@@ -203,8 +227,9 @@ export class MermaidLabelEditor {
   /**
    * 为没有标签的边创建标签
    */
-  createEdgeLabel(edgeElement, edgeIndex, onComplete) {
+  private createEdgeLabel(edgeElement: Element, edgeIndex: number, onComplete?: (newSource: string) => void): void {
     const svg = this.renderer.getCurrentSVG();
+    if (!svg) return;
     const path = edgeElement.querySelector('path');
     if (!path) return;
     
@@ -223,7 +248,7 @@ export class MermaidLabelEditor {
     text.textContent = '';
     
     labelGroup.appendChild(text);
-    edgeElement.parentElement.appendChild(labelGroup);
+    edgeElement.parentElement?.appendChild(labelGroup);
     
     // 开始编辑
     this.startEdit(text, edgeElement, '', (newLabel) => {
@@ -234,7 +259,7 @@ export class MermaidLabelEditor {
   /**
    * 检查是否正在编辑
    */
-  isEditing() {
+  isEditing(): boolean {
     return this.currentEdit !== null;
   }
 }

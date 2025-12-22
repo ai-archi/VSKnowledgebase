@@ -1,21 +1,42 @@
 // Mermaid 节点添加器
 // 实现快速添加节点功能
 
-import { MermaidParser } from './MermaidParser.js';
-import { MermaidCodeGenerator } from './MermaidCodeGenerator.js';
+import type { MermaidRenderer, ExtendedSVGElement } from './MermaidRenderer';
+import type { MermaidParser, MermaidAST, ParsedNode } from './MermaidParser';
+import type { MermaidCodeGenerator } from './MermaidCodeGenerator';
+
+export interface SVGPoint {
+  x: number;
+  y: number;
+}
+
+export interface SVGPoint {
+  x: number;
+  y: number;
+}
 
 export class MermaidNodeAdder {
-  constructor(renderer, parser, codeGenerator) {
+  private renderer: MermaidRenderer;
+  private parser: MermaidParser;
+  private codeGenerator: MermaidCodeGenerator;
+  private nodeCounter: number = 1;
+  
+  constructor(renderer: MermaidRenderer, parser: MermaidParser, codeGenerator: MermaidCodeGenerator) {
     this.renderer = renderer;
     this.parser = parser;
     this.codeGenerator = codeGenerator;
-    this.nodeCounter = 1;
   }
   
   /**
    * 在指定位置添加节点
    */
-  addNodeAtPosition(x, y, label = '', shape = 'rectangle', onComplete) {
+  addNodeAtPosition(
+    _x: number, 
+    _y: number, 
+    label: string = '', 
+    shape: string = 'rectangle', 
+    onComplete?: (newSource: string, nodeId: string) => void
+  ): { newSource: string; nodeId: string } {
     const source = this.renderer.getCurrentSource();
     const ast = this.parser.parse(source);
     
@@ -23,7 +44,7 @@ export class MermaidNodeAdder {
     const nodeId = this.generateNodeId(ast);
     
     // 创建新节点
-    const newNode = {
+    const newNode: ParsedNode = {
       id: nodeId,
       label: label || `节点${this.nodeCounter++}`,
       shape: shape,
@@ -45,7 +66,7 @@ export class MermaidNodeAdder {
   /**
    * 生成唯一的节点 ID
    */
-  generateNodeId(ast) {
+  private generateNodeId(ast: MermaidAST): string {
     const existingIds = new Set(ast.nodes.map(n => n.id));
     let id = 'A';
     let counter = 0;
@@ -65,22 +86,21 @@ export class MermaidNodeAdder {
   /**
    * 显示添加节点对话框
    */
-  showAddNodeDialog(svgPoint, onComplete) {
+  showAddNodeDialog(svgPoint: SVGPoint, onComplete?: (newSource: string, nodeId: string) => void): void {
     // 创建对话框
     const dialog = document.createElement('div');
     dialog.className = 'mermaid-add-node-dialog';
-    dialog.style.cssText = `
-      position: fixed;
-      left: ${svgPoint.x}px;
-      top: ${svgPoint.y}px;
-      background: white;
-      border: 2px solid #007bff;
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 10000;
-      min-width: 200px;
-    `;
+    // 设置对话框样式（不使用 cssText，避免覆盖其他样式）
+    dialog.style.position = 'fixed';
+    dialog.style.left = `${svgPoint.x}px`;
+    dialog.style.top = `${svgPoint.y}px`;
+    dialog.style.background = 'white';
+    dialog.style.border = '2px solid #007bff';
+    dialog.style.borderRadius = '8px';
+    dialog.style.padding = '16px';
+    dialog.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    dialog.style.zIndex = '10000';
+    dialog.style.minWidth = '200px';
     
     // 标签输入
     const labelLabel = document.createElement('label');
@@ -140,27 +160,25 @@ export class MermaidNodeAdder {
     // 取消按钮
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = '取消';
-    cancelBtn.style.cssText = `
-      padding: 6px 12px;
-      border: 1px solid #ddd;
-      background: white;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-    `;
+    // 设置取消按钮样式（不使用 cssText，避免覆盖其他样式）
+    cancelBtn.style.padding = '6px 12px';
+    cancelBtn.style.border = '1px solid #ddd';
+    cancelBtn.style.background = 'white';
+    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '14px';
     
     // 添加按钮
     const addBtn = document.createElement('button');
     addBtn.textContent = '添加';
-    addBtn.style.cssText = `
-      padding: 6px 12px;
-      border: none;
-      background: #007bff;
-      color: white;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-    `;
+    // 设置添加按钮样式（不使用 cssText，避免覆盖其他样式）
+    addBtn.style.padding = '6px 12px';
+    addBtn.style.border = 'none';
+    addBtn.style.background = '#007bff';
+    addBtn.style.color = 'white';
+    addBtn.style.borderRadius = '4px';
+    addBtn.style.cursor = 'pointer';
+    addBtn.style.fontSize = '14px';
     
     // 组装对话框
     dialog.appendChild(labelLabel);
@@ -207,8 +225,8 @@ export class MermaidNodeAdder {
     });
     
     // 点击外部关闭
-    const clickOutside = (e) => {
-      if (!dialog.contains(e.target)) {
+    const clickOutside = (e: MouseEvent) => {
+      if (!dialog.contains(e.target as Node)) {
         cleanup();
         document.removeEventListener('click', clickOutside);
       }
@@ -221,7 +239,7 @@ export class MermaidNodeAdder {
   /**
    * 将屏幕坐标转换为 SVG 坐标
    */
-  getSVGPoint(svg, clientX, clientY) {
+  getSVGPoint(svg: ExtendedSVGElement, clientX: number, clientY: number): SVGPoint | null {
     const point = svg.createSVGPoint();
     point.x = clientX;
     point.y = clientY;

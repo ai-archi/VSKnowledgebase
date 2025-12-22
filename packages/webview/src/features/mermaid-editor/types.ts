@@ -1,4 +1,4 @@
-// Type definitions (converted from TypeScript)
+// Type definitions for Mermaid Editor
 
 export const DEFAULT_NODE_COLORS = {
   rectangle: "#FDE68A",
@@ -14,7 +14,7 @@ export const DEFAULT_NODE_COLORS = {
   trapezoid: "#FCE7F3",
   "trapezoid-alt": "#FCD5CE",
   asymmetric: "#F5D0FE",
-};
+} as const;
 
 export const DEFAULT_EDGE_COLOR = "#2d3748";
 export const DEFAULT_NODE_TEXT = "#1a202c";
@@ -23,14 +23,14 @@ export const DEFAULT_NODE_STROKE = "#2d3748";
 export const LINE_STYLE_OPTIONS = [
   { value: "solid", label: "实线" },
   { value: "dashed", label: "虚线" },
-];
+] as const;
 
 export const ARROW_DIRECTION_OPTIONS = [
   { value: "forward", label: "向前" },
   { value: "backward", label: "向后" },
   { value: "both", label: "双向" },
   { value: "none", label: "无" },
-];
+] as const;
 
 export const HEX_COLOR_RE = /^#([0-9a-f]{6})$/i;
 export const PADDING_PRECISION = 1000;
@@ -64,4 +64,60 @@ export const SUBGRAPH_STROKE = "#a0aec0";
 export const SUBGRAPH_LABEL_COLOR = "#2d3748";
 export const SUBGRAPH_BORDER_RADIUS = 16;
 export const SUBGRAPH_SEPARATION = 140;
+
+// Type definitions
+export interface Node {
+  id: string;
+  label: string;
+  shape?: string;
+  style?: NodeStyle;
+  overridePosition?: { x: number; y: number };
+}
+
+export interface Edge {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  style?: EdgeStyle;
+  overridePoints?: Array<{ x: number; y: number }>;
+}
+
+export interface NodeStyle {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+}
+
+export interface EdgeStyle {
+  stroke?: string;
+  strokeWidth?: number;
+  strokeDasharray?: string;
+  arrowType?: string;
+}
+
+export interface Diagram {
+  nodes: Node[];
+  edges: Edge[];
+}
+
+export interface State {
+  diagram: Diagram | null;
+  loading: boolean;
+  error: string | null;
+  saving: boolean;
+  source: string;
+  sourceDraft: string;
+  lastSavedSource: string | null; // 参考 PlantUML，跟踪已保存的内容
+  sourceSaving: boolean;
+  sourceError: string | null;
+  selectedNodeId: string | null;
+  selectedEdgeId: string | null;
+  imagePaddingValue: string;
+  dragging: boolean;
+}
+
+export type StateListener = (state: State) => void;
+export type Unsubscribe = () => void;
 

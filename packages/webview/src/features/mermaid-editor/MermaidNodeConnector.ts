@@ -1,23 +1,34 @@
 // Mermaid 节点连接器
 // 实现拖拽方式连接节点
 
-import { MermaidParser } from './MermaidParser.js';
-import { MermaidCodeGenerator } from './MermaidCodeGenerator.js';
+import type { MermaidRenderer, ExtendedSVGElement } from './MermaidRenderer';
+import type { MermaidParser, ParsedEdge } from './MermaidParser';
+import type { MermaidCodeGenerator } from './MermaidCodeGenerator';
+
+export interface SVGPoint {
+  x: number;
+  y: number;
+}
 
 export class MermaidNodeConnector {
-  constructor(renderer, parser, codeGenerator) {
+  private renderer: MermaidRenderer;
+  private parser: MermaidParser;
+  private codeGenerator: MermaidCodeGenerator;
+  private connecting: boolean = false;
+  private sourceNodeId: string | null = null;
+  private connectionLine: SVGLineElement | null = null;
+  public onConnectionCreated?: (newSource: string) => void;
+  
+  constructor(renderer: MermaidRenderer, parser: MermaidParser, codeGenerator: MermaidCodeGenerator) {
     this.renderer = renderer;
     this.parser = parser;
     this.codeGenerator = codeGenerator;
-    this.connecting = false;
-    this.sourceNodeId = null;
-    this.connectionLine = null;
   }
   
   /**
    * 开始连接（从源节点开始）
    */
-  startConnecting(sourceNodeId, e) {
+  startConnecting(sourceNodeId: string, e: MouseEvent): void {
     if (this.connecting) return;
     
     this.connecting = true;
@@ -38,11 +49,11 @@ export class MermaidNodeConnector {
     );
     
     // 绑定鼠标移动和释放事件
-    const onMouseMove = (e) => {
+    const onMouseMove = (e: MouseEvent) => {
       this.updateConnectionLine(e);
     };
     
-    const onMouseUp = (e) => {
+    const onMouseUp = (e: MouseEvent) => {
       this.completeConnection(e, onMouseMove, onMouseUp);
     };
     
@@ -57,15 +68,15 @@ export class MermaidNodeConnector {
   /**
    * 创建连接线
    */
-  createConnectionLine(svg, startX, startY, e) {
+  private createConnectionLine(svg: ExtendedSVGElement, startX: number, startY: number, e: MouseEvent): SVGLineElement {
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', 'mermaid-connection-line');
-    line.setAttribute('x1', startX);
-    line.setAttribute('y1', startY);
+    line.setAttribute('x1', startX.toString());
+    line.setAttribute('y1', startY.toString());
     
     const svgPoint = this.getSVGPoint(svg, e.clientX, e.clientY);
-    line.setAttribute('x2', svgPoint ? svgPoint.x : startX);
-    line.setAttribute('y2', svgPoint ? svgPoint.y : startY);
+    line.setAttribute('x2', svgPoint ? svgPoint.x.toString() : startX.toString());
+    line.setAttribute('y2', svgPoint ? svgPoint.y.toString() : startY.toString());
     
     line.setAttribute('stroke', '#007bff');
     line.setAttribute('stroke-width', '3');
@@ -84,7 +95,7 @@ export class MermaidNodeConnector {
   /**
    * 更新连接线
    */
-  updateConnectionLine(e) {
+  private updateConnectionLine(e: MouseEvent): void {
     if (!this.connectionLine) return;
     
     const svg = this.renderer.getCurrentSVG();
@@ -92,8 +103,8 @@ export class MermaidNodeConnector {
     
     const svgPoint = this.getSVGPoint(svg, e.clientX, e.clientY);
     if (svgPoint) {
-      this.connectionLine.setAttribute('x2', svgPoint.x);
-      this.connectionLine.setAttribute('y2', svgPoint.y);
+      this.connectionLine.setAttribute('x2', svgPoint.x.toString());
+      this.connectionLine.setAttribute('y2', svgPoint.y.toString());
     }
     
     // 高亮悬停的节点
@@ -103,7 +114,11 @@ export class MermaidNodeConnector {
   /**
    * 完成连接
    */
-  completeConnection(e, onMouseMove, onMouseUp) {
+  private completeConnection(
+    e: MouseEvent, 
+    onMouseMove: (e: MouseEvent) => void, 
+    onMouseUp: (e: MouseEvent) => void
+  ): void {
     // 移除事件监听
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
@@ -124,7 +139,7 @@ export class MermaidNodeConnector {
     const targetNodeId = this.getHoverNodeId(e);
     if (targetNodeId && targetNodeId !== this.sourceNodeId) {
       // 创建连接
-      this.createConnection(this.sourceNodeId, targetNodeId);
+      this.createConnection(this.sourceNodeId!, targetNodeId);
     }
     
     // 重置状态
@@ -135,7 +150,7 @@ export class MermaidNodeConnector {
   /**
    * 创建连接（添加边）
    */
-  createConnection(fromNodeId, toNodeId) {
+  private createConnection(fromNodeId: string, toNodeId: string): void {
     const source = this.renderer.getCurrentSource();
     const ast = this.parser.parse(source);
     
@@ -150,15 +165,18 @@ export class MermaidNodeConnector {
     }
     
     // 添加新边
-    const newEdge = {
+    const newEdge: Omit<ParsedEdge, 'index' | 'lineNumber'> = {
       from: fromNodeId,
       to: toNodeId,
       label: '',
-      type: 'arrow',
-      lineNumber: -1
+      type: 'arrow'
     };
     
-    ast.edges.push(newEdge);
+    ast.edges.push({
+      ...newEdge,
+      index: ast.edges.length,
+      lineNumber: -1
+    });
     
     // 生成新代码
     const newSource = this.codeGenerator.generate(ast, source);
@@ -172,7 +190,7 @@ export class MermaidNodeConnector {
   /**
    * 高亮悬停的节点
    */
-  highlightHoverNode(e) {
+  private highlightHoverNode(e: MouseEvent): void {
     const targetNodeId = this.getHoverNodeId(e);
     const svg = this.renderer.getCurrentSVG();
     if (!svg) return;
@@ -191,7 +209,7 @@ export class MermaidNodeConnector {
   /**
    * 清除悬停高亮
    */
-  clearHoverHighlight() {
+  private clearHoverHighlight(): void {
     const svg = this.renderer.getCurrentSVG();
     if (!svg) return;
     
@@ -203,7 +221,7 @@ export class MermaidNodeConnector {
   /**
    * 获取悬停的节点 ID
    */
-  getHoverNodeId(e) {
+  private getHoverNodeId(e: MouseEvent): string | null {
     const svg = this.renderer.getCurrentSVG();
     if (!svg) return null;
     
@@ -229,7 +247,7 @@ export class MermaidNodeConnector {
   /**
    * 将屏幕坐标转换为 SVG 坐标
    */
-  getSVGPoint(svg, clientX, clientY) {
+  private getSVGPoint(svg: ExtendedSVGElement, clientX: number, clientY: number): SVGPoint | null {
     const point = svg.createSVGPoint();
     point.x = clientX;
     point.y = clientY;
@@ -241,7 +259,7 @@ export class MermaidNodeConnector {
   /**
    * 确保箭头标记存在
    */
-  ensureArrowMarker(svg) {
+  private ensureArrowMarker(svg: ExtendedSVGElement): void {
     let defs = svg.querySelector('defs');
     if (!defs) {
       defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -272,7 +290,7 @@ export class MermaidNodeConnector {
   /**
    * 设置连接创建回调
    */
-  setOnConnectionCreated(callback) {
+  setOnConnectionCreated(callback: (newSource: string) => void): void {
     this.onConnectionCreated = callback;
   }
 }

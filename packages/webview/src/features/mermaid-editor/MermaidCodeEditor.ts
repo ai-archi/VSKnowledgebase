@@ -3,21 +3,29 @@
 
 // 导入 CodeMirror（与 PlantUML 编辑器保持一致）
 import CodeMirror from 'codemirror';
+import type { Editor, EditorConfiguration, Position } from 'codemirror';
+
+export interface MermaidCodeEditorCallbacks {
+  onChange?: (value: string) => void;
+  onError?: (error: Error) => void;
+}
 
 export class MermaidCodeEditor {
-  constructor(textareaElement, callbacks = {}) {
+  private textarea: HTMLTextAreaElement;
+  private callbacks: Required<MermaidCodeEditorCallbacks>;
+  public editor: Editor | null = null; // 改为 public，供外部访问
+  private isSettingValue: boolean = false; // 标志：是否正在通过 setValue 设置值
+
+  constructor(textareaElement: HTMLTextAreaElement, callbacks: MermaidCodeEditorCallbacks = {}) {
     this.textarea = textareaElement;
     this.callbacks = {
       onChange: callbacks.onChange || (() => {}),
       onError: callbacks.onError || (() => {})
     };
-    
-    this.editor = null;
-    this.isSettingValue = false; // 标志：是否正在通过 setValue 设置值
     this.init();
   }
   
-  init() {
+  init(): void {
     // 初始化 CodeMirror（如果可用）
     try {
       if (!this.textarea) {
@@ -36,12 +44,12 @@ export class MermaidCodeEditor {
   /**
    * 初始化 CodeMirror 编辑器
    */
-  initCodeMirror() {
+  private initCodeMirror(): void {
     // 尝试定义 Mermaid 语法模式（简化版）
     // 如果 defineSimpleMode 不可用，使用 text/plain 模式
     try {
-      if (typeof CodeMirror.defineSimpleMode === 'function') {
-        CodeMirror.defineSimpleMode('mermaid', {
+      if (typeof (CodeMirror as any).defineSimpleMode === 'function') {
+        (CodeMirror as any).defineSimpleMode('mermaid', {
           start: [
             { regex: /(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|gantt|pie|gitgraph|journey|erDiagram|requirementDiagram|mindmap|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\s+(TD|LR|BT|RL|V|H)/, token: 'keyword' },
             { regex: /(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|gantt|pie|gitgraph|journey|erDiagram|requirementDiagram|mindmap|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)/, token: 'keyword' },
@@ -70,8 +78,8 @@ export class MermaidCodeEditor {
     this.textarea.style.display = 'block';
     
     // 创建 CodeMirror 编辑器
-    this.editor = CodeMirror.fromTextArea(this.textarea, {
-      mode: typeof CodeMirror.defineSimpleMode === 'function' ? 'mermaid' : 'text/plain',
+    const config: EditorConfiguration = {
+      mode: typeof (CodeMirror as any).defineSimpleMode === 'function' ? 'mermaid' : 'text/plain',
       theme: 'default',
       lineNumbers: true,
       lineWrapping: true,
@@ -81,7 +89,7 @@ export class MermaidCodeEditor {
       gutters: ['CodeMirror-linenumbers'],
       extraKeys: {
         'Ctrl-Space': 'autocomplete',
-        'Tab': (cm) => {
+        'Tab': (cm: Editor) => {
           if (cm.somethingSelected()) {
             cm.indentSelection('add');
           } else {
@@ -89,7 +97,9 @@ export class MermaidCodeEditor {
           }
         }
       }
-    });
+    };
+    
+    this.editor = CodeMirror.fromTextArea(this.textarea, config);
     
     console.log('[MermaidCodeEditor] CodeMirror editor created:', !!this.editor);
     
@@ -105,19 +115,19 @@ export class MermaidCodeEditor {
     // 确保行号正确渲染（样式由 CSS 文件统一管理）
     if (this.editor) {
       setTimeout(() => {
-        this.editor.refresh();
+        this.editor!.refresh();
         // 验证行号
-        const lineNumberElements = this.editor.getWrapperElement().querySelectorAll('.CodeMirror-linenumber');
+        const lineNumberElements = this.editor!.getWrapperElement().querySelectorAll('.CodeMirror-linenumber');
         console.log('[MermaidCodeEditor] CodeMirror initialized:', {
-          wrapper: !!this.editor.getWrapperElement(),
-          editor: !!this.editor.getScrollerElement(),
+          wrapper: !!this.editor!.getWrapperElement(),
+          editor: !!this.editor!.getScrollerElement(),
           lineNumbers: lineNumberElements.length
         });
       }, 0);
     }
     
     // 监听变化
-    this.editor.on('change', (cm) => {
+    this.editor.on('change', (cm: Editor) => {
       // 如果正在通过 setValue 设置值，不触发 onChange 回调（避免循环）
       if (this.isSettingValue) {
         return;
@@ -127,7 +137,7 @@ export class MermaidCodeEditor {
     });
     
     // 添加自动补全（如果可用）
-    if (typeof CodeMirror.showHint !== 'undefined') {
+    if (typeof (CodeMirror as any).showHint !== 'undefined') {
       this.setupAutocomplete();
     }
   }
@@ -135,7 +145,7 @@ export class MermaidCodeEditor {
   /**
    * 初始化原生编辑器（降级方案）
    */
-  initNativeEditor() {
+  private initNativeEditor(): void {
     // 添加基础样式类
     this.textarea.classList.add('mermaid-source-editor');
     
@@ -157,11 +167,11 @@ export class MermaidCodeEditor {
   /**
    * 设置自动补全
    */
-  setupAutocomplete() {
-    if (!this.editor || typeof CodeMirror.registerHelper === 'undefined') return;
+  private setupAutocomplete(): void {
+    if (!this.editor || typeof (CodeMirror as any).registerHelper === 'undefined') return;
     
     try {
-      CodeMirror.registerHelper('hint', 'mermaid', (cm) => {
+      (CodeMirror as any).registerHelper('hint', 'mermaid', (cm: Editor) => {
         const cursor = cm.getCursor();
         const line = cm.getLine(cursor.line);
         const start = cursor.ch;
@@ -195,7 +205,7 @@ export class MermaidCodeEditor {
   /**
    * 基础语法高亮（降级方案）
    */
-  applyBasicHighlighting() {
+  private applyBasicHighlighting(): void {
     // 这是一个非常简单的实现，主要通过 CSS 类来实现
     // 实际项目中建议使用 CodeMirror 或 Monaco Editor
   }
@@ -203,7 +213,7 @@ export class MermaidCodeEditor {
   /**
    * 获取编辑器内容
    */
-  getValue() {
+  getValue(): string {
     if (this.editor) {
       return this.editor.getValue();
     }
@@ -213,7 +223,7 @@ export class MermaidCodeEditor {
   /**
    * 设置编辑器内容
    */
-  setValue(value) {
+  setValue(value: string): void {
     this.isSettingValue = true; // 设置标志，防止触发 onChange
     
     try {
@@ -248,16 +258,17 @@ export class MermaidCodeEditor {
       }
     } finally {
       // 使用 setTimeout 确保 change 事件处理完成后再重置标志
+      // 增加延迟到 50ms，确保 CodeMirror 的 change 事件完全处理完成
       setTimeout(() => {
         this.isSettingValue = false;
-      }, 0);
+      }, 50);
     }
   }
   
   /**
    * 聚焦编辑器
    */
-  focus() {
+  focus(): void {
     if (this.editor) {
       this.editor.focus();
     } else {
@@ -268,7 +279,7 @@ export class MermaidCodeEditor {
   /**
    * 设置只读
    */
-  setReadOnly(readOnly) {
+  setReadOnly(readOnly: boolean): void {
     if (this.editor) {
       this.editor.setOption('readOnly', readOnly);
     } else {
@@ -279,7 +290,7 @@ export class MermaidCodeEditor {
   /**
    * 标记错误行
    */
-  markError(line, message) {
+  markError(line: number, _message: string): void {
     if (this.editor) {
       this.editor.addLineClass(line - 1, 'background', 'error-line');
       // 可以添加错误提示
@@ -289,7 +300,7 @@ export class MermaidCodeEditor {
   /**
    * 清除错误标记
    */
-  clearErrors() {
+  clearErrors(): void {
     if (this.editor) {
       this.editor.removeLineClass(null, 'background', 'error-line');
     }
@@ -298,7 +309,7 @@ export class MermaidCodeEditor {
   /**
    * 获取光标位置
    */
-  getCursor() {
+  getCursor(): Position {
     if (this.editor) {
       return this.editor.getCursor();
     }
@@ -308,7 +319,7 @@ export class MermaidCodeEditor {
   /**
    * 设置光标位置
    */
-  setCursor(line, ch) {
+  setCursor(line: number, ch: number): void {
     if (this.editor) {
       this.editor.setCursor(line, ch);
     } else {
@@ -324,5 +335,15 @@ export class MermaidCodeEditor {
     }
   }
   
+  /**
+   * 销毁编辑器
+   */
+  destroy(): void {
+    if (this.editor) {
+      // CodeMirror 的 toTextArea 是静态方法，需要从 textarea 重新创建
+      // 这里直接清空编辑器引用即可，textarea 会保持原样
+      this.editor = null;
+    }
+  }
 }
 

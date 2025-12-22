@@ -1,11 +1,13 @@
 // Mermaid 代码生成器
 // 从 AST 生成 mermaid 源代码，尽量保留原始格式
 
+import type { MermaidAST, NodeStyle, ClassDef, LinkStyle, ClassApplication } from './MermaidParser';
+
 export class MermaidCodeGenerator {
   /**
    * 生成 mermaid 源代码
    */
-  generate(ast, originalSource = '') {
+  generate(ast: MermaidAST, originalSource: string = ''): string {
     // 如果只是样式修改，尝试保留原始格式
     if (originalSource && this.canPreserveFormat(ast, originalSource)) {
       return this.updatePreservingFormat(ast, originalSource);
@@ -18,7 +20,7 @@ export class MermaidCodeGenerator {
   /**
    * 检查是否可以保留格式
    */
-  canPreserveFormat(newAST, originalSource) {
+  private canPreserveFormat(newAST: MermaidAST, originalSource: string): boolean {
     // 简单检查：如果节点和边的数量相同，可能可以保留格式
     const originalAST = this.parse(originalSource);
     return (
@@ -31,15 +33,15 @@ export class MermaidCodeGenerator {
   /**
    * 更新代码，保留原始格式（包括 subgraph）
    */
-  updatePreservingFormat(newAST, originalSource) {
+  private updatePreservingFormat(newAST: MermaidAST, originalSource: string): string {
     const lines = originalSource.split('\n');
     const updatedLines = [...lines]; // 保留所有原始行，包括 subgraph
     
     // 标记哪些行是样式相关的，需要更新
-    const styleLineNumbers = new Set();
+    const styleLineNumbers = new Set<number>();
     if (newAST.nodeStyles) {
       newAST.nodeStyles.forEach(styleDef => {
-        if (styleDef.lineNumber >= 0) {
+        if (styleDef.lineNumber !== undefined && styleDef.lineNumber >= 0) {
           styleLineNumbers.add(styleDef.lineNumber);
         }
       });
@@ -49,7 +51,7 @@ export class MermaidCodeGenerator {
         styleLineNumbers.add(classDef.lineNumber);
       }
     });
-    newAST.linkStyles.forEach((linkStyle, index) => {
+    newAST.linkStyles.forEach((linkStyle) => {
       if (linkStyle && linkStyle.lineNumber >= 0) {
         styleLineNumbers.add(linkStyle.lineNumber);
       }
@@ -63,7 +65,7 @@ export class MermaidCodeGenerator {
     // 更新 style 指令（最常用的方式）
     if (newAST.nodeStyles) {
       newAST.nodeStyles.forEach(styleDef => {
-        if (styleDef.lineNumber >= 0 && styleDef.lineNumber < lines.length) {
+        if (styleDef.lineNumber !== undefined && styleDef.lineNumber >= 0 && styleDef.lineNumber < lines.length) {
           // 检查原行的缩进
           const originalLine = lines[styleDef.lineNumber];
           const indent = originalLine.match(/^\s*/)?.[0] || '    ';
@@ -124,19 +126,15 @@ export class MermaidCodeGenerator {
   /**
    * 找到插入样式代码的位置（在最后一个 subgraph end 之后，或文件末尾）
    */
-  findInsertIndexForStyle(lines) {
+  private findInsertIndexForStyle(lines: string[]): number {
     // 从后往前找最后一个 'end'（subgraph 结束标记）
     // 但要确保不是在 subgraph 内部
     let lastEndIndex = -1;
-    let inSubgraph = false;
     
     for (let i = lines.length - 1; i >= 0; i--) {
       const trimmed = lines[i].trim();
       if (trimmed === 'end') {
         lastEndIndex = i;
-        inSubgraph = true;
-      } else if (trimmed.match(/^subgraph/)) {
-        inSubgraph = false;
         if (lastEndIndex >= 0) {
           // 找到了完整的 subgraph，在 end 之后插入
           return lastEndIndex + 1;
@@ -156,7 +154,7 @@ export class MermaidCodeGenerator {
   /**
    * 生成新代码
    */
-  generateNew(ast) {
+  private generateNew(ast: MermaidAST): string {
     let code = '';
     
     // 生成 init 配置（如果有）
@@ -207,8 +205,8 @@ export class MermaidCodeGenerator {
   /**
    * 生成节点代码
    */
-  generateNode(node) {
-    const shapeChars = {
+  private generateNode(node: { id: string; label: string; shape?: string }): string {
+    const shapeChars: Record<string, [string, string]> = {
       rectangle: ['[', ']'],
       stadium: ['(', ')'],
       diamond: ['{', '}'],
@@ -219,15 +217,15 @@ export class MermaidCodeGenerator {
       parallelogram: ['[///', ']'],
     };
     
-    const [start, end] = shapeChars[node.shape] || ['[', ']'];
+    const [start, end] = shapeChars[node.shape || 'rectangle'] || ['[', ']'];
     return `${node.id}${start}${node.label}${end}`;
   }
   
   /**
    * 生成边代码
    */
-  generateEdge(edge) {
-    const typeMap = {
+  private generateEdge(edge: { from: string; to: string; label?: string; type: string }): string {
+    const typeMap: Record<string, string> = {
       'arrow': '-->',
       'line': '---',
       'dotted-arrow': '-.->',
@@ -244,7 +242,7 @@ export class MermaidCodeGenerator {
   /**
    * 生成 style 指令（最常用的方式）
    */
-  generateStyle(styleDef) {
+  private generateStyle(styleDef: NodeStyle): string {
     const styles = Object.entries(styleDef.styles)
       .map(([key, value]) => {
         // 规范化颜色值
@@ -261,7 +259,7 @@ export class MermaidCodeGenerator {
   /**
    * 生成 classDef
    */
-  generateClassDef(classDef) {
+  private generateClassDef(classDef: ClassDef): string {
     const styles = Object.entries(classDef.styles)
       .map(([key, value]) => {
         // 规范化颜色值
@@ -282,7 +280,7 @@ export class MermaidCodeGenerator {
   /**
    * 规范化颜色值
    */
-  normalizeColor(color) {
+  private normalizeColor(color: string): string {
     if (!color || !color.startsWith('#')) {
       return color;
     }
@@ -321,14 +319,14 @@ export class MermaidCodeGenerator {
   /**
    * 生成 class 应用
    */
-  generateClassApplication(app) {
+  private generateClassApplication(app: ClassApplication): string {
     return `class ${app.nodes.join(',')} ${app.className}`;
   }
   
   /**
    * 生成 linkStyle
    */
-  generateLinkStyle(index, linkStyle) {
+  private generateLinkStyle(index: number, linkStyle: LinkStyle): string {
     const styles = Object.entries(linkStyle.styles)
       .map(([key, value]) => `${key}:${value}`)
       .join(',');
@@ -338,7 +336,7 @@ export class MermaidCodeGenerator {
   /**
    * 生成 init 配置
    */
-  generateInit(styles) {
+  private generateInit(styles: Record<string, string>): string {
     const themeVars = Object.entries(styles)
       .map(([key, value]) => `'${key}':'${value}'`)
       .join(',');
@@ -348,24 +346,31 @@ export class MermaidCodeGenerator {
   /**
    * 简单解析（用于格式保留检查）
    */
-  parse(source) {
+  private parse(source: string): { nodes: Array<{ id: string }>; edges: Array<{ from: string; to: string }>; subgraphs: Array<{ id: string }> } {
     // 简化版解析，只用于检查结构
-    const nodes = [];
-    const edges = [];
+    const nodes: Array<{ id: string }> = [];
+    const edges: Array<{ from: string; to: string }> = [];
     
     const nodePattern = /(\w+)\[([^\]]*)\]|(\w+)\(([^)]*)\)|(\w+)\{([^}]*)\}/g;
     const edgePattern = /(\w+)\s*-->\s*(\w+)/g;
     
     let match;
     while ((match = nodePattern.exec(source)) !== null) {
-      nodes.push({ id: match[1] || match[3] || match[5] });
+      nodes.push({ id: match[1] || match[3] || match[5] || '' });
     }
     
     while ((match = edgePattern.exec(source)) !== null) {
       edges.push({ from: match[1], to: match[2] });
     }
     
-    return { nodes, edges };
+    // 简单解析 subgraphs（仅用于格式检查）
+    const subgraphPattern = /subgraph\s+(\w+)/gi;
+    const subgraphs: Array<{ id: string }> = [];
+    while ((match = subgraphPattern.exec(source)) !== null) {
+      subgraphs.push({ id: match[1] || '' });
+    }
+    
+    return { nodes, edges, subgraphs };
   }
 }
 
