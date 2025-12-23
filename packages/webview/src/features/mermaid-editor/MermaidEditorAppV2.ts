@@ -458,19 +458,8 @@ export class MermaidEditorAppV2 {
     this.saveTimer = setTimeout(async () => {
       await this.saveSource(source);
       this.saveTimer = null;
-      
-      // 保存成功后，再触发渲染（Mermaid 需要先保存再渲染）
-      // 注意：这里不直接调用 scheduleRender，而是从状态管理器获取最新值
-      // 因为 scheduleRender 已经在 handleSourceChange 中调用了
-      // 这里只需要确保保存成功后，如果还没有渲染，就触发渲染
-      const latestSource = this.stateManager.getSource();
-      if (latestSource && latestSource.trim() !== '') {
-        // 检查是否已经有渲染定时器，如果没有，才触发渲染
-        // 这样可以避免重复渲染
-        if (!this.renderTimer) {
-          this.scheduleRender(latestSource);
-        }
-      }
+      // 注意：不在这里触发渲染，因为 scheduleRender 已经在编辑时触发了
+      // 渲染和保存是独立的，避免重复渲染
     }, 1000);
   }
 
@@ -849,26 +838,9 @@ export class MermaidEditorAppV2 {
     this.isSaving = false;
     console.log('[MermaidEditorAppV2] handleSaveSuccess: state updated, lastSavedSource updated, isSaving=false');
     
-    // 如果内容不为空，触发渲染（确保图表更新）
-    // 注意：Mermaid 是前端渲染，保存成功后需要主动触发渲染
-    // 为了强制触发渲染，临时清空 sourceDraft，这样 renderDiagram 就不会跳过渲染
-    if (currentSource && currentSource.trim() !== '') {
-      const currentSourceDraft = this.stateManager.getSourceDraft();
-      // 检查是否需要渲染：如果 sourceDraft 与 source 不同，或者 sourceDraft 为空，说明需要渲染
-      if (currentSourceDraft !== currentSource || !currentSourceDraft) {
-        console.log('[MermaidEditorAppV2] handleSaveSuccess: triggering render after save');
-        this.scheduleRender(currentSource);
-      } else {
-        // sourceDraft 与 source 相同，说明可能已经渲染过了
-        // 但为了确保图表是最新的（特别是保存后），强制触发一次渲染
-        // 临时清空 sourceDraft，强制 renderDiagram 执行渲染
-        console.log('[MermaidEditorAppV2] handleSaveSuccess: triggering render after save (force update)');
-        // 临时清空 sourceDraft，这样 renderDiagram 会认为内容有变化，执行渲染
-        this.stateManager.setState({ sourceDraft: '' });
-        // 立即调用 renderDiagram，它会更新 sourceDraft 为 currentSource
-        this.renderDiagram(currentSource);
-      }
-    }
+    // 注意：不在这里触发渲染，因为编辑时已经通过 scheduleRender 触发了渲染
+    // 如果 sourceDraft 与 source 相同，说明已经渲染过了，不需要重复渲染
+    // 这样可以避免保存成功后的重复渲染导致的闪烁
   }
 
   onStateChange(state: MermaidState) {
