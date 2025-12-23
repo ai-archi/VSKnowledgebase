@@ -69,7 +69,13 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
         try {
           // 使用 ExtensionService 的消息格式
           if (message.method === 'loadMermaid') {
-            // 返回文档内容，通过事件推送（参考 PlantUML 的方式）
+            // 先发送响应（用于 call 方法的 Promise resolve）
+            webviewPanel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: { success: true },
+            });
+            // 然后返回文档内容，通过事件推送（参考 PlantUML 的方式）
             webviewPanel.webview.postMessage({
               method: 'load',
               params: { source: document.getText() },
@@ -79,6 +85,12 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
             // 注意：Mermaid 渲染在前端进行，后端只负责提供源码
             const { source } = message.params || {};
             console.log('[MermaidEditor] Received renderMermaid request, source length:', source?.length || 0);
+            // 先发送响应（用于 call 方法的 Promise resolve）
+            webviewPanel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: { success: true },
+            });
             if (source) {
               // 前端会自己渲染，这里只返回成功确认
               webviewPanel.webview.postMessage({

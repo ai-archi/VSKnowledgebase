@@ -29,7 +29,6 @@ export class MermaidEditorAppV2 {
   private stateManager: StateManager;
   private renderer: MermaidRenderer | null = null;
   private editor: any = null; // CodeMirror 实例
-  private currentSVG: SVGElement | null = null;
   
   private elements: EditorElements;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -485,7 +484,7 @@ export class MermaidEditorAppV2 {
       // 检查是否与当前渲染的内容相同，避免重复渲染
       // 注意：使用 sourceDraft 来跟踪已渲染的内容
       const currentRenderedSource = this.stateManager.getSourceDraft();
-      if (source === currentRenderedSource && this.currentSVG) {
+      if (source === currentRenderedSource && this.renderer?.getCurrentSVG()) {
         console.log('[MermaidEditorAppV2] renderDiagram: Source unchanged, skipping render');
         return;
       }
@@ -499,21 +498,9 @@ export class MermaidEditorAppV2 {
       // 如果 source 为空或只包含空白字符，不渲染
       if (!source || !source.trim()) {
         // 淡出旧内容后清空容器，避免闪烁
-        if (this.elements.diagramContainer) {
-          const oldSVG = this.elements.diagramContainer.querySelector('svg');
-          if (oldSVG) {
-            oldSVG.style.transition = 'opacity 0.1s ease-out';
-            oldSVG.style.opacity = '0';
-            setTimeout(() => {
-              if (this.elements.diagramContainer) {
-                this.elements.diagramContainer.innerHTML = '';
-              }
-            }, 100);
-          } else {
-            this.elements.diagramContainer.innerHTML = '';
-          }
+        if (this.renderer) {
+          this.renderer.fadeOutAndClear();
         }
-        this.currentSVG = null;
         this.stateManager.setState({ error: null });
         return;
       }
@@ -522,9 +509,8 @@ export class MermaidEditorAppV2 {
       const svg = await this.renderer.render(source);
       console.log('[MermaidEditorAppV2] renderDiagram: renderer.render success');
       
-      // 保存当前 SVG 引用并应用缩放/平移
+      // 应用缩放/平移
       if (svg) {
-        this.currentSVG = svg;
         this.applyZoom();
         this.setupWheelZoom();
         this.setupPan();
@@ -595,23 +581,13 @@ export class MermaidEditorAppV2 {
       this.cleanupMermaidErrorDivsFromBody();
       
       // 淡出旧内容后清空容器，移除所有错误信息，避免闪烁
-      if (this.elements.diagramContainer) {
-        const oldSVG = this.elements.diagramContainer.querySelector('svg');
-        if (oldSVG) {
-          oldSVG.style.transition = 'opacity 0.1s ease-out';
-          oldSVG.style.opacity = '0';
-          setTimeout(() => {
-            if (this.elements.diagramContainer) {
-              this.elements.diagramContainer.innerHTML = '';
-              this.removeErrorElementsFromContainer(this.elements.diagramContainer);
-            }
-          }, 100);
-        } else {
-          this.elements.diagramContainer.innerHTML = '';
-          this.removeErrorElementsFromContainer(this.elements.diagramContainer);
-        }
+      if (this.renderer) {
+        this.renderer.fadeOutAndClear(() => {
+          if (this.elements.diagramContainer) {
+            this.removeErrorElementsFromContainer(this.elements.diagramContainer);
+          }
+        });
       }
-      this.currentSVG = null;
       
       // 显示错误消息（包括 UnknownDiagramError 和 No diagram type detected）
       let errorMessage = error.message || '未知错误';
@@ -897,8 +873,10 @@ export class MermaidEditorAppV2 {
     }
     
     // 清理其他组件
+    if (this.renderer) {
+      this.renderer.clear();
+    }
     this.renderer = null;
-    this.currentSVG = null;
   }
 
   // 缩放方法
@@ -922,11 +900,12 @@ export class MermaidEditorAppV2 {
   }
 
   applyZoom() {
-    if (!this.currentSVG) return;
+    const currentSVG = this.renderer?.getCurrentSVG();
+    if (!currentSVG) return;
     
     // 使用 transform 进行缩放和平移，保持居中
-    this.currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
-    this.currentSVG.style.transformOrigin = 'center center';
+    currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+    currentSVG.style.transformOrigin = 'center center';
   }
 
   setupWheelZoom() {
@@ -988,13 +967,17 @@ export class MermaidEditorAppV2 {
       // 1. 容器本身
       // 2. SVG 元素
       // 3. SVG 内的空白区域（g 元素、背景等）
+      const currentSVG = this.renderer?.getCurrentSVG();
       const isSVGElement = target instanceof SVGElement;
       const closestSvg = target.closest('svg');
+      // 使用类型断言来比较元素，因为 TypeScript 无法正确推断 HTMLElement & SVGElement 和 SVGSVGElement 的关系
+      const isCurrentSVG = currentSVG && (target === (currentSVG as any) || target.isSameNode(currentSVG));
+      const isInCurrentSVG = currentSVG && closestSvg && (closestSvg === (currentSVG as any) || closestSvg.isSameNode(currentSVG));
       const canDrag = target === this.elements.diagramContainer ||
-                      (isSVGElement && target === this.currentSVG) ||
+                      (isSVGElement && isCurrentSVG) ||
                       target.tagName === 'svg' ||
-                      (isSVGElement && closestSvg === this.currentSVG && 
-                       (target.tagName === 'g' || target.tagName === 'rect' || target === this.currentSVG));
+                      (isSVGElement && isInCurrentSVG && 
+                       (target.tagName === 'g' || target.tagName === 'rect' || isCurrentSVG));
       
       if (canDrag) {
         this.isDragging = true;
@@ -1006,8 +989,8 @@ export class MermaidEditorAppV2 {
         
         // 更新光标样式
         this.elements.diagramContainer.style.cursor = 'grabbing';
-        if (this.currentSVG) {
-          this.currentSVG.style.cursor = 'grabbing';
+        if (currentSVG) {
+          currentSVG.style.cursor = 'grabbing';
         }
         
         // 阻止默认行为，防止文本选择
@@ -1050,9 +1033,10 @@ export class MermaidEditorAppV2 {
         this.isPanning = false;
         
         // 恢复光标样式
+        const currentSVG = this.renderer?.getCurrentSVG();
         this.elements.diagramContainer.style.cursor = 'grab';
-        if (this.currentSVG) {
-          this.currentSVG.style.cursor = 'grab';
+        if (currentSVG) {
+          currentSVG.style.cursor = 'grab';
         }
         
         // 如果进行了平移，阻止后续的点击事件

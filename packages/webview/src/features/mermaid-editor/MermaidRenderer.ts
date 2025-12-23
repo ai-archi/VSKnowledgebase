@@ -41,7 +41,7 @@ export class MermaidRenderer {
    */
   async render(source: string): Promise<ExtendedSVGElement> {
     // 清空容器
-    this.container.innerHTML = '';
+    this.clear();
     
     // 使用 mermaid 渲染
     const id = `mermaid-${Date.now()}`;
@@ -50,13 +50,10 @@ export class MermaidRenderer {
     this.container.innerHTML = svg;
     
     // 查找 ZenUML 的包装 div 并设置 margin: auto
-    const zenUMLDiv = this.container.querySelector('div[id^="zenUMLApp-"]');
-    if (zenUMLDiv) {
-      (zenUMLDiv as HTMLElement).style.margin = 'auto';
-    }
+    const svgElement = this.container.querySelector('svg[id^="mermaid-"]');
+    this.container.querySelector('.zoom-controls')?.remove();
     
     // 获取 SVG 元素
-    const svgElement = this.container.querySelector('svg');
     if (!svgElement) {
       throw new Error('Failed to extract SVG from mermaid render result');
     }
@@ -64,6 +61,38 @@ export class MermaidRenderer {
     this.currentSVG = svgElement as ExtendedSVGElement;
     return this.currentSVG;
   }
-  
+
+  /**
+   * 获取当前渲染的 SVG 元素
+   */
+  getCurrentSVG(): ExtendedSVGElement | null {
+    return this.currentSVG;
+  }
+
+  /**
+   * 清空容器
+   */
+  clear(): void {
+    this.container.innerHTML = '';
+    this.currentSVG = null;
+  }
+
+  /**
+   * 淡出并清空容器（用于平滑过渡）
+   */
+  fadeOutAndClear(callback?: () => void): void {
+    const oldSVG = this.container.querySelector('svg');
+    if (oldSVG) {
+      oldSVG.style.transition = 'opacity 0.1s ease-out';
+      oldSVG.style.opacity = '0';
+      setTimeout(() => {
+        this.clear();
+        callback?.();
+      }, 100);
+    } else {
+      this.clear();
+      callback?.();
+    }
+  }
 
 }
