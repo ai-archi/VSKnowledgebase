@@ -1,6 +1,6 @@
 // Utility functions
 
-import { MAX_IMAGE_FILE_BYTES } from './types';
+export const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
 
 export function formatByteSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {

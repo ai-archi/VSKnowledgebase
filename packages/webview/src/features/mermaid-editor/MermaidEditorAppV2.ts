@@ -2,15 +2,9 @@
  * Mermaid Editor App V2 - Vue 适配版
  * 适配 Vue 3 组件，接收 DOM 元素引用而非通过 getElementById 获取
  */
-import { StateManager } from './StateManager';
+import { StateManager, type MermaidState } from './StateManager';
 import { MermaidRenderer } from './MermaidRenderer';
-import { MermaidInteractionLayer } from './MermaidInteractionLayer';
-import { MermaidLabelEditor } from './MermaidLabelEditor';
-import { MermaidNodeAdder } from './MermaidNodeAdder';
-import { MermaidNodeConnector } from './MermaidNodeConnector';
-import { MermaidCodeEditor } from './MermaidCodeEditor';
-import { MermaidParser } from './MermaidParser';
-import { MermaidCodeGenerator } from './MermaidCodeGenerator';
+import CodeMirror from 'codemirror';
 import {
   saveDiagram,
   loadMermaid,
@@ -34,29 +28,43 @@ interface EditorElements {
 export class MermaidEditorAppV2 {
   private stateManager: StateManager;
   private renderer: MermaidRenderer | null = null;
-  private interactionLayer: MermaidInteractionLayer | null = null;
-  private labelEditor: MermaidLabelEditor | null = null;
-  private nodeAdder: MermaidNodeAdder | null = null;
-  private nodeConnector: MermaidNodeConnector | null = null;
-  private codeEditor: MermaidCodeEditor | null = null;
-  private parser: MermaidParser;
-  private codeGenerator: MermaidCodeGenerator;
+  private editor: any = null; // CodeMirror 实例
+  private currentSVG: SVGElement | null = null;
   
   private elements: EditorElements;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private isSaving = false;
-  private selectedNodeId: string | null = null;
-  private selectedEdgeIndex: number | null = null;
   private boundHandleKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  private isSettingValue: boolean = false; // 标志：是否正在通过 setValue 设置值，防止触发 change 事件
+  private isSettingValue = false; // 标志：是否正在通过 setValue 设置值，防止触发 change 事件
   private isWaitingForInitialLoad = false; // 是否正在等待初始加载
   private renderTimer: ReturnType<typeof setTimeout> | null = null; // 渲染定时器
+  
+  // 缩放相关
+  private scale = 1.0;
+  private minScale = 0.1;
+  private maxScale = 5.0;
+  private scaleStep = 0.1;
+  
+  // 平移相关
+  private translateX = 0;
+  private translateY = 0;
+  private isDragging = false;
+  private isPanning = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragStartTranslateX = 0;
+  private dragStartTranslateY = 0;
+  private dragThreshold = 5;
+  
+  // 事件处理器引用（用于清理）
+  private wheelHandler: ((e: WheelEvent) => void) | null = null;
+  private panMouseDownHandler: ((e: MouseEvent) => void) | null = null;
+  private panMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+  private panMouseUpHandler: ((e: MouseEvent) => void) | null = null;
 
   constructor(elements: EditorElements) {
     this.elements = elements;
     this.stateManager = new StateManager();
-    this.parser = new MermaidParser();
-    this.codeGenerator = new MermaidCodeGenerator();
     this.init();
   }
 
@@ -64,63 +72,74 @@ export class MermaidEditorAppV2 {
     // 初始化 mermaid 渲染器
     this.renderer = new MermaidRenderer(this.elements.diagramContainer);
     
-    // 初始化标签编辑器
-    this.labelEditor = new MermaidLabelEditor(
-      this.renderer,
-      this.parser,
-      this.codeGenerator
-    );
-    
-    // 初始化节点添加器
-    this.nodeAdder = new MermaidNodeAdder(
-      this.renderer,
-      this.parser,
-      this.codeGenerator
-    );
-    
-    // 初始化节点连接器
-    this.nodeConnector = new MermaidNodeConnector(
-      this.renderer,
-      this.parser,
-      this.codeGenerator
-    );
-    this.nodeConnector.setOnConnectionCreated(async (newSource) => {
-      if (this.codeEditor) {
-        this.codeEditor.setValue(newSource);
-      } else {
-        this.elements.sourceEditor.value = newSource;
+    // 初始化 CodeMirror（如果可用）
+    try {
+      if (!this.elements.sourceEditor) {
+        throw new Error('Source editor element not found');
       }
-      await this.renderDiagram(newSource);
-      await this.saveSource(newSource);
-    });
-    
-    // 初始化交互层
-    this.interactionLayer = new MermaidInteractionLayer(this.renderer, {
-      onNodeSelect: (nodeId, nodeInfo, _element) => this.handleNodeSelect(nodeId, nodeInfo),
-      onEdgeSelect: (edgeIndex, edgeInfo, _element) => this.handleEdgeSelect(edgeIndex, edgeInfo),
-      onElementDblClick: (type, id, _element) => this.handleElementDblClick(type, String(id), _element),
-      onCanvasClick: () => this.handleCanvasClick(),
-      onCanvasDblClick: (e) => this.handleCanvasDblClick(e),
-      onNodeCtrlClick: (nodeId, e) => this.handleNodeCtrlClick(nodeId, e),
-      onMultiSelect: (_selection) => this.handleMultiSelect(_selection),
-    });
-    
-    // 订阅状态变化
-    this.stateManager.subscribe((state) => this.onStateChange(state));
-    
-    // 初始化代码编辑器
-    this.codeEditor = new MermaidCodeEditor(this.elements.sourceEditor, {
-      onChange: (_value) => {
-        // 如果正在通过 setValue 设置值，不触发 handleSourceChange（避免循环和重复渲染）
+
+      this.editor = CodeMirror.fromTextArea(this.elements.sourceEditor, {
+        mode: 'text/plain', // Mermaid 使用纯文本模式（与 PlantUML 保持一致）
+        theme: 'default',
+        lineNumbers: true,
+        lineWrapping: true,
+        indentUnit: 2,
+        tabSize: 2,
+        gutters: ['CodeMirror-linenumbers'],
+        extraKeys: {
+          // Cmd+S / Ctrl+S: 立即保存
+          'Cmd-S': () => {
+            this.saveImmediately();
+          },
+          'Ctrl-S': () => {
+            this.saveImmediately();
+          },
+        },
+      });
+      
+      // 样式由 CSS 文件统一管理，这里只刷新编辑器以确保样式正确应用
+
+      this.editor.on('change', () => {
+        // 如果正在通过 setValue 设置值，不触发渲染和保存（避免循环和重复渲染）
         if (this.isSettingValue) {
           return;
         }
-        this.handleSourceChange();
-      },
-      onError: (error) => {
-        this.stateManager.setState({ error: error.message });
+        const source = this.editor.getValue();
+        this.stateManager.setState({ source });
+        this.scheduleRender();
+        this.scheduleSave(source);
+      });
+
+      // 确保行号正确渲染
+      setTimeout(() => {
+        if (this.editor) {
+          this.editor.refresh();
+          console.log('[MermaidEditorAppV2] CodeMirror initialized');
+        }
+      }, 0);
+    } catch (error) {
+      // CodeMirror 不可用，回退到原生 textarea
+      console.error('[MermaidEditorAppV2] CodeMirror initialization failed, falling back to native textarea:', error);
+      if (this.elements.sourceEditor) {
+        this.elements.sourceEditor.addEventListener('input', () => {
+          const source = this.elements.sourceEditor.value;
+          this.stateManager.setState({ source });
+          this.scheduleRender();
+          this.scheduleSave(source);
+        });
+        
+        // 添加键盘快捷键监听（Cmd+S / Ctrl+S）
+        this.elements.sourceEditor.addEventListener('keydown', (e: KeyboardEvent) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            this.saveImmediately();
+          }
+        });
       }
-    });
+    }
+    
+    // 订阅状态变化
+    this.stateManager.subscribe((state) => this.onStateChange(state));
     
     this.setupEventListeners();
     this.setupWorkspaceResizer();
@@ -160,14 +179,7 @@ export class MermaidEditorAppV2 {
   }
 
   setupEventListeners() {
-    // 源代码编辑器变化（如果使用原生编辑器）
-    if (!this.codeEditor?.editor) {
-      this.elements.sourceEditor.addEventListener('input', () => {
-        this.handleSourceChange();
-      });
-    }
-    
-    // 键盘删除快捷键
+    // 键盘快捷键
     if (!this.boundHandleKeyDown) {
       this.boundHandleKeyDown = this.handleKeyDown.bind(this);
       window.addEventListener('keydown', this.boundHandleKeyDown);
@@ -176,22 +188,19 @@ export class MermaidEditorAppV2 {
     // 缩放控制按钮
     if (this.elements.zoomIn) {
       this.elements.zoomIn.addEventListener('click', () => {
-        this.renderer?.zoomIn();
-        this.updateZoomButtons();
+        this.zoomIn();
       });
     }
     
     if (this.elements.zoomOut) {
       this.elements.zoomOut.addEventListener('click', () => {
-        this.renderer?.zoomOut();
-        this.updateZoomButtons();
+        this.zoomOut();
       });
     }
     
     if (this.elements.zoomReset) {
       this.elements.zoomReset.addEventListener('click', () => {
-        this.renderer?.zoomReset();
-        this.updateZoomButtons();
+        this.zoomReset();
       });
     }
   }
@@ -200,18 +209,15 @@ export class MermaidEditorAppV2 {
    * 更新缩放按钮状态
    */
   updateZoomButtons() {
-    if (!this.renderer) return;
-    
-    const scale = this.renderer.getZoom();
-    const minScale = this.renderer.minScale;
-    const maxScale = this.renderer.maxScale;
+    const canZoomIn = this.scale < this.maxScale;
+    const canZoomOut = this.scale > this.minScale;
     
     if (this.elements.zoomIn) {
-      (this.elements.zoomIn as HTMLButtonElement).disabled = scale >= maxScale;
+      (this.elements.zoomIn as HTMLButtonElement).disabled = !canZoomIn;
     }
     
     if (this.elements.zoomOut) {
-      (this.elements.zoomOut as HTMLButtonElement).disabled = scale <= minScale;
+      (this.elements.zoomOut as HTMLButtonElement).disabled = !canZoomOut;
     }
   }
 
@@ -226,12 +232,7 @@ export class MermaidEditorAppV2 {
       }
       
       // 获取最新的源码（优先从编辑器获取，确保获取最新内容）
-      let source: string;
-      if (this.codeEditor) {
-        source = this.codeEditor.getValue() || '';
-      } else {
-        source = this.elements.sourceEditor.value || '';
-      }
+      const source = this.editor ? this.editor.getValue() : this.elements.sourceEditor.value;
       
       // 如果内容为空，不保存
       if (!source || source.trim() === '') {
@@ -253,37 +254,7 @@ export class MermaidEditorAppV2 {
       
       // 立即保存（不使用防抖，与 PlantUML 的 saveImmediately 保持一致）
       this.saveSource(source);
-      return;
     }
-    
-    const key = event.key;
-    if (key !== 'Delete' && key !== 'Backspace') {
-      return;
-    }
-    
-    // 如果焦点在代码编辑器或输入框中，则不处理
-    if (this.codeEditor?.editor && typeof (this.codeEditor.editor as any).hasFocus === 'function' && (this.codeEditor.editor as any).hasFocus()) {
-      return;
-    }
-    const target = event.target as HTMLElement;
-    if (target) {
-      const tagName = target.tagName?.toLowerCase();
-      if (tagName === 'input' || tagName === 'textarea' || target.isContentEditable || target.closest('.CodeMirror') || target.closest('.mermaid-label-editor')) {
-        return;
-      }
-    }
-    
-    const selection = this.interactionLayer?.getAllSelected();
-    if (!selection) {
-      return;
-    }
-    const hasSelection = selection.nodes.length > 0 || selection.edges.length > 0 || this.selectedNodeId || this.selectedEdgeIndex !== null;
-    if (!hasSelection) {
-      return;
-    }
-    
-    event.preventDefault();
-    this.handleDeleteSelected();
   }
 
   setupWorkspaceResizer() {
@@ -333,8 +304,8 @@ export class MermaidEditorAppV2 {
       sourcePanel.style.cssText = `flex: none !important; width: ${Math.max(minSourceWidth, newSourceWidth)}px !important; min-width: ${minSourceWidth}px !important; display: flex !important; visibility: visible !important;`;
       
       // 刷新 CodeMirror 编辑器以更新布局
-      if (this.codeEditor?.editor && typeof this.codeEditor.editor.refresh === 'function') {
-        this.codeEditor.editor.refresh();
+      if (this.editor && typeof this.editor.refresh === 'function') {
+        this.editor.refresh();
       }
     };
     
@@ -346,10 +317,10 @@ export class MermaidEditorAppV2 {
       document.removeEventListener('mouseup', stopDrag);
       
       // 拖拽结束后刷新 CodeMirror 编辑器以确保布局正确
-      if (this.codeEditor?.editor && typeof this.codeEditor.editor.refresh === 'function') {
+      if (this.editor && typeof this.editor.refresh === 'function') {
         // 使用 requestAnimationFrame 确保 DOM 更新完成后再刷新
         requestAnimationFrame(() => {
-          this.codeEditor?.editor?.refresh();
+          this.editor?.refresh();
         });
       }
     };
@@ -394,7 +365,7 @@ export class MermaidEditorAppV2 {
     }
     
     // 获取当前编辑器内容（参考 PlantUML 的方式）
-    const currentSource = this.codeEditor ? this.codeEditor.getValue() : 
+    const currentSource = this.editor ? this.editor.getValue() : 
                         (this.elements.sourceEditor ? this.elements.sourceEditor.value : '');
     
     // 判断是否是首次加载（参考 PlantUML，使用 lastSavedSource 判断）
@@ -421,8 +392,8 @@ export class MermaidEditorAppV2 {
     // 内容不同，更新编辑器（参考 PlantUML 的方式）
     this.isSettingValue = true; // 设置标志，防止触发 change 事件
     try {
-      if (this.codeEditor) {
-        this.codeEditor.setValue(source);
+      if (this.editor) {
+        this.editor.setValue(source);
       } else if (this.elements.sourceEditor) {
         this.elements.sourceEditor.value = source;
       }
@@ -525,7 +496,7 @@ export class MermaidEditorAppV2 {
       // 检查是否与当前渲染的内容相同，避免重复渲染
       // 注意：使用 sourceDraft 来跟踪已渲染的内容
       const currentRenderedSource = this.stateManager.getSourceDraft();
-      if (source === currentRenderedSource && this.renderer.getCurrentSVG()) {
+      if (source === currentRenderedSource && this.currentSVG) {
         console.log('[MermaidEditorAppV2] renderDiagram: Source unchanged, skipping render');
         return;
       }
@@ -539,32 +510,41 @@ export class MermaidEditorAppV2 {
       // 如果 source 为空或只包含空白字符，不渲染
       if (!source || !source.trim()) {
         // 淡出旧内容后清空容器，避免闪烁
-        if (this.renderer?.container) {
-          const oldSVG = this.renderer.container.querySelector('svg');
+        if (this.elements.diagramContainer) {
+          const oldSVG = this.elements.diagramContainer.querySelector('svg');
           if (oldSVG) {
             oldSVG.style.transition = 'opacity 0.1s ease-out';
             oldSVG.style.opacity = '0';
             setTimeout(() => {
-              if (this.renderer?.container) {
-                this.renderer.container.innerHTML = '';
+              if (this.elements.diagramContainer) {
+                this.elements.diagramContainer.innerHTML = '';
               }
             }, 100);
           } else {
-            this.renderer.container.innerHTML = '';
+            this.elements.diagramContainer.innerHTML = '';
           }
         }
+        this.currentSVG = null;
         this.stateManager.setState({ error: null });
         return;
       }
       
       console.log('[MermaidEditorAppV2] renderDiagram: calling renderer.render');
-      await this.renderer.render(source);
+      const svg = await this.renderer.render(source);
       console.log('[MermaidEditorAppV2] renderDiagram: renderer.render success');
+      
+      // 保存当前 SVG 引用并应用缩放/平移
+      if (svg) {
+        this.currentSVG = svg;
+        this.applyZoom();
+        this.setupWheelZoom();
+        this.setupPan();
+      }
       
       // 渲染成功后，验证编辑器内容是否仍然正确
       // 如果编辑器内容被清空，恢复它（参考 PlantUML 的逻辑，渲染后不应该影响编辑器内容）
       // 但只在渲染过程中（isSettingValue 为 true）才恢复，避免覆盖用户的编辑
-      const actualSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+      const actualSource = this.editor ? this.editor.getValue() : this.elements.sourceEditor.value;
       if (actualSource !== source && source.trim() !== '' && this.isSettingValue) {
         console.warn('[MermaidEditorAppV2] Editor content lost after render, restoring...', {
           expectedLength: source.length,
@@ -572,8 +552,8 @@ export class MermaidEditorAppV2 {
         });
         // 恢复编辑器内容，使用 isSettingValue 标志防止触发 change 事件
         // 注意：此时 isSettingValue 应该还是 true（从 handleSourceLoad 设置的）
-        if (this.codeEditor) {
-          this.codeEditor.setValue(source);
+        if (this.editor) {
+          this.editor.setValue(source);
         } else {
           this.elements.sourceEditor.value = source;
         }
@@ -593,15 +573,17 @@ export class MermaidEditorAppV2 {
       }
       
       // 渲染成功后，再次检查并移除可能的错误信息
-      if (this.renderer.container) {
-        this.removeErrorElementsFromContainer(this.renderer.container);
+      if (this.elements.diagramContainer) {
+        this.removeErrorElementsFromContainer(this.elements.diagramContainer);
       }
       
       // 清理 body 中可能残留的错误 div
       this.cleanupMermaidErrorDivsFromBody();
       
-      this.interactionLayer?.update();
       this.updateZoomButtons();
+      
+      // 更新 lastRenderedSource
+      this.stateManager.setState({ lastRenderedSource: source });
       
       this.stateManager.setState({ error: null });
       console.log('[MermaidEditorAppV2] renderDiagram: SUCCESS');
@@ -624,22 +606,23 @@ export class MermaidEditorAppV2 {
       this.cleanupMermaidErrorDivsFromBody();
       
       // 淡出旧内容后清空容器，移除所有错误信息，避免闪烁
-      if (this.renderer?.container) {
-        const oldSVG = this.renderer.container.querySelector('svg');
+      if (this.elements.diagramContainer) {
+        const oldSVG = this.elements.diagramContainer.querySelector('svg');
         if (oldSVG) {
           oldSVG.style.transition = 'opacity 0.1s ease-out';
           oldSVG.style.opacity = '0';
           setTimeout(() => {
-            if (this.renderer?.container) {
-              this.renderer.container.innerHTML = '';
-              this.removeErrorElementsFromContainer(this.renderer.container);
+            if (this.elements.diagramContainer) {
+              this.elements.diagramContainer.innerHTML = '';
+              this.removeErrorElementsFromContainer(this.elements.diagramContainer);
             }
           }, 100);
         } else {
-          this.renderer.container.innerHTML = '';
-          this.removeErrorElementsFromContainer(this.renderer.container);
+          this.elements.diagramContainer.innerHTML = '';
+          this.removeErrorElementsFromContainer(this.elements.diagramContainer);
         }
       }
+      this.currentSVG = null;
       
       // 显示错误消息（包括 UnknownDiagramError 和 No diagram type detected）
       let errorMessage = error.message || '未知错误';
@@ -755,7 +738,7 @@ export class MermaidEditorAppV2 {
       return;
     }
     
-    const source = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+    const source = this.editor ? this.editor.getValue() : this.elements.sourceEditor.value;
     
     // 更新状态（参考 PlantUML 的方式：直接更新状态）
     this.stateManager.setState({ source, sourceDraft: source });
@@ -766,252 +749,11 @@ export class MermaidEditorAppV2 {
     this.scheduleSave(source);
   }
 
-  handleNodeSelect(nodeId: string, _nodeInfo: any) {
-    this.selectedNodeId = nodeId;
-    this.selectedEdgeIndex = null;
-    
-    this.stateManager.setState({
-      selectedNodeId: nodeId,
-      selectedEdgeId: null
-    });
-  }
-
-  handleEdgeSelect(edgeIndex: number, _edgeInfo: any) {
-    this.selectedEdgeIndex = edgeIndex;
-    this.selectedNodeId = null;
-    
-    this.stateManager.setState({
-      selectedNodeId: null,
-      selectedEdgeId: `edge-${edgeIndex}`
-    });
-  }
-
-  handleElementDblClick(type: string, id: string, _element: any) {
-    if (type === 'node') {
-      this.startLabelEdit(id, 'node');
-    } else if (type === 'edge') {
-      this.startLabelEdit(id, 'edge');
-    }
-  }
-
-  handleCanvasClick() {
-    if (this.labelEditor && this.labelEditor.isEditing()) {
-      return;
-    }
-    
-    this.selectedNodeId = null;
-    this.selectedEdgeIndex = null;
-    
-    this.stateManager.setState({
-      selectedNodeId: null,
-      selectedEdgeId: null
-    });
-  }
-
-  handleNodeCtrlClick(nodeId: string, e: MouseEvent) {
-    this.nodeConnector?.startConnecting(nodeId, e);
-  }
-
-  handleCanvasDblClick(e: MouseEvent) {
-    if (this.labelEditor && this.labelEditor.isEditing()) {
-      return;
-    }
-    
-    const svg = this.renderer?.getCurrentSVG();
-    if (!svg) return;
-    
-    const svgPoint = this.nodeAdder?.getSVGPoint(svg, e.clientX, e.clientY);
-    if (svgPoint && this.nodeAdder) {
-      this.nodeAdder.showAddNodeDialog(svgPoint, async (newSource, nodeId) => {
-        this.elements.sourceEditor.value = newSource;
-        await this.renderDiagram(newSource);
-        await this.saveSource(newSource);
-        
-        setTimeout(() => {
-          const nodeInfo = this.renderer?.getNode(nodeId);
-          if (nodeInfo) {
-            const nodeElement = svg.querySelector(`[data-node-id="${nodeId}"]`);
-            if (nodeElement) {
-              this.interactionLayer?.selectNode(nodeId, nodeElement);
-              this.handleNodeSelect(nodeId, nodeInfo);
-            }
-          }
-        }, 100);
-      });
-    }
-  }
-
-  startLabelEdit(id: string, type: string) {
-    if (type === 'node') {
-      this.labelEditor?.startNodeLabelEdit(id, async (newSource) => {
-        if (this.codeEditor) {
-          this.codeEditor.setValue(newSource);
-        } else {
-          this.elements.sourceEditor.value = newSource;
-        }
-        await this.renderDiagram(newSource);
-        await this.saveSource(newSource);
-      });
-    } else if (type === 'edge') {
-      const edgeIndex = typeof id === 'string' ? parseInt(id, 10) : id;
-      if (isNaN(edgeIndex)) {
-        console.error('[MermaidEditorAppV2] Invalid edge index:', id);
-        return;
-      }
-      this.labelEditor?.startEdgeLabelEdit(edgeIndex, async (newSource) => {
-        if (this.codeEditor) {
-          this.codeEditor.setValue(newSource);
-        } else {
-          this.elements.sourceEditor.value = newSource;
-        }
-        await this.renderDiagram(newSource);
-        await this.saveSource(newSource);
-      });
-    }
-  }
-
-  async handleDeleteSelected() {
-    const selection = this.interactionLayer?.getAllSelected();
-    if (!selection) return;
-    
-    if (selection.nodes.length > 1 || selection.edges.length > 0) {
-      await this.deleteMultiple(selection);
-      return;
-    }
-    
-    if (this.selectedNodeId) {
-      await this.deleteNode(this.selectedNodeId);
-    } else if (this.selectedEdgeIndex !== null) {
-      await this.deleteEdge(this.selectedEdgeIndex);
-    }
-  }
-
-  async deleteMultiple(selection: any) {
-    const source = this.renderer?.getCurrentSource();
-    if (!source) return;
-    
-    const ast = this.parser.parse(source);
-    
-    if (selection.nodes.length > 0) {
-      const nodeIdsToDelete = new Set(selection.nodes);
-      ast.nodes = ast.nodes.filter((n: any) => !nodeIdsToDelete.has(n.id));
-      ast.edges = ast.edges.filter((e: any) => 
-        !nodeIdsToDelete.has(e.from) && !nodeIdsToDelete.has(e.to)
-      );
-      
-      selection.nodes.forEach((nodeId: string) => {
-        ast.classDefs = ast.classDefs.filter((cd: any) => cd.name !== `style-${nodeId}`);
-        if (ast.classApplications) {
-          ast.classApplications = ast.classApplications.filter((ca: any) => !ca.nodes.includes(nodeId));
-        }
-      });
-    }
-    
-    if (selection.edges.length > 0) {
-      const edgesToDelete = new Set(selection.edges);
-      const newEdges: any[] = [];
-      const newLinkStyles: any[] = [];
-      
-      ast.edges.forEach((edge: any, index: number) => {
-        if (!edgesToDelete.has(index)) {
-          newEdges.push(edge);
-          if (ast.linkStyles && ast.linkStyles[index]) {
-            newLinkStyles[newEdges.length - 1] = ast.linkStyles[index];
-          }
-        }
-      });
-      
-      ast.edges = newEdges;
-      ast.linkStyles = newLinkStyles;
-    }
-    
-    const newSource = this.codeGenerator.generate(ast, source);
-    if (this.codeEditor) {
-      this.codeEditor.setValue(newSource);
-    } else {
-      this.elements.sourceEditor.value = newSource;
-    }
-    await this.renderDiagram(newSource);
-    await this.saveSource(newSource);
-    
-    this.clearSelection();
-  }
-
-  handleMultiSelect(_selection: any) {
-    // 多选处理逻辑
-  }
-
-  async deleteNode(nodeId: string) {
-    const source = this.renderer?.getCurrentSource();
-    if (!source) return;
-    
-    const ast = this.parser.parse(source);
-    
-    ast.nodes = ast.nodes.filter((n: any) => n.id !== nodeId);
-    ast.edges = ast.edges.filter((e: any) => e.from !== nodeId && e.to !== nodeId);
-    
-    ast.classDefs = ast.classDefs.filter((cd: any) => cd.name !== `style-${nodeId}`);
-    if (ast.classApplications) {
-      ast.classApplications = ast.classApplications.filter((ca: any) => !ca.nodes.includes(nodeId));
-    }
-    
-    const newSource = this.codeGenerator.generate(ast, source);
-    if (this.codeEditor) {
-      this.codeEditor.setValue(newSource);
-    } else {
-      this.elements.sourceEditor.value = newSource;
-    }
-    await this.renderDiagram(newSource);
-    await this.saveSource(newSource);
-    
-    this.clearSelection();
-  }
-
-  async deleteEdge(edgeIndex: number) {
-    const source = this.renderer?.getCurrentSource();
-    if (!source) return;
-    
-    const ast = this.parser.parse(source);
-    
-    ast.edges.splice(edgeIndex, 1);
-    
-    if (ast.linkStyles) {
-      const newLinkStyles: any[] = [];
-      ast.linkStyles.forEach((linkStyle: any, index: number) => {
-        if (linkStyle && index !== edgeIndex) {
-          const newIndex = index > edgeIndex ? index - 1 : index;
-          newLinkStyles[newIndex] = linkStyle;
-        }
-      });
-      ast.linkStyles = newLinkStyles;
-    }
-    
-    const newSource = this.codeGenerator.generate(ast, source);
-    if (this.codeEditor) {
-      this.codeEditor.setValue(newSource);
-    } else {
-      this.elements.sourceEditor.value = newSource;
-    }
-    await this.renderDiagram(newSource);
-    await this.saveSource(newSource);
-    
-    this.clearSelection();
-  }
-
-  clearSelection() {
-    this.selectedNodeId = null;
-    this.selectedEdgeIndex = null;
-    this.interactionLayer?.clearSelection();
-    this.stateManager.setState({
-      selectedNodeId: null,
-      selectedEdgeId: null
-    });
-  }
 
   async saveSource(source: string): Promise<boolean> {
     // 保存时，从编辑器获取最新的内容，而不是使用传入的参数
     // 这样可以确保保存的是用户当前编辑的内容
-    const currentEditorSource = this.codeEditor ? this.codeEditor.getValue() : this.elements.sourceEditor.value;
+    const currentEditorSource = this.editor ? this.editor.getValue() : this.elements.sourceEditor.value;
     const sourceToSave = currentEditorSource || source;
     const lastSavedSource = this.stateManager.getLastSavedSource();
     
@@ -1035,7 +777,6 @@ export class MermaidEditorAppV2 {
     console.log('[MermaidEditorAppV2] saveSource: starting save, isSaving=true');
     try {
       const diagram = {
-        ...this.stateManager.getDiagram(),
         source: sourceToSave
       };
       await saveDiagram(diagram);
@@ -1059,6 +800,41 @@ export class MermaidEditorAppV2 {
     }
     // 注意：isSaving 标志的清除应该在 handleSaveSuccess 中完成
     // 这样可以确保只有在后端确认保存成功后才清除标志
+  }
+
+  /**
+   * 立即保存（用于快捷键触发）
+   * 清除防抖定时器并立即保存
+   */
+  saveImmediately() {
+    // 清除保存定时器
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    
+    // 获取最新的源码（从编辑器或状态管理器）
+    let source: string;
+    if (this.editor) {
+      source = this.editor.getValue();
+    } else if (this.elements.sourceEditor) {
+      source = this.elements.sourceEditor.value;
+    } else {
+      source = this.stateManager.getSource();
+    }
+    
+    // 如果内容没有变化，不保存（避免触发重新加载）
+    if (source === this.stateManager.getLastSavedSource()) {
+      return;
+    }
+    
+    // 更新状态
+    if (source !== this.stateManager.getSource()) {
+      this.stateManager.setState({ source });
+    }
+    
+    // 立即保存
+    this.saveSource(source);
   }
 
   handleSaveSuccess() {
@@ -1095,7 +871,7 @@ export class MermaidEditorAppV2 {
     }
   }
 
-  onStateChange(state: any) {
+  onStateChange(state: MermaidState) {
     // 使用回调函数通知错误
     if (this.elements.onError) {
       this.elements.onError(state.error || null);
@@ -1112,43 +888,219 @@ export class MermaidEditorAppV2 {
       this.saveTimer = null;
     }
     
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+      this.renderTimer = null;
+    }
+    
     // 移除事件监听器
     if (this.boundHandleKeyDown) {
       window.removeEventListener('keydown', this.boundHandleKeyDown);
       this.boundHandleKeyDown = null;
     }
     
+    if (this.wheelHandler && this.elements.diagramContainer) {
+      this.elements.diagramContainer.removeEventListener('wheel', this.wheelHandler);
+    }
+    
+    if (this.panMouseDownHandler && this.elements.diagramContainer) {
+      this.elements.diagramContainer.removeEventListener('mousedown', this.panMouseDownHandler);
+    }
+    
+    if (this.panMouseMoveHandler) {
+      document.removeEventListener('mousemove', this.panMouseMoveHandler);
+    }
+    
+    if (this.panMouseUpHandler) {
+      document.removeEventListener('mouseup', this.panMouseUpHandler);
+    }
+    
     // 移除 ExtensionService 的事件监听
     extensionService.off('load');
     
-    // 清理编辑器
-    if (this.codeEditor) {
-      this.codeEditor.destroy?.();
-      this.codeEditor = null;
+    // 清理 CodeMirror
+    if (this.editor) {
+      this.editor.toTextArea();
+      this.editor = null;
     }
     
     // 清理其他组件
     this.renderer = null;
-    this.interactionLayer = null;
-    this.labelEditor = null;
-    this.nodeAdder = null;
-    this.nodeConnector = null;
+    this.currentSVG = null;
   }
 
   // 缩放方法
   zoomIn() {
-    this.renderer?.zoomIn();
-    this.updateZoomButtons();
+    return this.setZoom(this.scale + this.scaleStep);
   }
 
   zoomOut() {
-    this.renderer?.zoomOut();
-    this.updateZoomButtons();
+    return this.setZoom(this.scale - this.scaleStep);
   }
 
   zoomReset() {
-    this.renderer?.zoomReset();
+    return this.setZoom(1.0);
+  }
+
+  setZoom(newScale: number) {
+    this.scale = Math.max(this.minScale, Math.min(this.maxScale, newScale));
+    this.applyZoom();
     this.updateZoomButtons();
+    return this.scale;
+  }
+
+  applyZoom() {
+    if (!this.currentSVG) return;
+    
+    // 使用 transform 进行缩放和平移，保持居中
+    this.currentSVG.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+    this.currentSVG.style.transformOrigin = 'center center';
+  }
+
+  setupWheelZoom() {
+    if (!this.elements.diagramContainer) return;
+    
+    if (this.wheelHandler) {
+      this.elements.diagramContainer.removeEventListener('wheel', this.wheelHandler);
+    }
+    
+    this.wheelHandler = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -this.scaleStep : this.scaleStep;
+        this.setZoom(this.scale + delta);
+      }
+    };
+    
+    this.elements.diagramContainer.addEventListener('wheel', this.wheelHandler, { passive: false });
+  }
+
+  setupPan() {
+    if (!this.elements.diagramContainer) return;
+    
+    // 移除旧的监听器（如果存在）
+    if (this.panMouseDownHandler) {
+      this.elements.diagramContainer.removeEventListener('mousedown', this.panMouseDownHandler);
+    }
+    if (this.panMouseMoveHandler) {
+      document.removeEventListener('mousemove', this.panMouseMoveHandler);
+    }
+    if (this.panMouseUpHandler) {
+      document.removeEventListener('mouseup', this.panMouseUpHandler);
+    }
+    
+    // 鼠标按下事件
+    this.panMouseDownHandler = (e: MouseEvent) => {
+      // 只处理鼠标左键
+      if (e.button !== 0) return;
+      
+      // 如果按住了修饰键（Ctrl/Cmd/Shift），不处理拖拽（可能用于其他操作）
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        return;
+      }
+      
+      const target = e.target as HTMLElement;
+      
+      // 检查是否点击了可交互的元素（如文本、链接等），如果是则不拖拽
+      // 但允许在 SVG 背景、容器或空白区域拖拽
+      const isInteractiveElement = target.closest('a, button, input, textarea, select') ||
+                                   target.isContentEditable ||
+                                   target.tagName === 'text' ||
+                                   target.tagName === 'tspan';
+      
+      if (isInteractiveElement) {
+        return;
+      }
+      
+      // 允许在以下位置开始拖拽：
+      // 1. 容器本身
+      // 2. SVG 元素
+      // 3. SVG 内的空白区域（g 元素、背景等）
+      const isSVGElement = target instanceof SVGElement;
+      const closestSvg = target.closest('svg');
+      const canDrag = target === this.elements.diagramContainer ||
+                      (isSVGElement && target === this.currentSVG) ||
+                      target.tagName === 'svg' ||
+                      (isSVGElement && closestSvg === this.currentSVG && 
+                       (target.tagName === 'g' || target.tagName === 'rect' || target === this.currentSVG));
+      
+      if (canDrag) {
+        this.isDragging = true;
+        this.isPanning = false; // 重置平移状态
+        this.dragStartX = e.clientX;
+        this.dragStartY = e.clientY;
+        this.dragStartTranslateX = this.translateX;
+        this.dragStartTranslateY = this.translateY;
+        
+        // 更新光标样式
+        this.elements.diagramContainer.style.cursor = 'grabbing';
+        if (this.currentSVG) {
+          this.currentSVG.style.cursor = 'grabbing';
+        }
+        
+        // 阻止默认行为，防止文本选择
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    
+    // 鼠标移动事件
+    this.panMouseMoveHandler = (e: MouseEvent) => {
+      if (!this.isDragging) return;
+      
+      const deltaX = e.clientX - this.dragStartX;
+      const deltaY = e.clientY - this.dragStartY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // 如果移动距离超过阈值，开始平移
+      if (distance > this.dragThreshold) {
+        this.isPanning = true;
+      }
+      
+      // 一旦开始平移，就持续更新位置
+      if (this.isPanning) {
+        this.translateX = this.dragStartTranslateX + deltaX;
+        this.translateY = this.dragStartTranslateY + deltaY;
+        
+        this.applyZoom();
+        
+        // 阻止默认行为，防止文本选择或页面滚动
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    
+    // 鼠标释放事件
+    this.panMouseUpHandler = (e: MouseEvent) => {
+      if (this.isDragging) {
+        const wasPanning = this.isPanning;
+        this.isDragging = false;
+        this.isPanning = false;
+        
+        // 恢复光标样式
+        this.elements.diagramContainer.style.cursor = 'grab';
+        if (this.currentSVG) {
+          this.currentSVG.style.cursor = 'grab';
+        }
+        
+        // 如果进行了平移，阻止后续的点击事件
+        if (wasPanning) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    
+    // 绑定事件监听器
+    this.elements.diagramContainer.addEventListener('mousedown', this.panMouseDownHandler);
+    document.addEventListener('mousemove', this.panMouseMoveHandler);
+    document.addEventListener('mouseup', this.panMouseUpHandler);
+  }
+
+  resetPan() {
+    this.translateX = 0;
+    this.translateY = 0;
+    this.applyZoom();
   }
 
   // 分隔条拖拽

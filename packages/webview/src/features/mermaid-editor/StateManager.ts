@@ -1,29 +1,40 @@
-// State Manager - replaces React Hooks
+// State Manager for Mermaid Editor - 参考 PlantUML 实现
 
-import type { State, StateListener, Unsubscribe, Diagram, Node, Edge } from './types';
+export type RenderState = 'idle' | 'rendering' | 'error';
+
+export interface MermaidState {
+  source: string;
+  sourceDraft: string;
+  loading: boolean;
+  rendering: boolean;
+  renderState: RenderState;
+  error: string | null;
+  saving: boolean;
+  lastSavedSource: string | null;
+  lastRenderedSource: string | null;
+}
+
+export type StateListener = (state: MermaidState) => void;
+export type Unsubscribe = () => void;
 
 export class StateManager {
-  private diagram: Diagram | null = null;
-  private loading: boolean = true;
-  private error: string | null = null;
-  private saving: boolean = false;
   private source: string = "";
   private sourceDraft: string = "";
-  private lastSavedSource: string | null = null; // 参考 PlantUML，跟踪已保存的内容
-  private sourceSaving: boolean = false;
-  private sourceError: string | null = null;
-  private selectedNodeId: string | null = null;
-  private selectedEdgeId: string | null = null;
-  private imagePaddingValue: string = "";
-  private dragging: boolean = false;
+  private loading: boolean = true;
+  private rendering: boolean = false;
+  private renderState: RenderState = 'idle';
+  private error: string | null = null;
+  private saving: boolean = false;
+  private lastSavedSource: string | null = null;
+  private lastRenderedSource: string | null = null;
   
   // 监听器
   private listeners: Set<StateListener> = new Set();
   
-  // 保存定时器
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  // 渲染防抖定时器
+  private renderTimer: ReturnType<typeof setTimeout> | null = null;
   
-  // 公共访问器方法
+  // Getter 方法供外部访问
   getSource(): string {
     return this.source;
   }
@@ -36,8 +47,8 @@ export class StateManager {
     return this.lastSavedSource;
   }
   
-  getDiagram(): Diagram | null {
-    return this.diagram;
+  getLastRenderedSource(): string | null {
+    return this.lastRenderedSource;
   }
   
   // 订阅状态变化
@@ -60,29 +71,25 @@ export class StateManager {
   }
   
   // 获取当前状态快照
-  getState(): State {
+  getState(): MermaidState {
     return {
-      diagram: this.diagram,
-      loading: this.loading,
-      error: this.error,
-      saving: this.saving,
       source: this.source,
       sourceDraft: this.sourceDraft,
+      loading: this.loading,
+      rendering: this.rendering,
+      renderState: this.renderState,
+      error: this.error,
+      saving: this.saving,
       lastSavedSource: this.lastSavedSource,
-      sourceSaving: this.sourceSaving,
-      sourceError: this.sourceError,
-      selectedNodeId: this.selectedNodeId,
-      selectedEdgeId: this.selectedEdgeId,
-      imagePaddingValue: this.imagePaddingValue,
-      dragging: this.dragging,
+      lastRenderedSource: this.lastRenderedSource,
     };
   }
   
   // 设置状态并通知
-  setState(updates: Partial<State>): void {
+  setState(updates: Partial<MermaidState>): void {
     let changed = false;
     for (const [key, value] of Object.entries(updates)) {
-      if (this[key as keyof State] !== value) {
+      if (this[key as keyof MermaidState] !== value) {
         (this as any)[key] = value;
         changed = true;
       }
@@ -92,45 +99,18 @@ export class StateManager {
     }
   }
   
-  // 获取选中的节点
-  getSelectedNode(): Node | null {
-    if (!this.diagram || !this.selectedNodeId) {
-      return null;
-    }
-    return this.diagram.nodes.find(node => node.id === this.selectedNodeId) ?? null;
-  }
-  
-  // 获取选中的边
-  getSelectedEdge(): Edge | null {
-    if (!this.diagram || !this.selectedEdgeId) {
-      return null;
-    }
-    return this.diagram.edges.find(edge => edge.id === this.selectedEdgeId) ?? null;
-  }
-  
-  // 检查是否有覆盖
-  hasOverrides(): boolean {
-    if (!this.diagram) {
-      return false;
-    }
-    return (
-      this.diagram.nodes.some(node => node.overridePosition) ||
-      this.diagram.edges.some(edge => edge.overridePoints && edge.overridePoints.length > 0)
-    );
-  }
-  
-  // 清除保存定时器
-  clearSaveTimer(): void {
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
+  // 清除渲染定时器
+  clearRenderTimer(): void {
+    if (this.renderTimer !== null) {
+      clearTimeout(this.renderTimer);
+      this.renderTimer = null;
     }
   }
   
-  // 设置保存定时器
-  setSaveTimer(callback: () => void, delay: number): void {
-    this.clearSaveTimer();
-    this.saveTimer = setTimeout(callback, delay);
+  // 设置渲染定时器（防抖）
+  setRenderTimer(callback: () => void, delay: number): void {
+    this.clearRenderTimer();
+    this.renderTimer = setTimeout(callback, delay);
   }
 }
 

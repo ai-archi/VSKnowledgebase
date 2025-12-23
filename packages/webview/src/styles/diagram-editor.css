@@ -329,6 +329,8 @@ html, body {
 
 .source-panel .CodeMirror-lines {
   padding: 0;
+  position: relative !important;
+  z-index: 1 !important;
 }
 
 .source-panel .CodeMirror-sizer {
@@ -406,6 +408,49 @@ html, body {
 
 .CodeMirror-line.error-line {
   background-color: var(--editor-error-bg);
+}
+
+/* CodeMirror 光标样式 - 确保光标可见 */
+/* 使用 VSCode 主题变量，确保光标颜色与编辑器主题一致 */
+.source-panel .CodeMirror-cursor,
+.diagram-editor .source-panel .CodeMirror-cursor {
+  border-left: 2px solid var(--vscode-editorCursor-foreground, var(--editor-text, #cccccc)) !important;
+  border-right: none !important;
+  width: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: inline-block !important;
+  z-index: 10 !important;
+  position: absolute !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  height: 1.5em !important;
+  pointer-events: none !important;
+}
+
+/* 当编辑器聚焦时，光标闪烁 */
+.source-panel .CodeMirror.CodeMirror-focused .CodeMirror-cursor,
+.diagram-editor .source-panel .CodeMirror.CodeMirror-focused .CodeMirror-cursor {
+  border-left-color: var(--vscode-editorCursor-foreground, var(--editor-text, #cccccc)) !important;
+  opacity: 1 !important;
+  animation: cm-blink 1s step-end infinite !important;
+}
+
+/* 当编辑器失去焦点时，光标仍然可见但不闪烁 */
+.source-panel .CodeMirror:not(.CodeMirror-focused) .CodeMirror-cursor,
+.diagram-editor .source-panel .CodeMirror:not(.CodeMirror-focused) .CodeMirror-cursor {
+  opacity: 0.5 !important;
+  animation: none !important;
+}
+
+/* CodeMirror 光标闪烁动画 */
+@keyframes cm-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
 }
 
 /* Error Toast - 统一错误提示样式 */
