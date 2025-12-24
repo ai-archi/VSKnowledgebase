@@ -1,23 +1,14 @@
 /**
- * VSCode API Adapter for PlantUML Editor
- * 适配 PlantUML 编辑器的通信方式到 ExtensionService
+ * IDE API Adapter for PlantUML Editor
+ * 适配 PlantUML 编辑器的通信方式到 ExtensionService（支持多 IDE）
  */
 import { extensionService } from '@/services/ExtensionService';
 
 // 消息类型定义
 type MessageType = 'load-request' | 'render' | 'save';
 
-// 检测是否在 VSCode webview 环境中
-export const isVSCodeWebview = typeof window !== 'undefined' && 
-  (typeof (window as any).acquireVsCodeApi === 'function' || (window as any).vscode);
-
 // 适配 postMessage（异步调用）
 export async function postMessage(type: MessageType, payload?: any): Promise<void> {
-  if (!isVSCodeWebview) {
-    console.warn('[vscodeApiAdapter] Not in VSCode webview environment');
-    return;
-  }
-
   try {
     switch (type) {
       case 'load-request':
@@ -33,10 +24,10 @@ export async function postMessage(type: MessageType, payload?: any): Promise<voi
         await extensionService.call('savePlantUML', { source: payload?.source });
         break;
       default:
-        console.warn(`[vscodeApiAdapter] Unknown message type: ${type}`);
+        console.warn(`[ideApiAdapter] Unknown message type: ${type}`);
     }
   } catch (error) {
-    console.error(`[vscodeApiAdapter] Error sending message ${type}:`, error);
+    console.error(`[ideApiAdapter] Error sending message ${type}:`, error);
   }
 }
 
@@ -50,25 +41,25 @@ export function setupMessageHandlers(callbacks: {
 }) {
   // 监听后端推送的 load 事件（method: 'load'）
   extensionService.on('load', (data: { source: string }) => {
-    console.log('[vscodeApiAdapter] Received load event, source length:', data?.source?.length || 0);
+    console.log('[ideApiAdapter] Received load event, source length:', data?.source?.length || 0);
     callbacks.onSourceLoad?.(data.source);
   });
   
   // 监听后端推送的 render-result 事件（method: 'render-result'）
   extensionService.on('render-result', (data: { svg: string }) => {
-    console.log('[vscodeApiAdapter] Received render-result event, SVG length:', data?.svg?.length || 0);
+    console.log('[ideApiAdapter] Received render-result event, SVG length:', data?.svg?.length || 0);
     callbacks.onRenderResult?.(data.svg);
   });
   
   // 监听后端推送的 render-error 事件（method: 'render-error'）
   extensionService.on('render-error', (data: { error: string }) => {
-    console.error('[vscodeApiAdapter] Received render-error event:', data?.error);
+    console.error('[ideApiAdapter] Received render-error event:', data?.error);
     callbacks.onRenderError?.(data.error);
   });
   
   // 监听后端推送的 save-success 事件（method: 'save-success'）
   extensionService.on('save-success', () => {
-    console.log('[vscodeApiAdapter] Received save-success event');
+    console.log('[ideApiAdapter] Received save-success event');
     callbacks.onSaveSuccess?.();
   });
 }

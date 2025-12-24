@@ -2,26 +2,31 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
+import { IDEAdapter } from '../../../core/ide-api/ide-adapter';
+import { CustomTextEditorProvider, TextDocument, WebviewPanel, CancellationToken, Uri, WorkspaceEdit, Range, WebviewOptions, Disposable } from '../../../core/ide-api/ide-types';
 
 /**
  * PlantUML 编辑器提供者
  * 支持 .puml 文件的可视化编辑
  */
-export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
+export class PlantUMLEditorProvider implements CustomTextEditorProvider {
   public static readonly viewType = 'architool.plantumlEditor';
   
   // 静态缓存 jar 文件路径，避免重复查找
   private static cachedJarPath: string | null = null;
   private jarPath: string | null = null;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly ideAdapter: IDEAdapter
+  ) {}
 
   /**
    * 注册编辑器提供者
    */
-  public static register(context: vscode.ExtensionContext): vscode.Disposable {
-    const provider = new PlantUMLEditorProvider(context);
-    return vscode.window.registerCustomEditorProvider(
+  public static register(context: vscode.ExtensionContext, ideAdapter: IDEAdapter): Disposable {
+    const provider = new PlantUMLEditorProvider(context, ideAdapter);
+    return ideAdapter.registerCustomEditorProvider(
       PlantUMLEditorProvider.viewType,
       provider,
       {
@@ -37,28 +42,30 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
    * 解析自定义编辑器
    */
   async resolveCustomTextEditor(
-    document: vscode.TextDocument,
-    webviewPanel: vscode.WebviewPanel,
-    token: vscode.CancellationToken
+    document: TextDocument,
+    webviewPanel: WebviewPanel,
+    token: CancellationToken
   ): Promise<void> {
     // 设置 Webview 内容
-    const extensionPath = this.context.extensionPath;
+    const extensionPath = this.ideAdapter.getExtensionPath();
     const webviewPath = path.join(extensionPath, 'dist', 'webview');
-    const webviewUri = vscode.Uri.file(webviewPath);
+    const webviewUri = this.ideAdapter.UriFile(webviewPath);
     
-    webviewPanel.webview.options = {
+    const extensionUri = this.ideAdapter.getExtensionUri();
+    const options: WebviewOptions = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
+        this.ideAdapter.UriJoinPath(extensionUri, 'dist'),
         webviewUri,
       ],
       enableCommandUris: false,
     };
+    (webviewPanel.webview as any).options = options;
 
-    webviewPanel.webview.html = this.getWebviewContent(
-      webviewPanel.webview,
-      document,
-      this.context.extensionUri
+    (webviewPanel.webview as any).html = this.getWebviewContent(
+      webviewPanel.webview as any,
+      document as any,
+      this.context.extensionUri as any
     );
 
     // 处理来自 Webview 的消息（使用 ExtensionService 格式）
@@ -100,14 +107,16 @@ export class PlantUMLEditorProvider implements vscode.CustomTextEditorProvider {
             // 保存文档
             const { source } = message.params || {};
             if (source !== undefined) {
-              const edit = new vscode.WorkspaceEdit();
+              const edit = this.ideAdapter.createWorkspaceEdit();
               edit.replace(
                 document.uri,
-                new vscode.Range(0, 0, document.lineCount, 0),
+                this.ideAdapter.Range(0, 0, document.lineCount, 0),
                 source
               );
-              await vscode.workspace.applyEdit(edit);
-              await document.save();
+              await this.ideAdapter.applyEdit(edit);
+              if ((document as any).save) {
+                await (document as any).save();
+              }
               webviewPanel.webview.postMessage({
                 method: 'save-success',
               });

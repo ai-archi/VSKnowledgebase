@@ -9,6 +9,8 @@ import { FileOperationDomainService } from '../modules/shared/domain/services/Fi
 import { CommandExecutionContext } from '../modules/shared/domain/value_object/CommandExecutionContext';
 import { Artifact } from '../modules/shared/domain/entity/artifact';
 import { Logger } from '../core/logger/Logger';
+import { IDEAdapter } from '../core/ide-api/ide-adapter';
+import { WebviewView, Webview, CancellationToken, Uri, WebviewOptions } from '../core/ide-api/ide-types';
 
 /**
  * 视点应用服务接口（临时定义，待后续迁移完整服务）
@@ -28,9 +30,9 @@ export interface AIApplicationService {
  * 视点 WebviewView Provider
  * 用于在 panel 中直接显示 Webview
  */
-export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider {
-  private webviewView: vscode.WebviewView | null = null;
-  private fileWatcherDisposable: vscode.Disposable | null = null;
+export class ViewpointWebviewViewProvider {
+  private webviewView: WebviewView | null = null;
+  private fileWatcherDisposable: any | null = null;
 
   constructor(
     private viewpointService: ViewpointApplicationService,
@@ -40,13 +42,14 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
     private aiService: AIApplicationService,
     private fileOperationService: FileOperationDomainService,
     private logger: Logger,
-    private context: vscode.ExtensionContext
+    private context: vscode.ExtensionContext,
+    private ideAdapter: IDEAdapter
   ) {}
 
   resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
-    token: vscode.CancellationToken
+    webviewView: WebviewView,
+    context: { readonly webview: Webview },
+    token: CancellationToken
   ): void | Thenable<void> {
     try {
       this.logger.info('[ViewpointWebviewViewProvider] Resolving webview view');
@@ -64,22 +67,23 @@ export class ViewpointWebviewViewProvider implements vscode.WebviewViewProvider 
       this.logger.info(`[ViewpointWebviewViewProvider] HTML path: ${htmlPath}`);
       this.logger.info(`[ViewpointWebviewViewProvider] HTML file exists: ${fs.existsSync(htmlPath)}`);
       
-      webviewView.webview.options = {
+      const options: WebviewOptions = {
         enableScripts: true,
-        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+        localResourceRoots: [this.ideAdapter.UriFile(webviewDistPath)],
       };
+      (webviewView.webview as any).options = options;
 
       // 加载 HTML
       this.logger.info('[ViewpointWebviewViewProvider] Loading webview HTML content...');
-      const html = this.getWebviewContent(webviewView.webview);
-      webviewView.webview.html = html;
+      const html = this.getWebviewContent(webviewView.webview as any);
+      (webviewView.webview as any).html = html;
       this.logger.info('[ViewpointWebviewViewProvider] Webview HTML loaded successfully');
 
       // 监听 webview 错误
       webviewView.webview.onDidReceiveMessage(
         async (message) => {
           try {
-            await this.handleWebviewMessage(webviewView.webview, message);
+            await this.handleWebviewMessage(webviewView.webview as any, message);
           } catch (error: any) {
             this.logger.error('[ViewpointWebviewViewProvider] Error in message handler', error);
           }

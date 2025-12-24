@@ -1,5 +1,6 @@
-import * as vscode from 'vscode';
+import { IDEAdapter } from '../ide-api/ide-adapter';
 import { Logger } from '../logger/Logger';
+import { WebviewPanel, Webview, ViewColumn, WebviewOptions } from '../ide-api/ide-types';
 
 /**
  * Webview RPC 消息接口
@@ -24,15 +25,15 @@ export interface WebviewResponse {
 
 /**
  * Webview 适配器
- * 处理 Webview 与 Extension 后端的 RPC 通信
+ * 处理 Webview 与 Extension 后端的 RPC 通信，使用 IDEAdapter 接口
  */
 export class WebviewAdapter {
-  private webviewPanel: vscode.WebviewPanel | null = null;
+  private webviewPanel: WebviewPanel | null = null;
   private messageHandlers: Map<string, (params: any) => Promise<any>> = new Map();
   private logger: Logger;
   private static globalInstance: WebviewAdapter | null = null;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, private ideAdapter: IDEAdapter) {
     this.logger = logger;
     // 设置为全局实例，以便从任何地方访问
     WebviewAdapter.globalInstance = this;
@@ -48,7 +49,7 @@ export class WebviewAdapter {
   /**
    * 处理来自任何 webview 的消息（全局消息处理器）
    */
-  static async handleGlobalMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
+  static async handleGlobalMessage(webview: Webview, message: WebviewMessage): Promise<void> {
     const instance = WebviewAdapter.getGlobalInstance();
     if (instance) {
       await instance.handleMessage(webview, message);
@@ -61,31 +62,31 @@ export class WebviewAdapter {
   createWebviewPanel(
     viewType: string,
     title: string,
-    viewColumn: vscode.ViewColumn = vscode.ViewColumn.One
-  ): vscode.WebviewPanel {
+    viewColumn: ViewColumn = ViewColumn.One
+  ): WebviewPanel {
     if (this.webviewPanel) {
       this.webviewPanel.reveal(viewColumn);
       return this.webviewPanel;
     }
 
-    const panel = vscode.window.createWebviewPanel(
+    const options: WebviewOptions = {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      localResourceRoots: [],
+    };
+
+    const panel = this.ideAdapter.createWebviewPanel(
       viewType,
       title,
       viewColumn,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [],
-      }
+      options
     );
 
     // 监听来自 Webview 的消息
     panel.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
         await this.handleMessage(panel.webview, message);
-      },
-      null,
-      []
+      }
     );
 
     // 监听面板关闭事件
@@ -114,14 +115,14 @@ export class WebviewAdapter {
   /**
    * 向 Webview 发送消息
    */
-  postMessage(webview: vscode.Webview, message: WebviewResponse): void {
+  postMessage(webview: Webview, message: WebviewResponse): void {
     webview.postMessage(message);
   }
 
   /**
    * 处理来自 Webview 的消息
    */
-  async handleMessage(webview: vscode.Webview, message: WebviewMessage): Promise<void> {
+  async handleMessage(webview: Webview, message: WebviewMessage): Promise<void> {
     try {
       this.logger.info(`[WebviewAdapter] handleMessage called with method: ${message.method}`, { 
         id: message.id, 
@@ -170,7 +171,7 @@ export class WebviewAdapter {
   /**
    * 获取 Webview HTML 内容
    */
-  getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, htmlContent: string): string {
+  getWebviewContent(webview: Webview, extensionUri: any, htmlContent: string): string {
     // 将相对路径转换为 Webview URI
     // 这里简化处理，实际应该处理资源文件路径
     return htmlContent;

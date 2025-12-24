@@ -34,7 +34,7 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     protected logger: Logger,
     protected context: vscode.ExtensionContext,
     protected treeViewProvider: BaseArtifactTreeViewProvider<T>,
-    protected treeView: vscode.TreeView<vscode.TreeItem>,
+    protected treeView: any, // TreeView<T> from ide-types, but BaseArtifactTreeViewProvider uses vscode.TreeView
     protected webviewAdapter: WebviewAdapter
   ) {}
 

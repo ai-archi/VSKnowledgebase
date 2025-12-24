@@ -14,6 +14,7 @@ export const TYPES = {
   WorkspaceFileSystemAdapter: Symbol.for('WorkspaceFileSystemAdapter'),
   YamlMetadataRepository: Symbol.for('YamlMetadataRepository'),
   GitVaultAdapter: Symbol.for('GitVaultAdapter'),
+  IDEAdapter: Symbol.for('IDEAdapter'),
 
   // Repositories
   ArtifactRepository: Symbol.for('ArtifactRepository'),

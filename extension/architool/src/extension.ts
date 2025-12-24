@@ -30,6 +30,8 @@ import { CodeFileSystemApplicationService } from './modules/shared/application/C
 import { AICommandApplicationService } from './modules/shared/application/AICommandApplicationService';
 import { MermaidEditorProvider } from './modules/editor/mermaid/MermaidEditorProvider';
 import { PlantUMLEditorProvider } from './modules/editor/plantuml/PlantUMLEditorProvider';
+import { IDEAdapter } from './core/ide-api/ide-adapter';
+import { ViewColumn } from './core/ide-api/ide-types';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -45,8 +47,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	// 初始化依赖注入容器
 	const container = createContainer(architoolRoot, context, logger);
 	
-	// 创建命令适配器
-	const commandAdapter = new CommandAdapter(context);
+	// 获取 IDE 适配器
+	const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+	
+	// 创建命令适配器（使用 IDEAdapter）
+	const commandAdapter = new CommandAdapter(ideAdapter);
 	
 	// 初始化文档视图和命令
 	const documentTreeViewProvider = await initializeDocumentViewAndCommand(logger, context, commandAdapter, container);
@@ -54,7 +59,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	initializeOtherCommands(logger, context, commandAdapter, container, documentTreeViewProvider);
 	
 	// 注册自定义编辑器
-	initializeCustomEditors(logger, context);
+	initializeCustomEditors(logger, context, container);
 }
 
 /**
@@ -120,16 +125,20 @@ async function initializeDocumentViewAndCommand(
 		const fileTreeDomainService = container.get<FileTreeDomainService>(TYPES.FileTreeDomainService);
 		const fileOperationDomainService = container.get<FileOperationDomainService>(TYPES.FileOperationDomainService);
 		
+		// 获取 IDE 适配器
+		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		
 		// 初始化文档树视图
 		const documentTreeViewProvider = new DocumentTreeViewProvider(
 			vaultService,
 			artifactService,
-			logger
+			logger,
+			ideAdapter
 		);
-		const documentTreeView = vscode.window.createTreeView('architool.documentView', {
-			treeDataProvider: documentTreeViewProvider
-		});
-		context.subscriptions.push(documentTreeView);
+		// 注意：createTreeView 需要 TreeDataProvider，但 DocumentTreeViewProvider 实现了 vscode.TreeDataProvider
+		// 需要进行类型转换
+		const documentTreeView = ideAdapter.createTreeView('architool.documentView', documentTreeViewProvider as any) as any;
+		ideAdapter.subscribe(documentTreeView);
 		logger.info('Document tree view registered');
 
 		// 从容器获取 DocumentApplicationService 和其他服务
@@ -146,7 +155,8 @@ async function initializeDocumentViewAndCommand(
 			templateService,
 			artifactService,
 			codeFileService,
-			aiCommandService
+			aiCommandService,
+			ideAdapter
 		);
 
 		// 初始化文档命令（需要视图实例）
@@ -235,6 +245,9 @@ function initializeOtherCommands(
 		// 获取 FileOperationDomainService（用于提示词生成，必需）
 		const fileOperationService = container.get<FileOperationDomainService>(TYPES.FileOperationDomainService);
 		
+		// 获取 IDE 适配器（如果还没有获取）
+		const ideAdapterForViewpoint = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		
 		const viewpointCommands = new ViewpointCommands(
 			viewpointService,
 			vaultService,
@@ -243,7 +256,8 @@ function initializeOtherCommands(
 			aiService,
 			fileOperationService,
 			logger,
-			context
+			context,
+			ideAdapterForViewpoint
 		);
 		viewpointCommands.registerCommands(context);
 
@@ -267,21 +281,26 @@ function initializeOtherCommands(
  */
 function initializeCustomEditors(
 	logger: Logger,
-	context: vscode.ExtensionContext
+	context: vscode.ExtensionContext,
+	container: Container
 ) {
 	try {
+		// 获取 IDE 适配器
+		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		
 		// 注册 Mermaid 编辑器
-		const mermaidEditorDisposable = MermaidEditorProvider.register(context);
-		context.subscriptions.push(mermaidEditorDisposable);
+		const mermaidEditorDisposable = MermaidEditorProvider.register(context, ideAdapter);
+		ideAdapter.subscribe(mermaidEditorDisposable);
 		logger.info('Mermaid editor registered');
 
 		// 注册 PlantUML 编辑器
-		const plantumlEditorDisposable = PlantUMLEditorProvider.register(context);
-		context.subscriptions.push(plantumlEditorDisposable);
+		const plantumlEditorDisposable = PlantUMLEditorProvider.register(context, ideAdapter);
+		ideAdapter.subscribe(plantumlEditorDisposable);
 		logger.info('PlantUML editor registered');
 	} catch (error: any) {
 		logger.error('Failed to register custom editors:', error);
-		vscode.window.showErrorMessage(`Failed to register custom editors: ${error.message}`);
+		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		ideAdapter.showErrorMessage(`Failed to register custom editors: ${error.message}`);
 	}
 }
 

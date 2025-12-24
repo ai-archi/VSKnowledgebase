@@ -11,6 +11,8 @@ import { VaultFileSystemAdapter } from '../../modules/shared/infrastructure/stor
 import { WorkspaceFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/WorkspaceFileSystemAdapter';
 import { WorkspaceFileSystemAdapterImpl } from '../../modules/shared/infrastructure/storage/file/WorkspaceFileSystemAdapterImpl';
 import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/shared/infrastructure/storage/git/GitVaultAdapter';
+import { IDEAdapter } from '../../core/ide-api/ide-adapter';
+import { VSCodeAdapter } from '../../core/ide-api/vscode-adapter';
 
 // Repositories
 import { ArtifactRepositoryImpl } from '../../modules/shared/infrastructure/ArtifactRepositoryImpl';
@@ -75,6 +77,8 @@ export function createContainer(
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot));
   container.bind<WorkspaceFileSystemAdapter>(TYPES.WorkspaceFileSystemAdapter)
     .toConstantValue(new WorkspaceFileSystemAdapterImpl());
+  container.bind<IDEAdapter>(TYPES.IDEAdapter)
+    .toConstantValue(new VSCodeAdapter(context!));
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
     .to(GitVaultAdapterImpl).inSingletonScope();
 

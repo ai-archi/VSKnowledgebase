@@ -1,22 +1,22 @@
-import * as vscode from 'vscode';
+import { IDEAdapter } from '../ide-api/ide-adapter';
+import { TreeView, TreeDataProvider, TreeViewRevealOptions } from '../ide-api/ide-types';
 
 /**
  * TreeView 适配器
- * 封装 VSCode TreeView API
+ * 封装 TreeView API，使用 IDEAdapter 接口
  */
 export class TreeViewAdapter<T> {
-  private treeView: vscode.TreeView<T>;
+  private treeView: TreeView<T>;
 
   constructor(
+    ideAdapter: IDEAdapter,
     viewId: string,
-    treeDataProvider: vscode.TreeDataProvider<T>
+    treeDataProvider: TreeDataProvider<T>
   ) {
-    this.treeView = vscode.window.createTreeView(viewId, {
-      treeDataProvider,
-    });
+    this.treeView = ideAdapter.createTreeView(viewId, treeDataProvider);
   }
 
-  reveal(element: T, options?: { select?: boolean; focus?: boolean; expand?: boolean }): Thenable<void> {
+  reveal(element: T, options?: TreeViewRevealOptions): Thenable<void> {
     return this.treeView.reveal(element, options);
   }
 

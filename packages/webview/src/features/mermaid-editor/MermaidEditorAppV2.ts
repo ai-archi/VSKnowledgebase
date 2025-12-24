@@ -9,8 +9,7 @@ import {
   saveDiagram,
   loadMermaid,
   renderMermaid,
-  isVSCodeWebview,
-} from './vscodeApiAdapter';
+} from './ideApiAdapter';
 import { extensionService } from '@/services/ExtensionService';
 
 interface EditorElements {
@@ -143,38 +142,33 @@ export class MermaidEditorAppV2 {
     this.setupEventListeners();
     this.setupWorkspaceResizer();
     
-    // 设置 VSCode 消息监听
-    if (isVSCodeWebview) {
-      // 只使用 ExtensionService 的事件监听，避免重复处理
-      // ExtensionService 已经监听了 window.addEventListener('message')
-      // 监听源码加载事件
-      extensionService.on('load', (data: { source?: string; diagram?: any }) => {
-        if (this.isSaving) return;
-        // 兼容新旧格式：新格式是 { source: string }，旧格式是 { diagram: { source: string } }
-        if (data?.source !== undefined) {
-          this.handleSourceLoad(data.source);
-        } else if (data?.diagram) {
-          // 兼容旧格式
-          const source = data.diagram?.source || '';
-          this.handleSourceLoad(source);
-        }
-      });
-      
-      // 监听渲染结果事件（前端渲染，这里只用于确认）
-      extensionService.on('render-result', (_data: any) => {
-        console.log('[MermaidEditorAppV2] Received render-result confirmation');
-      });
-      
-      // 监听保存成功事件（与 PlantUML 保持一致）
-      extensionService.on('save-success', () => {
-        this.handleSaveSuccess();
-      });
-      
-      // 加载初始图表
-      this.loadDiagram();
-    } else {
-      this.loadDiagram();
-    }
+    // 设置 IDE 消息监听（通过 ExtensionService）
+    // ExtensionService 已经监听了 window.addEventListener('message')
+    // 监听源码加载事件
+    extensionService.on('load', (data: { source?: string; diagram?: any }) => {
+      if (this.isSaving) return;
+      // 兼容新旧格式：新格式是 { source: string }，旧格式是 { diagram: { source: string } }
+      if (data?.source !== undefined) {
+        this.handleSourceLoad(data.source);
+      } else if (data?.diagram) {
+        // 兼容旧格式
+        const source = data.diagram?.source || '';
+        this.handleSourceLoad(source);
+      }
+    });
+    
+    // 监听渲染结果事件（前端渲染，这里只用于确认）
+    extensionService.on('render-result', (_data: any) => {
+      console.log('[MermaidEditorAppV2] Received render-result confirmation');
+    });
+    
+    // 监听保存成功事件（与 PlantUML 保持一致）
+    extensionService.on('save-success', () => {
+      this.handleSaveSuccess();
+    });
+    
+    // 加载初始图表
+    this.loadDiagram();
   }
 
   setupEventListeners() {
@@ -541,11 +535,9 @@ export class MermaidEditorAppV2 {
       }
       
       // 通知后端渲染完成（用于确认，参考 PlantUML 的方式）
-      if (isVSCodeWebview) {
-        renderMermaid(source).catch(err => {
-          console.warn('[MermaidEditorAppV2] Failed to notify render completion:', err);
-        });
-      }
+      renderMermaid(source).catch(err => {
+        console.warn('[MermaidEditorAppV2] Failed to notify render completion:', err);
+      });
       
       // 渲染成功后，再次检查并移除可能的错误信息
       if (this.elements.diagramContainer) {

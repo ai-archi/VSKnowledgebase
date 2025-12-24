@@ -15,13 +15,11 @@ import { commonmark } from '@milkdown/preset-commonmark';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { nord } from '@milkdown/theme-nord';
 import EditorToolbar from './EditorToolbar.vue';
+import { extensionService } from '@/services/ExtensionService';
 
 const editorContainer = ref<HTMLElement | null>(null);
 let editor: Editor | null = null;
 let currentContent = ref('');
-
-// 获取 VSCode API
-const vscode = (window as any).vscode || (window as any).acquireVsCodeApi?.();
 
 // 防抖保存
 let saveTimeout: NodeJS.Timeout | null = null;
@@ -30,11 +28,10 @@ const debounceSave = (content: string) => {
     clearTimeout(saveTimeout);
   }
   saveTimeout = setTimeout(() => {
-    if (vscode && content !== currentContent.value) {
+    if (content !== currentContent.value) {
       currentContent.value = content;
-      vscode.postMessage({
-        method: 'saveSolution',
-        params: { content },
+      extensionService.call('saveSolution', { content }).catch((error) => {
+        console.error('Failed to save solution:', error);
       });
     }
   }, 500);
@@ -107,15 +104,19 @@ onMounted(async () => {
 
       console.log('Milkdown editor initialized successfully');
 
-      // 监听来自扩展的消息
-      if (vscode) {
-        window.addEventListener('message', handleMessage);
-        
-        // 请求初始内容
-        vscode.postMessage({
-          method: 'loadSolution',
-        });
-      }
+      // 监听来自扩展的消息（通过 ExtensionService）
+      extensionService.on('load', (data: { source?: string }) => {
+        if (data?.source && editor) {
+          editor.action((ctx) => {
+            ctx.get(rootCtx).setMarkdown(data.source!);
+          });
+        }
+      });
+      
+      // 请求初始内容
+      extensionService.call('loadSolution').catch((error) => {
+        console.error('Failed to load solution:', error);
+      });
     } catch (error) {
       console.error('Failed to initialize Milkdown editor:', error);
       console.error('Error details:', {
@@ -188,11 +189,9 @@ const handleMessage = (event: MessageEvent) => {
   } else if (message.method === 'initialize-success') {
     console.log('Missing chapters initialized successfully');
     // 重新加载内容
-    if (vscode) {
-      vscode.postMessage({
-        method: 'loadSolution',
-      });
-    }
+    extensionService.call('loadSolution').catch((error) => {
+      console.error('Failed to load solution:', error);
+    });
   } else if (message.method === 'initialize-error') {
     const { error } = message.params || {};
     console.error('Failed to initialize missing chapters:', error);

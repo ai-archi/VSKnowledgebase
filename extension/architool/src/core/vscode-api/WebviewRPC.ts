@@ -8,6 +8,7 @@ import { CodeFileSystemApplicationService } from '../../modules/shared/applicati
 import { AICommandApplicationService } from '../../modules/shared/application/AICommandApplicationService';
 import { CommandExecutionContext } from '../../modules/shared/domain/value_object/CommandExecutionContext';
 import { WebviewAdapter, WebviewMessage } from './WebviewAdapter';
+import { IDEAdapter } from '../ide-api/ide-adapter';
 
 /**
  * Webview RPC 服务
@@ -23,9 +24,10 @@ export class WebviewRPC {
     private templateService: TemplateApplicationService,
     private artifactService: ArtifactApplicationService,
     private codeFileService: CodeFileSystemApplicationService,
-    private aiCommandService: AICommandApplicationService
+    private aiCommandService: AICommandApplicationService,
+    ideAdapter: IDEAdapter
   ) {
-    this.webviewAdapter = new WebviewAdapter(logger);
+    this.webviewAdapter = new WebviewAdapter(logger, ideAdapter);
     this.registerAllMethods();
   }
 
@@ -55,7 +57,7 @@ export class WebviewRPC {
   setupWebviewMessageHandler(webview: vscode.Webview): void {
     webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
-        await this.webviewAdapter['handleMessage'](webview, message);
+        await this.webviewAdapter['handleMessage'](webview as any, message);
       },
       null,
       []

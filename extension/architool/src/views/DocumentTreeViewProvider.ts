@@ -7,18 +7,21 @@ import { Artifact } from '../modules/shared/domain/entity/artifact';
 import { VaultApplicationService } from '../modules/shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../modules/shared/application/ArtifactApplicationService';
 import { Logger } from '../core/logger/Logger';
+import { IDEAdapter } from '../core/ide-api/ide-adapter';
+import { TreeItemCollapsibleState, Uri, Command } from '../core/ide-api/ide-types';
 
 export class DocumentTreeItem extends BaseArtifactTreeItem {
   public readonly artifact?: Artifact;
 
   constructor(
     artifact?: Artifact,
-    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None,
+    collapsibleState: TreeItemCollapsibleState = TreeItemCollapsibleState.None,
     vaultName?: string,
     contextValue?: string,
     folderPath?: string,
     filePath?: string,
-    vaultId?: string
+    vaultId?: string,
+    ideAdapter?: IDEAdapter
   ) {
     if (artifact) {
       // 使用文件名（包含扩展名）作为显示名称
@@ -26,11 +29,12 @@ export class DocumentTreeItem extends BaseArtifactTreeItem {
       super(fileName, collapsibleState, artifact.vault.name, artifact.vault.id, undefined, artifact.path, 'document');
       this.artifact = artifact;
       this.tooltip = artifact.path;
+      const uri = ideAdapter ? ideAdapter.UriFile(artifact.contentLocation) : vscode.Uri.file(artifact.contentLocation) as any;
       this.command = {
         command: 'vscode.open',
         title: 'Open Document',
-        arguments: [vscode.Uri.file(artifact.contentLocation)],
-      };
+        arguments: [uri],
+      } as Command;
     } else if (filePath !== undefined) {
       // 文件节点（未索引的文件，直接使用文件系统信息）
       const fileName = path.basename(filePath);
@@ -51,12 +55,16 @@ export class DocumentTreeItem extends BaseArtifactTreeItem {
 }
 
 export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<DocumentTreeItem> {
+  private ideAdapter?: IDEAdapter;
+
   constructor(
     vaultService: VaultApplicationService,
     treeService: ArtifactApplicationService,
-    logger: Logger
+    logger: Logger,
+    ideAdapter?: IDEAdapter
   ) {
     super(vaultService, treeService, logger);
+    this.ideAdapter = ideAdapter;
   }
 
   protected getRootDirectory(): string {
@@ -81,7 +89,7 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
 
   protected createTreeItem(
     label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
+    collapsibleState: TreeItemCollapsibleState,
     vaultName?: string,
     vaultId?: string,
     folderPath?: string,
@@ -95,7 +103,8 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
       contextValue,
       folderPath,
       filePath,
-      vaultId
+      vaultId,
+      this.ideAdapter
     );
   }
 
@@ -111,7 +120,7 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
     return filteredVaults.map(vault =>
       this.createTreeItem(
         vault.name,
-        vscode.TreeItemCollapsibleState.Collapsed,
+        TreeItemCollapsibleState.Collapsed,
         vault.name,
         vault.id,
         undefined,

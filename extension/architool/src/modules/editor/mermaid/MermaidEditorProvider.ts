@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { mermaidToDiagramData, diagramDataToMermaid, DiagramData, Point } from './mermaidConverter';
+import { IDEAdapter } from '../../../core/ide-api/ide-adapter';
+import { CustomTextEditorProvider, TextDocument, WebviewPanel, CancellationToken, Uri, WorkspaceEdit, Range, ViewColumn, WebviewOptions, Disposable } from '../../../core/ide-api/ide-types';
 
 // API 消息类型定义
 interface LayoutUpdate {
@@ -13,17 +15,20 @@ interface LayoutUpdate {
  * Mermaid 编辑器提供者
  * 支持 .mmd 文件的可视化拖拽编辑（基于 oxdraw 前端）
  */
-export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
+export class MermaidEditorProvider implements CustomTextEditorProvider {
   public static readonly viewType = 'architool.mermaidEditor';
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly ideAdapter: IDEAdapter
+  ) {}
 
   /**
    * 注册编辑器提供者
    */
-  public static register(context: vscode.ExtensionContext): vscode.Disposable {
-    const provider = new MermaidEditorProvider(context);
-    return vscode.window.registerCustomEditorProvider(
+  public static register(context: vscode.ExtensionContext, ideAdapter: IDEAdapter): Disposable {
+    const provider = new MermaidEditorProvider(context, ideAdapter);
+    return ideAdapter.registerCustomEditorProvider(
       MermaidEditorProvider.viewType,
       provider,
       {
@@ -39,28 +44,31 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
    * 解析自定义编辑器
    */
   async resolveCustomTextEditor(
-    document: vscode.TextDocument,
-    webviewPanel: vscode.WebviewPanel,
-    token: vscode.CancellationToken
+    document: TextDocument,
+    webviewPanel: WebviewPanel,
+    token: CancellationToken
   ): Promise<void> {
     // 设置 Webview 内容
-    const extensionPath = this.context.extensionPath;
+    const extensionPath = this.ideAdapter.getExtensionPath();
     const webviewPath = path.join(extensionPath, 'dist', 'webview');
-    const webviewUri = vscode.Uri.file(webviewPath);
+    const webviewUri = this.ideAdapter.UriFile(webviewPath);
     
-    webviewPanel.webview.options = {
+    const extensionUri = this.ideAdapter.getExtensionUri();
+    const options: WebviewOptions = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
+        this.ideAdapter.UriJoinPath(extensionUri, 'dist'),
         webviewUri,
       ],
       enableCommandUris: false,
     };
+    // 设置 webview 选项（必须在设置 HTML 之前）
+    (webviewPanel.webview as any).options = options;
 
-    webviewPanel.webview.html = this.getWebviewContent(
-      webviewPanel.webview,
-      document,
-      this.context.extensionUri
+    (webviewPanel.webview as any).html = this.getWebviewContent(
+      webviewPanel.webview as any,
+      document as any,
+      this.context.extensionUri as any
     );
 
     // 处理来自 Webview 的消息（使用 ExtensionService 格式）
@@ -127,16 +135,18 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                 timestamp: new Date().toISOString()
               });
               
-              const edit = new vscode.WorkspaceEdit();
+              const edit = this.ideAdapter.createWorkspaceEdit();
               edit.replace(
                 document.uri,
-                new vscode.Range(0, 0, document.lineCount, 0),
+                this.ideAdapter.Range(0, 0, document.lineCount, 0),
                 mermaidSource
               );
-              await vscode.workspace.applyEdit(edit);
+              await this.ideAdapter.applyEdit(edit);
               console.log('[MermaidEditorProvider] saveDiagram: edit applied');
               
-              await document.save();
+              if ((document as any).save) {
+                await (document as any).save();
+              }
               console.log('[MermaidEditorProvider] saveDiagram: document saved');
               
               const savedDocumentText = document.getText();
@@ -200,14 +210,16 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                 if (payload && typeof payload === 'object' && 'diagram' in payload) {
                   const diagram = payload.diagram as DiagramData;
                   const mermaidSource = diagramDataToMermaid(diagram);
-                  const edit = new vscode.WorkspaceEdit();
+                  const edit = this.ideAdapter.createWorkspaceEdit();
                   edit.replace(
-                    document.uri,
-                    new vscode.Range(0, 0, document.lineCount, 0),
+                    document.uri as any,
+                    this.ideAdapter.Range(0, 0, document.lineCount, 0),
                     mermaidSource
                   );
-                  await vscode.workspace.applyEdit(edit);
-                  await document.save();
+                  await this.ideAdapter.applyEdit(edit);
+                  if ((document as any).save) {
+                await (document as any).save();
+              }
                   shouldUpdateDocument = true;
                 }
                 break;
@@ -248,14 +260,16 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                   }
                 }
                 const mermaidSource = diagramDataToMermaid(diagram);
-                const edit = new vscode.WorkspaceEdit();
+                const edit = this.ideAdapter.createWorkspaceEdit();
                 edit.replace(
-                  document.uri,
-                  new vscode.Range(0, 0, document.lineCount, 0),
+                  document.uri as any,
+                  this.ideAdapter.Range(0, 0, document.lineCount, 0),
                   mermaidSource
                 );
-                await vscode.workspace.applyEdit(edit);
-                await document.save();
+                await this.ideAdapter.applyEdit(edit);
+                if ((document as any).save) {
+                await (document as any).save();
+              }
                 shouldUpdateDocument = true;
                 break;
               }
@@ -263,14 +277,16 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
               case 'updateSource': {
                 if (payload && typeof payload === 'object' && 'source' in payload) {
                   const source = payload.source as string;
-                  const edit = new vscode.WorkspaceEdit();
+                  const edit = this.ideAdapter.createWorkspaceEdit();
                   edit.replace(
-                    document.uri,
-                    new vscode.Range(0, 0, document.lineCount, 0),
+                    document.uri as any,
+                    this.ideAdapter.Range(0, 0, document.lineCount, 0),
                     source
                   );
-                  await vscode.workspace.applyEdit(edit);
-                  await document.save();
+                  await this.ideAdapter.applyEdit(edit);
+                  if ((document as any).save) {
+                await (document as any).save();
+              }
                   shouldUpdateDocument = true;
                 }
                 break;
@@ -283,14 +299,16 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                 // 应用样式更新（这里简化处理，实际应该更新 diagram 中的样式信息）
                 // 注意：Mermaid 的样式通常通过 CSS 或注释来设置，这里可能需要更复杂的处理
                 const mermaidSource = diagramDataToMermaid(diagram);
-                const edit = new vscode.WorkspaceEdit();
+                const edit = this.ideAdapter.createWorkspaceEdit();
                 edit.replace(
-                  document.uri,
-                  new vscode.Range(0, 0, document.lineCount, 0),
+                  document.uri as any,
+                  this.ideAdapter.Range(0, 0, document.lineCount, 0),
                   mermaidSource
                 );
-                await vscode.workspace.applyEdit(edit);
-                await document.save();
+                await this.ideAdapter.applyEdit(edit);
+                if ((document as any).save) {
+                await (document as any).save();
+              }
                 shouldUpdateDocument = true;
                 break;
               }
@@ -304,14 +322,16 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                   diagram.nodes = diagram.nodes.filter(n => n.id !== nodeId);
                   diagram.edges = diagram.edges.filter(e => e.from !== nodeId && e.to !== nodeId);
                   const mermaidSource = diagramDataToMermaid(diagram);
-                  const edit = new vscode.WorkspaceEdit();
+                  const edit = this.ideAdapter.createWorkspaceEdit();
                   edit.replace(
-                    document.uri,
-                    new vscode.Range(0, 0, document.lineCount, 0),
+                    document.uri as any,
+                    this.ideAdapter.Range(0, 0, document.lineCount, 0),
                     mermaidSource
                   );
-                  await vscode.workspace.applyEdit(edit);
-                  await document.save();
+                  await this.ideAdapter.applyEdit(edit);
+                  if ((document as any).save) {
+                await (document as any).save();
+              }
                   shouldUpdateDocument = true;
                 }
                 break;
@@ -325,14 +345,16 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
                   // 删除边
                   diagram.edges = diagram.edges.filter(e => e.id !== edgeId);
                   const mermaidSource = diagramDataToMermaid(diagram);
-                  const edit = new vscode.WorkspaceEdit();
+                  const edit = this.ideAdapter.createWorkspaceEdit();
                   edit.replace(
-                    document.uri,
-                    new vscode.Range(0, 0, document.lineCount, 0),
+                    document.uri as any,
+                    this.ideAdapter.Range(0, 0, document.lineCount, 0),
                     mermaidSource
                   );
-                  await vscode.workspace.applyEdit(edit);
-                  await document.save();
+                  await this.ideAdapter.applyEdit(edit);
+                  if ((document as any).save) {
+                await (document as any).save();
+              }
                   shouldUpdateDocument = true;
                 }
                 break;
@@ -404,31 +426,35 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
               if ((message as any).diagram) {
                 const diagram = (message as any).diagram as DiagramData;
                 const mermaidSource = diagramDataToMermaid(diagram);
-                const edit = new vscode.WorkspaceEdit();
+                const edit = this.ideAdapter.createWorkspaceEdit();
                 edit.replace(
-                  document.uri,
-                  new vscode.Range(0, 0, document.lineCount, 0),
+                  document.uri as any,
+                  this.ideAdapter.Range(0, 0, document.lineCount, 0),
                   mermaidSource
                 );
-                const success = await vscode.workspace.applyEdit(edit);
+                const success = await this.ideAdapter.applyEdit(edit);
                 if (!success) {
-                  vscode.window.showErrorMessage('Failed to save document');
+                  this.ideAdapter.showErrorMessage('Failed to save document');
                 } else {
-                  await document.save();
+                  if ((document as any).save) {
+                    await (document as any).save();
+                  }
                 }
               } else if ((message as any).content) {
                 // 兼容旧的保存方式（直接保存内容）
-                const edit = new vscode.WorkspaceEdit();
+                const edit = this.ideAdapter.createWorkspaceEdit();
                 edit.replace(
-                  document.uri,
-                  new vscode.Range(0, 0, document.lineCount, 0),
+                  document.uri as any,
+                  this.ideAdapter.Range(0, 0, document.lineCount, 0),
                   (message as any).content
                 );
-                const success = await vscode.workspace.applyEdit(edit);
+                const success = await this.ideAdapter.applyEdit(edit);
                 if (!success) {
-                  vscode.window.showErrorMessage('Failed to save document');
+                  this.ideAdapter.showErrorMessage('Failed to save document');
                 } else {
-                  await document.save();
+                  if ((document as any).save) {
+                    await (document as any).save();
+                  }
                 }
               }
               break;
@@ -436,23 +462,25 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
             case 'save-source':
               // 保存源代码
               if ((message as any).source) {
-                const edit = new vscode.WorkspaceEdit();
+                const edit = this.ideAdapter.createWorkspaceEdit();
                 edit.replace(
-                  document.uri,
-                  new vscode.Range(0, 0, document.lineCount, 0),
+                  document.uri as any,
+                  this.ideAdapter.Range(0, 0, document.lineCount, 0),
                   (message as any).source
                 );
-                const success = await vscode.workspace.applyEdit(edit);
+                const success = await this.ideAdapter.applyEdit(edit);
                 if (!success) {
-                  vscode.window.showErrorMessage('Failed to save document');
+                  this.ideAdapter.showErrorMessage('Failed to save document');
                 } else {
-                  await document.save();
+                  if ((document as any).save) {
+                    await (document as any).save();
+                  }
                 }
               }
               break;
 
             case 'error':
-              vscode.window.showErrorMessage(`Editor error: ${(message as any).message || 'Unknown error'}`);
+              this.ideAdapter.showErrorMessage(`Editor error: ${(message as any).message || 'Unknown error'}`);
               break;
           }
         }
@@ -460,7 +488,7 @@ export class MermaidEditorProvider implements vscode.CustomTextEditorProvider {
     );
 
     // 监听文档变更：发送加载消息（参考 PlantUML 的方式）
-    const changeDocumentSubscription2 = vscode.workspace.onDidChangeTextDocument(
+    const changeDocumentSubscription2 = this.ideAdapter.onDidChangeTextDocument(
       (e) => {
         if (e.document.uri.toString() === document.uri.toString()) {
           const source = e.document.getText();
@@ -545,10 +573,10 @@ Please run: cd packages/webview && pnpm build`;
     // 读取静态 HTML 文件
     let htmlContent = fs.readFileSync(mermaidEditorHtmlPath, 'utf-8');
     
-    // 获取 webview URI 辅助函数
+    // 获取 webview URI 辅助函数（参考 PlantUML 的实现）
     const webviewUri = vscode.Uri.file(webviewPath);
     const webviewUriHelper = (relativePath: string) => {
-      // 跳过已经是绝对路径的
+      // 跳过已经是绝对路径的（如 CDN、data URI、vscode-webview://）
       if (
         relativePath.startsWith('http://') ||
         relativePath.startsWith('https://') ||
@@ -558,24 +586,9 @@ Please run: cd packages/webview && pnpm build`;
       ) {
         return relativePath;
       }
-
-      // 规范化路径
-      let normalizedPath = relativePath;
-      if (normalizedPath.startsWith('./')) {
-        normalizedPath = normalizedPath.substring(2);
-      } else if (normalizedPath.startsWith('/')) {
-        normalizedPath = normalizedPath.substring(1);
-      }
-
-      const resourceFile = path.join(webviewPath, normalizedPath);
-      if (fs.existsSync(resourceFile)) {
-        const resourceUri = webview.asWebviewUri(
-          vscode.Uri.file(resourceFile)
-        );
-        return resourceUri.toString();
-      }
-
-      return relativePath;
+      // 使用 vscode.Uri.joinPath 连接路径，然后转换为 webview URI
+      const uri = vscode.Uri.joinPath(webviewUri, relativePath);
+      return (webview as any).asWebviewUri(uri).toString();
     };
 
     // 替换所有资源文件的路径为 webview URI

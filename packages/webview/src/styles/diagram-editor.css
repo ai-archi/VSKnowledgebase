@@ -1,17 +1,21 @@
 /* 统一的图表编辑器样式 - 适用于 PlantUML 和 Mermaid 编辑器 */
 
-/* VSCode 主题变量适配 */
+/* 编辑器主题变量 - 使用固定值，不依赖 IDE 主题 */
 :root {
-  --editor-bg: var(--vscode-editor-background, #1e1e1e);
-  --editor-text: var(--vscode-editor-foreground, #cccccc);
-  --editor-border: var(--vscode-panel-border, #3e3e3e);
-  --editor-panel-bg: var(--vscode-sideBar-background, #252526);
-  --editor-toolbar-bg: var(--vscode-titleBar-activeBackground, #2d2d30);
-  --editor-button-bg: var(--vscode-button-secondaryBackground, #3c3c3c);
-  --editor-button-text: var(--vscode-button-secondaryForeground, #cccccc);
-  --editor-button-hover: var(--vscode-button-secondaryHoverBackground, #4c4c4c);
-  --editor-error-bg: var(--vscode-inputValidation-errorBackground, #5a1d1d);
-  --editor-error-text: var(--vscode-errorForeground, #f48771);
+  --editor-bg: #1e1e1e;
+  --editor-text: #cccccc;
+  --editor-border: #3e3e3e;
+  --editor-panel-bg: #252526;
+  --editor-toolbar-bg: #2d2d30;
+  --editor-button-bg: #3c3c3c;
+  --editor-button-text: #cccccc;
+  --editor-button-hover: #4c4c4c;
+  --editor-error-bg: #5a1d1d;
+  --editor-error-text: #f48771;
+  --editor-font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  --editor-font-size: 13px;
+  --editor-line-number-color: #858585;
+  --editor-cursor-color: #cccccc;
 }
 
 /* Base styles */
@@ -25,8 +29,8 @@ html, body {
   height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif);
-  font-size: var(--vscode-font-size, 14px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 14px;
   background: var(--editor-bg);
   color: var(--editor-text);
 }
@@ -121,7 +125,7 @@ html, body {
 
 .workspace-divider:hover,
 .workspace-divider.dragging {
-  background: var(--vscode-list-hoverBackground, #2a2d2e);
+  background: #2a2d2e;
 }
 
 .workspace.resizing,
@@ -212,7 +216,7 @@ html, body {
 }
 
 .zoom-controls button:active:not(:disabled) {
-  background: var(--vscode-button-secondaryHoverBackground, #5c5c5c);
+  background: #5c5c5c;
 }
 
 .zoom-controls button:disabled {
@@ -257,8 +261,8 @@ html, body {
   margin: 0;
   border: none;
   resize: none;
-  font-family: var(--vscode-editor-font-family, 'Monaco', 'Menlo', 'Ubuntu Mono', monospace);
-  font-size: var(--vscode-editor-font-size, 13px);
+  font-family: var(--editor-font-family);
+  font-size: var(--editor-font-size);
   line-height: 1.5;
   background: var(--editor-bg);
   color: var(--editor-text);
@@ -294,8 +298,8 @@ html, body {
   width: 100% !important;
   /* CodeMirror 在 flex 布局中使用 flex: 1 占据剩余空间 */
   height: auto !important;
-  font-family: var(--vscode-editor-font-family, 'Monaco', 'Menlo', 'Ubuntu Mono', monospace) !important;
-  font-size: var(--vscode-editor-font-size, 13px) !important;
+  font-family: var(--editor-font-family) !important;
+  font-size: var(--editor-font-size) !important;
   line-height: 1.5 !important;
   flex: 1 1 auto !important;
   min-height: 0 !important;
@@ -387,7 +391,7 @@ html, body {
 .source-panel .CodeMirror-linenumber {
   display: inline-block !important;
   visibility: visible !important;
-  color: var(--vscode-editorLineNumber-foreground, #858585) !important;
+  color: var(--editor-line-number-color) !important;
   padding: 0 8px 0 4px !important;
   min-width: 3ch !important;
   text-align: right !important;
@@ -411,10 +415,9 @@ html, body {
 }
 
 /* CodeMirror 光标样式 - 确保光标可见 */
-/* 使用 VSCode 主题变量，确保光标颜色与编辑器主题一致 */
 .source-panel .CodeMirror-cursor,
 .diagram-editor .source-panel .CodeMirror-cursor {
-  border-left: 2px solid var(--vscode-editorCursor-foreground, var(--editor-text, #cccccc)) !important;
+  border-left: 2px solid var(--editor-cursor-color) !important;
   border-right: none !important;
   width: 0 !important;
   visibility: visible !important;
@@ -431,7 +434,7 @@ html, body {
 /* 当编辑器聚焦时，光标闪烁 */
 .source-panel .CodeMirror.CodeMirror-focused .CodeMirror-cursor,
 .diagram-editor .source-panel .CodeMirror.CodeMirror-focused .CodeMirror-cursor {
-  border-left-color: var(--vscode-editorCursor-foreground, var(--editor-text, #cccccc)) !important;
+  border-left-color: var(--editor-cursor-color) !important;
   opacity: 1 !important;
   animation: cm-blink 1s step-end infinite !important;
 }
@@ -464,8 +467,8 @@ html, body {
   align-items: flex-start;
   gap: 12px;
   padding: 16px 20px;
-  background: var(--vscode-errorForeground, #f48771);
-  color: var(--vscode-editor-background, #1e1e1e);
+  background: var(--editor-error-text);
+  color: var(--editor-bg);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
   z-index: 10000;
   font-size: 13px;
@@ -542,7 +545,7 @@ html, body {
 
 .status {
   font-size: 13px;
-  color: var(--vscode-descriptionForeground, #999999);
+  color: #999999;
 }
 
 .actions {

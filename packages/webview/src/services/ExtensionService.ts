@@ -1,7 +1,10 @@
 /**
  * Extension Service
- * 提供与 VSCode Extension 后端通信的功能
+ * 提供与 IDE Extension 后端通信的功能
  */
+
+import { IDECommunication } from './ide-communication';
+import { createIDECommunication } from './ide-communication-factory';
 
 export interface ExtensionMessage {
   method: string;
@@ -22,31 +25,21 @@ export interface ExtensionResponse {
 
 /**
  * Extension Service
- * 用于 Webview 与 VSCode Extension 后端通信
+ * 用于 Webview 与 IDE Extension 后端通信
  */
 export class ExtensionService {
-  private vscode: any;
+  private ideComm: IDECommunication;
   private messageHandlers: Map<string, (data: any) => void> = new Map();
   private requestId = 0;
   private pendingRequests: Map<number, { resolve: (value: any) => void; reject: (error: any) => void }> = new Map();
+  private unsubscribeMessage?: () => void;
 
   constructor() {
-    // 获取 VSCode API（在 Webview 环境中可用）
-    // HTML 中已经注入了 acquireVsCodeApi，它会返回已存在的实例
-    // 优先使用已存在的 vscode 实例，否则通过 acquireVsCodeApi 获取
-    if ((window as any).vscode) {
-      this.vscode = (window as any).vscode;
-    } else if (typeof (window as any).acquireVsCodeApi === 'function') {
-      this.vscode = (window as any).acquireVsCodeApi();
-      // 保存到 window 以便其他地方使用
-      (window as any).vscode = this.vscode;
-    } else {
-      this.vscode = null;
-    }
+    // 自动检测 IDE 类型并创建相应的通信实例
+    this.ideComm = createIDECommunication();
 
-    // 监听来自 Extension 的消息
-    window.addEventListener('message', (event) => {
-      const message: ExtensionResponse = event.data;
+    // 监听来自 IDE 的消息
+    this.unsubscribeMessage = this.ideComm.onMessage((message: ExtensionResponse) => {
       this.handleMessage(message);
     });
   }
@@ -55,8 +48,8 @@ export class ExtensionService {
    * 调用后端方法
    */
   async call<T = any>(method: string, params?: any): Promise<T> {
-    if (!this.vscode) {
-      throw new Error('VSCode API not available');
+    if (!this.ideComm.isAvailable()) {
+      throw new Error(`${this.ideComm.getIDEType()} API not available`);
     }
 
     const id = ++this.requestId;
@@ -67,14 +60,14 @@ export class ExtensionService {
     };
 
     // 添加前端调试日志
-    console.log('[ExtensionService] Sending message:', { method, params, id });
+    console.log('[ExtensionService] Sending message:', { method, params, id, ideType: this.ideComm.getIDEType() });
 
     return new Promise<T>((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
 
       // 发送消息到 Extension
       console.log('[ExtensionService] postMessage called with:', message);
-      this.vscode.postMessage(message);
+      this.ideComm.postMessage(message);
 
       // 设置超时
       setTimeout(() => {

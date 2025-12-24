@@ -3,7 +3,7 @@
  * 适配 Vue 3 组件，接收 DOM 元素引用而非通过 getElementById 获取
  */
 import { StateManager, type PlantUMLState } from './StateManager';
-import { postMessage, setupMessageHandlers, isVSCodeWebview } from './vscodeApiAdapter';
+import { postMessage, setupMessageHandlers } from './ideApiAdapter';
 import CodeMirror from 'codemirror';
 
 interface EditorElements {
@@ -128,38 +128,36 @@ export class PlantUMLEditorApp {
       }
     }
     
-    // 设置消息回调
-    if (isVSCodeWebview) {
-      setupMessageHandlers({
-        onSourceLoad: (source) => {
-          // 如果正在保存，忽略加载请求（防止循环）
-          if (this.isSaving) return;
-          this.loadSource(source);
-        },
-        onRenderResult: (svg) => this.handleRenderResult(svg),
-        onRenderError: (error) => this.handleRenderError(error),
-        onSaveSuccess: () => this.handleSaveSuccess(),
-      });
-      
-      // 延迟请求加载内容，确保 Vue 应用完全初始化
-      // 使用 requestAnimationFrame 和 setTimeout 确保 DOM 完全准备好
-      requestAnimationFrame(() => {
+    // 设置消息回调（通过 ExtensionService）
+    setupMessageHandlers({
+      onSourceLoad: (source) => {
+        // 如果正在保存，忽略加载请求（防止循环）
+        if (this.isSaving) return;
+        this.loadSource(source);
+      },
+      onRenderResult: (svg) => this.handleRenderResult(svg),
+      onRenderError: (error) => this.handleRenderError(error),
+      onSaveSuccess: () => this.handleSaveSuccess(),
+    });
+    
+    // 延迟请求加载内容，确保 Vue 应用完全初始化
+    // 使用 requestAnimationFrame 和 setTimeout 确保 DOM 完全准备好
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        this.isInitialized = true;
+        this.isWaitingForInitialLoad = true;
+        console.log('[PlantUMLEditorApp] Requesting initial content...');
+        postMessage('load-request');
+        
+        // 设置超时，如果 5 秒内没有收到响应，显示警告
         setTimeout(() => {
-          this.isInitialized = true;
-          this.isWaitingForInitialLoad = true;
-          console.log('[PlantUMLEditorApp] Requesting initial content...');
-          postMessage('load-request');
-          
-          // 设置超时，如果 5 秒内没有收到响应，显示警告
-          setTimeout(() => {
-            if (this.isWaitingForInitialLoad) {
-              console.warn('[PlantUMLEditorApp] Initial load timeout, content may not be loaded');
-              this.isWaitingForInitialLoad = false;
-            }
-          }, 5000);
-        }, 100);
-      });
-    }
+          if (this.isWaitingForInitialLoad) {
+            console.warn('[PlantUMLEditorApp] Initial load timeout, content may not be loaded');
+            this.isWaitingForInitialLoad = false;
+          }
+        }, 5000);
+      }, 100);
+    });
     
     // 订阅状态变化
     this.stateManager.subscribe((state: PlantUMLState) => {
@@ -320,15 +318,12 @@ export class PlantUMLEditorApp {
     
     this.hideError();
     
-    if (isVSCodeWebview) {
-      console.log('[PlantUMLEditorApp] Sending render request to backend');
-      postMessage('render', { source }).catch((error) => {
-        console.error('[PlantUMLEditorApp] Error sending render request:', error);
-        this.showError(`发送渲染请求失败: ${error.message}`);
-      });
-    } else {
-      this.showError('请在 VSCode 扩展中使用此编辑器');
-    }
+    // 发送渲染请求到后端
+    console.log('[PlantUMLEditorApp] Sending render request to backend');
+    postMessage('render', { source }).catch((error) => {
+      console.error('[PlantUMLEditorApp] Error sending render request:', error);
+      this.showError(`发送渲染请求失败: ${error.message}`);
+    });
   }
 
   handleRenderResult(svg: string) {
@@ -500,19 +495,15 @@ export class PlantUMLEditorApp {
     }
     
     this.isSaving = true;
-    if (isVSCodeWebview) {
-      postMessage('save', { source });
-      // 设置超时，防止保存失败时标志未重置（5秒超时）
-      setTimeout(() => {
-        if (this.isSaving) {
-          console.warn('[PlantUMLEditorApp] Save timeout, resetting isSaving flag');
-          this.isSaving = false;
-        }
-      }, 5000);
-    } else {
-      this.showError('请在 VSCode 扩展中使用此编辑器');
-      this.isSaving = false;
-    }
+    // 发送保存请求到后端
+    postMessage('save', { source });
+    // 设置超时，防止保存失败时标志未重置（5秒超时）
+    setTimeout(() => {
+      if (this.isSaving) {
+        console.warn('[PlantUMLEditorApp] Save timeout, resetting isSaving flag');
+        this.isSaving = false;
+      }
+    }, 5000);
   }
 
   /**
@@ -548,19 +539,15 @@ export class PlantUMLEditorApp {
     
     // 立即保存
     this.isSaving = true;
-    if (isVSCodeWebview) {
-      postMessage('save', { source });
-      // 设置超时，防止保存失败时标志未重置（5秒超时）
-      setTimeout(() => {
-        if (this.isSaving) {
-          console.warn('[PlantUMLEditorApp] Save timeout, resetting isSaving flag');
-          this.isSaving = false;
-        }
-      }, 5000);
-    } else {
-      this.showError('请在 VSCode 扩展中使用此编辑器');
-      this.isSaving = false;
-    }
+    // 发送保存请求到后端
+    postMessage('save', { source });
+    // 设置超时，防止保存失败时标志未重置（5秒超时）
+    setTimeout(() => {
+      if (this.isSaving) {
+        console.warn('[PlantUMLEditorApp] Save timeout, resetting isSaving flag');
+        this.isSaving = false;
+      }
+    }, 5000);
   }
 
   handleSaveSuccess() {

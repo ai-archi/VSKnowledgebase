@@ -5,6 +5,7 @@ import { VaultApplicationService } from '../modules/shared/application/VaultAppl
 import { ArtifactApplicationService } from '../modules/shared/application/ArtifactApplicationService';
 import { FileOperationDomainService } from '../modules/shared/domain/services/FileOperationDomainService';
 import { Logger } from '../core/logger/Logger';
+import { IDEAdapter } from '../core/ide-api/ide-adapter';
 
 /**
  * 视点模块命令
@@ -18,7 +19,8 @@ export class ViewpointCommands {
     private aiService: AIApplicationService,
     private fileOperationService: FileOperationDomainService,
     private logger: Logger,
-    private context: vscode.ExtensionContext
+    private context: vscode.ExtensionContext,
+    private ideAdapter: IDEAdapter
   ) {}
 
   /**
@@ -36,10 +38,11 @@ export class ViewpointCommands {
         this.aiService,
         this.fileOperationService,
         this.logger,
-        this.context
+        this.context,
+        this.ideAdapter
       );
 
-      const disposable = vscode.window.registerWebviewViewProvider(
+      const disposable = this.ideAdapter.registerWebviewViewProvider(
         'architool.viewpointView',
         webviewViewProvider,
         {
@@ -50,7 +53,7 @@ export class ViewpointCommands {
       );
       
       this.logger.info('[ViewpointCommands] WebviewView provider registered successfully');
-      context.subscriptions.push(disposable);
+      this.ideAdapter.subscribe(disposable);
     } catch (error: any) {
       this.logger.error('[ViewpointCommands] Failed to register WebviewView provider', {
         message: error.message,
@@ -61,13 +64,13 @@ export class ViewpointCommands {
     }
 
     // 创建自定义视点
-    const createViewpointCommand = vscode.commands.registerCommand(
+    const createViewpointCommand = this.ideAdapter.registerCommand(
       'archi.viewpoint.create',
       async () => {
-        vscode.window.showInformationMessage('archi.viewpoint.create - 待实现（需要完整的 ViewpointApplicationService）');
+        this.ideAdapter.showInformationMessage('archi.viewpoint.create - 待实现（需要完整的 ViewpointApplicationService）');
       }
     );
 
-    context.subscriptions.push(createViewpointCommand);
+    this.ideAdapter.subscribe(createViewpointCommand);
   }
 }

@@ -20,7 +20,7 @@ defineProps<{
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--vscode-editor-background, #1e1e1e);
+  background: #1e1e1e;
   overflow: hidden;
   position: fixed;
   top: 0;

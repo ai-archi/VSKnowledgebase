@@ -5,10 +5,10 @@
 import { createApp, type App, type Component } from 'vue';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
-// 样式加载顺序：Element Plus -> CodeMirror -> VSCode 主题 -> 图表编辑器样式（最后加载，确保优先级）
+// 样式加载顺序：Element Plus -> Element Plus 深色主题 -> CodeMirror -> 图表编辑器样式（最后加载，确保优先级）
 import 'element-plus/dist/index.css';
+import 'element-plus/theme-chalk/dark/css-vars.css'; // Element Plus 深色主题
 import 'codemirror/lib/codemirror.css';
-import '@/styles/vscode-theme.css';
 import '@/styles/diagram-editor.css';
 
 /**
