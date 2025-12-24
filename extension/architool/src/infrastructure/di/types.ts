@@ -12,7 +12,6 @@ export const TYPES = {
   ArtifactFileSystemAdapter: Symbol.for('ArtifactFileSystemAdapter'),
   VaultFileSystemAdapter: Symbol.for('VaultFileSystemAdapter'),
   WorkspaceFileSystemAdapter: Symbol.for('WorkspaceFileSystemAdapter'),
-  SqliteRuntimeIndex: Symbol.for('SqliteRuntimeIndex'),
   YamlMetadataRepository: Symbol.for('YamlMetadataRepository'),
   GitVaultAdapter: Symbol.for('GitVaultAdapter'),
 

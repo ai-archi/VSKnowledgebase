@@ -23,7 +23,6 @@ import { ArtifactApplicationService } from './modules/shared/application/Artifac
 import { DocumentApplicationService } from './modules/document/application/DocumentApplicationService';
 import { FileTreeDomainService } from './modules/shared/domain/services/FileTreeDomainService';
 import { FileOperationDomainService } from './modules/shared/domain/services/FileOperationDomainService';
-import { SqliteRuntimeIndex } from './modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { WebviewAdapter } from './core/vscode-api/WebviewAdapter';
 import { WebviewRPC } from './core/vscode-api/WebviewRPC';
 import { TemplateApplicationService } from './modules/template/application/TemplateApplicationService';
@@ -44,22 +43,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const { workspaceRoot, architoolRoot } = await initializeWorkspace(logger, context);
 	
 	// 初始化依赖注入容器
-	const dbPath = path.join(architoolRoot, 'cache', 'runtime.sqlite');
-	const container = createContainer(architoolRoot, dbPath, context, logger);
-	
-	// 初始化 SQLite
-	try {
-		const index = container.get<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex);
-		await index.initialize();
-		logger.info('SQLite runtime index initialized');
-	} catch (error: any) {
-		const errorMessage = error?.message || String(error);
-		if (errorMessage.includes('bindings') || errorMessage.includes('better_sqlite3.node') || errorMessage.includes('NODE_MODULE_VERSION')) {
-			logger.warn('SQLite initialization failed due to native bindings version mismatch. Some features may not be available.');
-		} else {
-			logger.error('Failed to initialize SQLite', error);
-		}
-	}
+	const container = createContainer(architoolRoot, context, logger);
 	
 	// 创建命令适配器
 	const commandAdapter = new CommandAdapter(context);

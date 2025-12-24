@@ -22,7 +22,6 @@ const extensionConfig = {
   },
   externals: {
     vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
-    'better-sqlite3': 'commonjs better-sqlite3', // Native module, must be external
     // modules added here also need to be added in the .vscodeignore file
   },
   plugins: [

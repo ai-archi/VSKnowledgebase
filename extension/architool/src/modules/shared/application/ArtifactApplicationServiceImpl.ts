@@ -15,7 +15,6 @@ import { Result, ArtifactError, ArtifactErrorCode, QueryOptions } from '../domai
 import { ArtifactValidator } from '../domain/ArtifactValidator';
 import { ArtifactFileSystemAdapter } from '../infrastructure/storage/file/ArtifactFileSystemAdapter';
 import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
-import { SqliteRuntimeIndex } from '../infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { MetadataRepository } from '../infrastructure/MetadataRepository';
 import { ArtifactRepository } from '../infrastructure/ArtifactRepository';
 import { VaultApplicationService } from './VaultApplicationService';
@@ -36,7 +35,6 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   constructor(
     @inject(TYPES.ArtifactFileSystemAdapter) private fileAdapter: ArtifactFileSystemAdapter,
     @inject(TYPES.VaultFileSystemAdapter) private vaultAdapter: VaultFileSystemAdapter,
-    @inject(TYPES.SqliteRuntimeIndex) private index: SqliteRuntimeIndex,
     @inject(TYPES.MetadataRepository) private metadataRepo: MetadataRepository,
     @inject(TYPES.ArtifactRepository) private artifactRepository: ArtifactRepository,
     @inject(TYPES.VaultApplicationService) private vaultService: VaultApplicationService,

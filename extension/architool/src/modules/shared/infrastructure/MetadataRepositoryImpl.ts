@@ -7,7 +7,6 @@ import { YamlMetadataRepository } from './storage/yaml/YamlMetadataRepository';
 import { VaultRepository } from './VaultRepository';
 import { ConfigManager } from '../../../core/config/ConfigManager';
 import { ArtifactFileSystemAdapter } from './storage/file/ArtifactFileSystemAdapter';
-import { SqliteRuntimeIndex } from './storage/sqlite/SqliteRuntimeIndex';
 import { Logger } from '../../../core/logger/Logger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -22,7 +21,6 @@ export class MetadataRepositoryImpl implements MetadataRepository {
   private vaultRepository: VaultRepository;
   private configManager: ConfigManager;
   private fileAdapter: ArtifactFileSystemAdapter;
-  private index: SqliteRuntimeIndex;
   private logger?: Logger;
   private metadataCache: Map<string, ArtifactMetadata> = new Map();
 
@@ -30,13 +28,11 @@ export class MetadataRepositoryImpl implements MetadataRepository {
     @inject(TYPES.VaultRepository) vaultRepository: VaultRepository,
     @inject(TYPES.ConfigManager) configManager: ConfigManager,
     @inject(TYPES.ArtifactFileSystemAdapter) fileAdapter: ArtifactFileSystemAdapter,
-    @inject(TYPES.SqliteRuntimeIndex) index: SqliteRuntimeIndex,
     @inject(TYPES.Logger) logger?: Logger
   ) {
     this.vaultRepository = vaultRepository;
     this.configManager = configManager;
     this.fileAdapter = fileAdapter;
-    this.index = index;
     this.logger = logger;
   }
 
@@ -417,20 +413,6 @@ export class MetadataRepositoryImpl implements MetadataRepository {
       return { success: false, error: writeResult.error };
     }
 
-    // 同步到索引（Infrastructure层职责）
-    try {
-      const metadataPath = this.fileAdapter.getMetadataPath(vaultId, metadata.id);
-      await this.index.syncFromYaml(
-        metadata,
-        metadataPath,
-        options?.title,
-        options?.description
-      );
-    } catch (error: any) {
-      this.logger?.warn('Failed to sync metadata to index', error);
-      // 索引同步失败不影响元数据持久化，只记录警告
-    }
-
     // 更新缓存
     this.metadataCache.set(metadata.id, metadata);
     return { success: true, value: metadata };
@@ -474,19 +456,6 @@ export class MetadataRepositoryImpl implements MetadataRepository {
       return { success: false, error: writeResult.error };
     }
 
-    // 同步到索引（Infrastructure层职责）
-    try {
-      const metadataPath = this.fileAdapter.getMetadataPath(vaultId, metadata.id);
-      await this.index.syncFromYaml(
-        metadata,
-        metadataPath,
-        options?.title,
-        options?.description
-      );
-    } catch (error: any) {
-      this.logger?.warn('Failed to sync metadata to index', error);
-    }
-
     this.metadataCache.set(metadata.id, metadata);
     return { success: true, value: metadata };
   }
@@ -506,16 +475,6 @@ export class MetadataRepositoryImpl implements MetadataRepository {
     const deleteResult = await yamlRepo.deleteMetadata(metadataId);
     if (!deleteResult.success) {
       return deleteResult;
-    }
-
-    // 从索引中删除（Infrastructure层职责）
-    if (artifactId) {
-      try {
-        await this.index.removeFromIndex(artifactId);
-      } catch (error: any) {
-        this.logger?.warn('Failed to remove metadata from index', error);
-        // 索引删除失败不影响元数据删除，只记录警告
-      }
     }
 
     this.metadataCache.delete(metadataId);

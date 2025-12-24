@@ -10,7 +10,6 @@ import { ArtifactFileSystemAdapter } from '../../modules/shared/infrastructure/s
 import { VaultFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/VaultFileSystemAdapter';
 import { WorkspaceFileSystemAdapter } from '../../modules/shared/infrastructure/storage/file/WorkspaceFileSystemAdapter';
 import { WorkspaceFileSystemAdapterImpl } from '../../modules/shared/infrastructure/storage/file/WorkspaceFileSystemAdapterImpl';
-import { SqliteRuntimeIndex } from '../../modules/shared/infrastructure/storage/sqlite/SqliteRuntimeIndex';
 import { GitVaultAdapter, GitVaultAdapterImpl } from '../../modules/shared/infrastructure/storage/git/GitVaultAdapter';
 
 // Repositories
@@ -49,7 +48,6 @@ import * as vscode from 'vscode';
 
 export function createContainer(
   architoolRoot: string,
-  dbPath: string,
   context?: vscode.ExtensionContext,
   logger?: Logger
 ): Container {
@@ -77,8 +75,6 @@ export function createContainer(
     .toConstantValue(new VaultFileSystemAdapter(architoolRoot));
   container.bind<WorkspaceFileSystemAdapter>(TYPES.WorkspaceFileSystemAdapter)
     .toConstantValue(new WorkspaceFileSystemAdapterImpl());
-  container.bind<SqliteRuntimeIndex>(TYPES.SqliteRuntimeIndex)
-    .toConstantValue(new SqliteRuntimeIndex(dbPath, containerLogger));
   container.bind<GitVaultAdapter>(TYPES.GitVaultAdapter)
     .to(GitVaultAdapterImpl).inSingletonScope();
 
