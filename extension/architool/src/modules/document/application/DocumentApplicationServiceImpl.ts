@@ -3,6 +3,7 @@ import { TYPES } from '../../../infrastructure/di/types';
 import { DocumentApplicationService } from './DocumentApplicationService';
 import { ArtifactApplicationService } from '../../shared/application/ArtifactApplicationService';
 import { VaultApplicationService } from '../../shared/application/VaultApplicationService';
+import { MetadataRepository } from '../../shared/infrastructure/MetadataRepository';
 import { VaultReference } from '../../shared/domain/value_object/VaultReference';
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
@@ -24,6 +25,8 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     private artifactService: ArtifactApplicationService,
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
+    @inject(TYPES.MetadataRepository)
+    private metadataRepo: MetadataRepository,
     @inject(TYPES.Logger)
     private logger: Logger,
     @inject(TYPES.ConfigManager)
@@ -546,24 +549,27 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
 
   /**
    * 删除单个文件夹的 metadata
+   * 包括两种类型的 metadata：
+   * 1. FolderMetadata（模板信息，通过 YamlFolderMetadataRepository 管理）
+   * 2. ArtifactMetadata（关联关系，通过 MetadataRepository 管理，格式为 folder:vaultId:folderPath）
    */
   private async deleteFolderMetadata(vaultId: string, folderPath: string): Promise<void> {
     try {
+      // 1. 删除 FolderMetadata（模板信息）
       const architoolRoot = this.configManager.getArchitoolRoot();
       const vaultPath = path.join(architoolRoot, vaultId);
       const yamlRepo = new YamlFolderMetadataRepository(vaultPath);
-      // 通过 folderPath 查找元数据文件（因为使用 UUID 作为文件名）
       const findResult = await yamlRepo.findByFolderPath(folderPath);
       if (findResult.success && findResult.value) {
         const deleteResult = await yamlRepo.deleteMetadata(findResult.value.id);
         if (deleteResult.success) {
-          this.logger.info('Folder metadata deleted successfully', {
+          this.logger.info('[DocumentApplicationService] FolderMetadata deleted successfully', {
             vaultId,
             folderPath,
             metadataId: findResult.value.id
           });
         } else {
-          this.logger.warn('Failed to delete folder metadata', {
+          this.logger.warn('[DocumentApplicationService] Failed to delete FolderMetadata', {
             vaultId,
             folderPath,
             metadataId: findResult.value.id,
@@ -571,13 +577,49 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
           });
         }
       } else {
-        this.logger.debug('Folder metadata not found for deletion', {
+        this.logger.debug('[DocumentApplicationService] FolderMetadata not found for deletion', {
           vaultId,
           folderPath
         });
       }
+
+      // 2. 删除 ArtifactMetadata（关联关系，使用 folder:vaultId:folderPath 格式）
+      const folderArtifactId = `folder:${vaultId}:${folderPath}`;
+      this.logger.info('[DocumentApplicationService] Trying to delete ArtifactMetadata for folder', {
+        vaultId,
+        folderPath,
+        folderArtifactId
+      });
+      
+      const metadataByFolderFormatResult = await this.metadataRepo.findByArtifactId(folderArtifactId);
+      if (metadataByFolderFormatResult.success && metadataByFolderFormatResult.value) {
+        const metadata = metadataByFolderFormatResult.value;
+        this.logger.info('[DocumentApplicationService] Found ArtifactMetadata for folder, deleting', {
+          metadataId: metadata.id,
+          folderArtifactId
+        });
+        const deleteMetadataResult = await this.metadataRepo.delete(metadata.id);
+        if (!deleteMetadataResult.success) {
+          this.logger.warn('[DocumentApplicationService] Failed to delete ArtifactMetadata for folder', {
+            metadataId: metadata.id,
+            folderArtifactId,
+            error: deleteMetadataResult.error?.message
+          });
+        } else {
+          this.logger.info('[DocumentApplicationService] ArtifactMetadata deleted successfully for folder', {
+            metadataId: metadata.id,
+            folderArtifactId
+          });
+        }
+      } else {
+        this.logger.debug('[DocumentApplicationService] ArtifactMetadata not found for folder', {
+          vaultId,
+          folderPath,
+          folderArtifactId
+        });
+      }
     } catch (error: any) {
-      this.logger.error('Failed to delete folder metadata', {
+      this.logger.error('[DocumentApplicationService] Failed to delete folder metadata', {
         vaultId,
         folderPath,
         error: error.message
