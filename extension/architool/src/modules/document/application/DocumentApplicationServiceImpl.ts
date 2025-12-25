@@ -9,8 +9,13 @@ import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/er
 import { Logger } from '../../../core/logger/Logger';
 import { TemplateStructureDomainServiceImpl } from '../../shared/domain/services/TemplateStructureDomainService';
 import { ArtifactTemplate } from '../../shared/domain/entity/ArtifactTemplate';
+import { FolderMetadata } from '../../shared/domain/FolderMetadata';
+import { YamlFolderMetadataRepository } from '../../shared/infrastructure/storage/yaml/YamlFolderMetadataRepository';
+import { ConfigManager } from '../../../core/config/ConfigManager';
+import { v4 as uuidv4 } from 'uuid';
 import * as yaml from 'js-yaml';
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 @injectable()
 export class DocumentApplicationServiceImpl implements DocumentApplicationService {
@@ -20,7 +25,9 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     @inject(TYPES.VaultApplicationService)
     private vaultService: VaultApplicationService,
     @inject(TYPES.Logger)
-    private logger: Logger
+    private logger: Logger,
+    @inject(TYPES.ConfigManager)
+    private configManager: ConfigManager
   ) {}
 
   async listDocuments(vaultId: string): Promise<Result<Artifact[], ArtifactError>> {
@@ -277,6 +284,21 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
                   templateId,
                   targetFolderPath
                 });
+
+                // 递归为所有文件夹创建元数据
+                await this.createMetadataForAllFolders(
+                  vault.id,
+                  vault.name,
+                  targetFolderPath,
+                  artifactTemplate.structure,
+                  {
+                    templateId: templateId,
+                    templatePath: templateFilePath,
+                    templateVaultId: templateVault.id,
+                    templateVaultName: templateVault.name,
+                    variables: variables
+                  }
+                );
               }
             } else {
               this.logger.error('Failed to parse template structure - ArtifactTemplate is invalid', {
@@ -373,6 +395,433 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
   }
 
   async deleteDocument(vaultId: string, path: string): Promise<Result<void, ArtifactError>> {
-    return this.artifactService.deleteArtifact(vaultId, path);
+    // 先检查是文件还是文件夹
+    const vaultResult = await this.vaultService.getVault(vaultId);
+    if (!vaultResult.success) {
+      return {
+        success: false,
+        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
+      };
+    }
+
+    const vault: VaultReference = {
+      id: vaultResult.value.id,
+      name: vaultResult.value.name,
+    };
+
+    // 检查是文件还是文件夹
+    const isDirResult = await this.artifactService.isDirectory(vault, path);
+    if (!isDirResult.success) {
+      return {
+        success: false,
+        error: isDirResult.error,
+      };
+    }
+
+    const isDirectory = isDirResult.value;
+
+    // 如果是文件夹，在删除之前先获取子文件夹列表（用于后续删除 metadata）
+    let subFolders: string[] = [];
+    if (isDirectory) {
+      subFolders = await this.getSubFoldersForMetadataDeletion(vaultId, path, vault);
+    }
+
+    // 删除文件或文件夹
+    const deleteResult = await this.artifactService.deleteArtifact(vaultId, path);
+    if (!deleteResult.success) {
+      return deleteResult;
+    }
+
+    // 删除成功后，处理 metadata
+    if (isDirectory) {
+      // 如果是文件夹，删除文件夹的 metadata 和所有子文件夹的 metadata
+      // 先递归删除子文件夹的 metadata
+      for (const subFolderPath of subFolders) {
+        await this.deleteFolderMetadataRecursive(vaultId, subFolderPath);
+      }
+      // 最后删除当前文件夹的 metadata
+      await this.deleteFolderMetadata(vaultId, path);
+    }
+    // 如果是文件，不需要更新父文件夹的 metadata
+    // expectedFiles 始终保持模板定义的所有文件列表，不管文件是否已创建
+
+    return { success: true, value: undefined };
   }
+
+  /**
+   * 获取文件夹的所有子文件夹路径（用于删除 metadata）
+   */
+  private async getSubFoldersForMetadataDeletion(
+    vaultId: string,
+    folderPath: string,
+    vault: VaultReference
+  ): Promise<string[]> {
+    const subFolders: string[] = [];
+
+    try {
+      // 从 metadata 中获取预期子文件夹
+      const metadata = await this.readFolderMetadata(vaultId, folderPath);
+      if (metadata?.expectedFolders) {
+        for (const expectedFolder of metadata.expectedFolders) {
+          const subFolderPath = folderPath === ''
+            ? expectedFolder.path
+            : `${folderPath}/${expectedFolder.path}`;
+          subFolders.push(subFolderPath);
+          
+          // 递归获取子文件夹的子文件夹
+          const nestedSubFolders = await this.getSubFoldersForMetadataDeletion(
+            vaultId,
+            subFolderPath,
+            vault
+          );
+          subFolders.push(...nestedSubFolders);
+        }
+      }
+
+      // 也从文件系统中列出实际存在的子文件夹（以防 metadata 不完整）
+      const listResult = await this.artifactService.listDirectory(vault, folderPath, {
+        includeHidden: false,
+      });
+      
+      if (listResult.success) {
+        for (const node of listResult.value) {
+          if (node.isDirectory) {
+            // node.path 是相对于 vault 根目录的完整路径
+            const subFolderPath = node.path;
+            if (!subFolders.includes(subFolderPath)) {
+              subFolders.push(subFolderPath);
+              
+              // 递归获取子文件夹的子文件夹
+              const nestedSubFolders = await this.getSubFoldersForMetadataDeletion(
+                vaultId,
+                subFolderPath,
+                vault
+              );
+              for (const nested of nestedSubFolders) {
+                if (!subFolders.includes(nested)) {
+                  subFolders.push(nested);
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      this.logger.error('Failed to get sub folders for metadata deletion', {
+        vaultId,
+        folderPath,
+        error: error.message
+      });
+    }
+
+    return subFolders;
+  }
+
+  /**
+   * 删除单个文件夹的 metadata
+   */
+  private async deleteFolderMetadata(vaultId: string, folderPath: string): Promise<void> {
+    try {
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      const vaultPath = path.join(architoolRoot, vaultId);
+      const yamlRepo = new YamlFolderMetadataRepository(vaultPath);
+      // 通过 folderPath 查找元数据文件（因为使用 UUID 作为文件名）
+      const findResult = await yamlRepo.findByFolderPath(folderPath);
+      if (findResult.success && findResult.value) {
+        const deleteResult = await yamlRepo.deleteMetadata(findResult.value.id);
+        if (deleteResult.success) {
+          this.logger.info('Folder metadata deleted successfully', {
+            vaultId,
+            folderPath,
+            metadataId: findResult.value.id
+          });
+        } else {
+          this.logger.warn('Failed to delete folder metadata', {
+            vaultId,
+            folderPath,
+            metadataId: findResult.value.id,
+            error: deleteResult.error?.message
+          });
+        }
+      } else {
+        this.logger.debug('Folder metadata not found for deletion', {
+          vaultId,
+          folderPath
+        });
+      }
+    } catch (error: any) {
+      this.logger.error('Failed to delete folder metadata', {
+        vaultId,
+        folderPath,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * 递归删除文件夹及其所有子文件夹的 metadata
+   * 注意：此方法假设文件夹已经被删除，只删除 metadata 文件
+   */
+  private async deleteFolderMetadataRecursive(vaultId: string, folderPath: string): Promise<void> {
+    try {
+      // 先尝试读取 metadata 获取子文件夹列表
+      const metadata = await this.readFolderMetadata(vaultId, folderPath);
+      const subFolders: string[] = [];
+
+      if (metadata?.expectedFolders) {
+        // 从 metadata 中获取预期子文件夹
+        for (const expectedFolder of metadata.expectedFolders) {
+          const subFolderPath = folderPath === ''
+            ? expectedFolder.path
+            : `${folderPath}/${expectedFolder.path}`;
+          subFolders.push(subFolderPath);
+        }
+      }
+
+      // 递归删除所有子文件夹的 metadata（在删除当前文件夹之前）
+      for (const subFolderPath of subFolders) {
+        await this.deleteFolderMetadataRecursive(vaultId, subFolderPath);
+      }
+
+      // 最后删除当前文件夹的 metadata
+      await this.deleteFolderMetadata(vaultId, folderPath);
+    } catch (error: any) {
+      this.logger.error('Failed to delete folder metadata recursively', {
+        vaultId,
+        folderPath,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * 递归为所有文件夹创建元数据
+   */
+  private async createMetadataForAllFolders(
+    vaultId: string,
+    vaultName: string,
+    baseFolderPath: string,
+    structureItems: Array<{ type: string; name: string; description?: string; template?: string; children?: any[] }>,
+    templateInfo: {
+      templateId: string;
+      templatePath: string;
+      templateVaultId: string;
+      templateVaultName: string;
+      variables: Record<string, string>;
+    }
+  ): Promise<void> {
+    // 为当前文件夹创建元数据
+    // metadataId 生成规则：使用 UUID（如：94d488d4-47db-4697-b9df-dd764ee391e3）
+    const metadataId = uuidv4();
+    const expectedFiles = this.extractExpectedFiles(structureItems);
+    const expectedFolders = this.extractExpectedFolders(structureItems);
+
+    const folderMetadata: FolderMetadata = {
+      id: metadataId, // 使用 metadataId 作为元数据文件名称（.metadata/{metadataId}.metadata.yml）
+      folderPath: baseFolderPath,
+      vaultId: vaultId,
+      vaultName: vaultName,
+      templateInfo: {
+        templateId: templateInfo.templateId,
+        templatePath: templateInfo.templatePath,
+        templateVaultId: templateInfo.templateVaultId,
+        templateVaultName: templateInfo.templateVaultName,
+        createdAt: new Date().toISOString(),
+        variables: templateInfo.variables
+      },
+      // 存储当前文件夹对应的模板结构（只包含直接子项）
+      templateStructure: {
+        type: 'directory' as const,
+        name: path.basename(baseFolderPath),
+        children: structureItems.map(item => ({
+          type: item.type as 'directory' | 'file',
+          name: item.name,
+          description: item.description,
+          template: item.template,
+          // 注意：这里只存储直接子项，不递归存储所有子项
+          children: item.children as any
+        }))
+      },
+      expectedFiles: expectedFiles.length > 0 ? expectedFiles : undefined,
+      expectedFolders: expectedFolders.length > 0 ? expectedFolders : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // 保存当前文件夹的元数据
+    await this.saveFolderMetadata(vaultId, folderMetadata);
+
+    // 递归处理子文件夹
+    for (const item of structureItems) {
+      if (item.type === 'directory' && item.children) {
+        const subFolderPath = baseFolderPath === ''
+          ? item.name
+          : `${baseFolderPath}/${item.name}`;
+        
+        // 递归为子文件夹创建元数据
+        await this.createMetadataForAllFolders(
+          vaultId,
+          vaultName,
+          subFolderPath,
+          item.children,
+          templateInfo
+        );
+      }
+    }
+  }
+
+  /**
+   * 从模板结构中提取预期文件列表（只提取直接子文件，不包括子文件夹中的文件）
+   */
+  private extractExpectedFiles(structure: Array<{ type: string; name: string; description?: string; template?: string; children?: any[] }>): Array<{
+    path: string;
+    name: string;
+    extension?: string;
+    description?: string;
+    template?: string;
+  }> {
+    const expectedFiles: Array<{
+      path: string;
+      name: string;
+      extension?: string;
+      description?: string;
+      template?: string;
+    }> = [];
+
+    for (const item of structure) {
+      if (item.type === 'file') {
+        // 提取文件名和扩展名
+        const fileName = item.name;
+        const extMatch = fileName.match(/\.([^.]+)$/);
+        const extension = extMatch ? extMatch[1] : undefined;
+        const nameWithoutExt = extension ? fileName.substring(0, fileName.length - extension.length - 1) : fileName;
+
+        expectedFiles.push({
+          path: fileName, // 相对于文件夹的路径
+          name: nameWithoutExt,
+          extension: extension,
+          description: item.description,
+          template: item.template
+        });
+      }
+    }
+
+    return expectedFiles;
+  }
+
+  /**
+   * 从模板结构中提取预期子文件夹列表（只提取直接子文件夹）
+   */
+  private extractExpectedFolders(structure: Array<{ type: string; name: string; description?: string; children?: any[] }>): Array<{
+    path: string;
+    name: string;
+    description?: string;
+    structure?: any;
+  }> {
+    const expectedFolders: Array<{
+      path: string;
+      name: string;
+      description?: string;
+      structure?: any;
+    }> = [];
+
+    for (const item of structure) {
+      if (item.type === 'directory') {
+        expectedFolders.push({
+          path: item.name, // 相对于当前文件夹的路径
+          name: item.name,
+          description: item.description,
+          structure: item.children ? {
+            type: 'directory',
+            name: item.name,
+            children: item.children
+          } : undefined
+        });
+      }
+    }
+
+    return expectedFolders;
+  }
+
+  /**
+   * 保存文件夹元数据
+   */
+  /**
+   * 保存文件夹元数据
+   * 元数据文件使用 metadata.id 作为文件名：.metadata/{metadata.id}.metadata.yml
+   */
+  private async saveFolderMetadata(vaultId: string, metadata: FolderMetadata): Promise<void> {
+    try {
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      const vaultPath = path.join(architoolRoot, vaultId);
+      const yamlRepo = new YamlFolderMetadataRepository(vaultPath);
+      // 使用 metadata.id 作为 metadataId 保存元数据文件
+      const result = await yamlRepo.writeMetadata(metadata);
+      if (!result.success) {
+        this.logger.error('Failed to save folder metadata', {
+          vaultId,
+          folderPath: metadata.folderPath,
+          error: result.error
+        });
+      } else {
+        this.logger.info('Folder metadata saved successfully', {
+          vaultId,
+          folderPath: metadata.folderPath,
+          metadataId: metadata.id
+        });
+      }
+    } catch (error: any) {
+      this.logger.error('Failed to save folder metadata', {
+        vaultId,
+        folderPath: metadata.folderPath,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * 读取文件夹元数据（实现接口方法）
+   * 通过 folderPath 查找元数据文件（因为使用 UUID 作为文件名）
+   */
+  async readFolderMetadata(vaultId: string, folderPath: string): Promise<FolderMetadata | null> {
+    try {
+      // 如果 folderPath 为空，无法读取元数据（根目录没有元数据）
+      if (!folderPath || folderPath === '') {
+        return null;
+      }
+
+      const architoolRoot = this.configManager.getArchitoolRoot();
+      const vaultPath = path.join(architoolRoot, vaultId);
+      const yamlRepo = new YamlFolderMetadataRepository(vaultPath);
+      // 通过 folderPath 查找元数据文件（因为使用 UUID 作为文件名）
+      const result = await yamlRepo.findByFolderPath(folderPath);
+      
+      if (result.success && result.value) {
+        this.logger.debug('Folder metadata read successfully', {
+          vaultId,
+          folderPath,
+          metadataId: result.value.id,
+          expectedFilesCount: result.value.expectedFiles?.length || 0
+        });
+        return result.value;
+      } else {
+        // result.success 为 false 时，result 有 error 属性
+        const errorMessage = result.success === false ? result.error?.message : undefined;
+        this.logger.debug('Folder metadata not found', {
+          vaultId,
+          folderPath,
+          error: errorMessage
+        });
+      }
+      return null;
+    } catch (error: any) {
+      this.logger.error('Failed to read folder metadata', {
+        vaultId,
+        folderPath,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
 }

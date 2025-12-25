@@ -59,5 +59,6 @@ tmp/
 # ArchiTool runtime
 .architool/cache/
 vendors/vscode-extension-samples
+vendor/plantuml-stdlib
 yarn.lock
 **/*.vsix

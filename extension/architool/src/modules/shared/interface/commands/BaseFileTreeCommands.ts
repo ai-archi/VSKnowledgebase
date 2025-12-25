@@ -527,19 +527,40 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
 
   /**
    * 显示创建文件对话框
+   * @param item 选中的树项（可选）
+   * @param prefill 预填充数据（可选）
    */
-  protected async showCreateFileDialog(item?: T): Promise<void> {
-    // 如果已经打开，直接显示
+  protected async showCreateFileDialog(item?: T, prefill?: {
+    vaultId?: string;
+    folderPath?: string;
+    fileName?: string;
+    templateId?: string;
+  }): Promise<void> {
+    // 如果已经打开，直接显示并发送预填充数据
     if (this.createFileWebviewPanel) {
       this.createFileWebviewPanel.reveal();
+      if (prefill) {
+        this.createFileWebviewPanel.webview.postMessage({
+          type: 'prefill',
+          data: prefill
+        });
+      }
       return;
     }
 
     // 获取当前选中的 vault 信息
     let initialVaultId: string | undefined;
     let initialFolderPath: string | undefined;
+    let initialFileName: string | undefined;
+    let initialTemplateId: string | undefined;
 
-    if (item) {
+    // 优先使用预填充数据
+    if (prefill) {
+      initialVaultId = prefill.vaultId;
+      initialFolderPath = prefill.folderPath;
+      initialFileName = prefill.fileName;
+      initialTemplateId = prefill.templateId;
+    } else if (item) {
       // 优先使用 item.vaultId，如果没有则通过 vaultName 查找
       if (item.vaultId) {
         initialVaultId = item.vaultId;
@@ -643,7 +664,11 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
       initialVaultId,
       initialFolderPath,
       undefined,
-      { view: 'create-file-dialog' }
+      { 
+        view: 'create-file-dialog',
+        initialFileName: initialFileName,
+        initialTemplateId: initialTemplateId
+      }
     );
     panel.webview.html = htmlContent;
 

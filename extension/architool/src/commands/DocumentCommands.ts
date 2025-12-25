@@ -176,6 +176,12 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     // 注册文档特定命令
     commandAdapter.registerCommands([
       {
+        command: 'archi.document.createFromPlaceholder',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.createFromPlaceholder(item);
+        },
+      },
+      {
         command: 'archi.document.create',
         callback: async () => {
           const vaultsResult = await this.vaultService.listVaults();
@@ -242,6 +248,65 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         },
       },
     ]);
+  }
+
+  /**
+   * 从占位节点创建文件
+   */
+  private async createFromPlaceholder(item?: DocumentTreeItem): Promise<void> {
+    if (!item) {
+      const selection = this.treeView.selection;
+      if (selection.length === 0) {
+        return;
+      }
+      item = selection[0] as DocumentTreeItem;
+    }
+
+    if (!item.filePath || !item.vaultId) {
+      return;
+    }
+
+    // 1. 获取占位节点信息
+    const folderPath = path.dirname(item.filePath);
+    const normalizedFolderPath = folderPath === '.' || folderPath === '' ? '' : folderPath;
+    const fileName = path.basename(item.filePath, path.extname(item.filePath));
+    const extension = path.extname(item.filePath).substring(1); // 去掉点号
+
+    // 2. 读取文件夹元数据，获取文件模板信息
+    const folderMetadata = await this.documentService.readFolderMetadata(item.vaultId, normalizedFolderPath);
+
+    // 查找对应的 expectedFile
+    const fileNameWithExt = path.basename(item.filePath); // 如 "system-context.md"
+    const expectedFile = folderMetadata?.expectedFiles?.find(
+      f => {
+        // f.path 可能是 "system-context.md" 或 "system-context"
+        const expectedFileName = f.extension ? `${f.name}.${f.extension}` : f.name;
+        return f.path === fileNameWithExt || f.path === expectedFileName;
+      }
+    );
+
+    // 3. 解析模板ID（如果存在）
+    let templateId: string | undefined;
+    if (expectedFile?.template) {
+      // 模板路径可能是 "demo-vault-assistant/archi-templates/content/c4-model/system-context.md"
+      // 需要提取模板ID，通常是路径的最后一部分（去掉扩展名）
+      const templatePath = expectedFile.template;
+      const templateName = path.basename(templatePath, path.extname(templatePath));
+      // 如果模板路径包含 vault 名称，保留完整路径；否则只使用模板名称
+      if (templatePath.includes('/')) {
+        templateId = templatePath;
+      } else {
+        templateId = templateName;
+      }
+    }
+
+    // 4. 打开创建文件弹窗（预填充信息）
+    await this.showCreateFileDialog(item, {
+      vaultId: item.vaultId,
+      folderPath: normalizedFolderPath,
+      fileName: fileName,
+      templateId: templateId
+    });
   }
 
   /**

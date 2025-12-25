@@ -1658,10 +1658,26 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     try {
       const fullPath = this.getFullPath(vault, dirPath);
       
-      if (!fs.existsSync(fullPath)) {
-        fs.mkdirSync(fullPath, { recursive: true });
+      if (fs.existsSync(fullPath)) {
+        // 如果路径已存在，检查它是否是一个目录
+        const stats = fs.statSync(fullPath);
+        if (!stats.isDirectory()) {
+          // 如果路径存在但是一个文件，返回错误
+          return {
+            success: false,
+            error: new ArtifactError(
+              ArtifactErrorCode.OPERATION_FAILED,
+              `Path exists but is not a directory: ${dirPath}`,
+              { vaultId: vault.id, vaultName: vault.name, dirPath }
+            ),
+          };
+        }
+        // 如果路径已存在且是目录，直接返回成功
+        return { success: true, value: undefined };
       }
 
+      // 路径不存在，创建目录
+      fs.mkdirSync(fullPath, { recursive: true });
       return { success: true, value: undefined };
     } catch (error: any) {
       return {
@@ -1955,12 +1971,41 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       }
 
       // 递归处理子项（子项已经在外部替换过变量，这里直接使用）
+      // 即使某个子项创建失败，也继续处理其他子项，确保所有能创建的子项都被创建
       if (item.children && Array.isArray(item.children)) {
+        const errors: string[] = [];
         for (const child of item.children) {
           const childResult = await this.createStructureItem(vault, itemPath, child, variables);
           if (!childResult.success) {
-            return childResult;
+            const errorMsg = `Failed to create child ${child.type} '${child.name}' in directory '${itemName}': ${childResult.error?.message || 'Unknown error'}`;
+            this.logger.error(errorMsg, {
+              vaultId: vault.id,
+              basePath: itemPath,
+              childType: child.type,
+              childName: child.name,
+              error: childResult.error
+            });
+            errors.push(errorMsg);
+            // 继续处理其他子项，而不是立即返回
+          } else {
+            this.logger.info('Child structure item created successfully', {
+              vaultId: vault.id,
+              basePath: itemPath,
+              childType: child.type,
+              childName: child.name
+            });
           }
+        }
+        
+        // 如果有错误，记录警告，但仍然返回成功（因为至少部分子项已经创建）
+        if (errors.length > 0) {
+          this.logger.warn('Some child structure items failed to create', {
+            vaultId: vault.id,
+            basePath: itemPath,
+            directoryName: itemName,
+            errorCount: errors.length,
+            errors
+          });
         }
       }
 

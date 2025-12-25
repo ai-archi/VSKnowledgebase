@@ -128,12 +128,16 @@ async function initializeDocumentViewAndCommand(
 		// 获取 IDE 适配器
 		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
 		
+		// 从容器获取 DocumentApplicationService（需要在创建 DocumentTreeViewProvider 之前获取）
+		const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
+		
 		// 初始化文档树视图
 		const documentTreeViewProvider = new DocumentTreeViewProvider(
 			vaultService,
 			artifactService,
 			logger,
-			ideAdapter
+			ideAdapter,
+			documentService
 		);
 		// 注意：createTreeView 需要 TreeDataProvider，但 DocumentTreeViewProvider 实现了 vscode.TreeDataProvider
 		// 需要进行类型转换
@@ -141,8 +145,7 @@ async function initializeDocumentViewAndCommand(
 		ideAdapter.subscribe(documentTreeView);
 		logger.info('Document tree view registered');
 
-		// 从容器获取 DocumentApplicationService 和其他服务
-		const documentService = container.get<DocumentApplicationService>(TYPES.DocumentApplicationService);
+		// 从容器获取其他服务
 		const templateService = container.get<TemplateApplicationService>(TYPES.TemplateApplicationService);
 		const codeFileService = container.get<CodeFileSystemApplicationService>(TYPES.CodeFileSystemApplicationService);
 		const aiCommandService = container.get<AICommandApplicationService>(TYPES.AICommandApplicationService);
