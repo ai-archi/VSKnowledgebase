@@ -91,6 +91,9 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
   protected async handleDelete(item: DocumentTreeItem): Promise<void> {
     // 先判断是否是文件或文件夹（优先级高于 vault）
     if (item.artifact || item.filePath || item.folderPath !== undefined) {
+      // 检查是否是占位文件
+      const isPlaceholderFile = item.contextValue === 'placeholder-file';
+      
       // 删除文档或文件夹
       let filePath: string;
       let vaultId: string;
@@ -116,7 +119,7 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       }
       
       const confirm = await vscode.window.showWarningMessage(
-        `Are you sure you want to delete ${isFolder ? 'folder' : 'file'} '${fileName}'? This action cannot be undone.`,
+        `Are you sure you want to delete ${isPlaceholderFile ? 'placeholder ' : ''}${isFolder ? 'folder' : 'file'} '${fileName}'? This action cannot be undone.`,
         { modal: true },
         'Delete'
       );
@@ -125,6 +128,19 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         return;
       }
 
+      // 如果是占位文件，从 expectedFiles 中移除
+      if (isPlaceholderFile) {
+        const result = await this.documentService.removeExpectedFile(vaultId, filePath);
+        if (result.success) {
+          vscode.window.showInformationMessage(`Placeholder file '${fileName}' removed`);
+          this.treeViewProvider.refresh();
+        } else {
+          vscode.window.showErrorMessage(`Failed to remove placeholder file: ${result.error.message}`);
+        }
+        return;
+      }
+
+      // 普通文件或文件夹的删除
       const result = await this.documentService.deleteDocument(vaultId, filePath);
 
       if (result.success) {

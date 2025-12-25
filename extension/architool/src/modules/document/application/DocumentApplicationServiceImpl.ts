@@ -409,6 +409,33 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       name: vaultResult.value.name,
     };
 
+    // 先检查文件是否存在
+    const existsResult = await this.artifactService.exists(vault, path);
+    if (!existsResult.success) {
+      // 如果检查失败，可能是占位文件，尝试从 expectedFiles 中移除
+      const removeResult = await this.removeExpectedFile(vaultId, path);
+      if (removeResult.success) {
+        return { success: true, value: undefined };
+      }
+      return {
+        success: false,
+        error: existsResult.error,
+      };
+    }
+
+    // 如果文件不存在，可能是占位文件，尝试从 expectedFiles 中移除
+    if (!existsResult.value) {
+      const removeResult = await this.removeExpectedFile(vaultId, path);
+      if (removeResult.success) {
+        return { success: true, value: undefined };
+      }
+      // 如果移除失败，返回文件不存在的错误
+      return {
+        success: false,
+        error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `File not found: ${path}`),
+      };
+    }
+
     // 检查是文件还是文件夹
     const isDirResult = await this.artifactService.isDirectory(vault, path);
     if (!isDirResult.success) {
@@ -821,6 +848,112 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
         error: error.message
       });
       return null;
+    }
+  }
+
+  /**
+   * 从父文件夹的 expectedFiles 中移除指定的占位文件
+   * 当用户删除占位文件时调用此方法
+   */
+  async removeExpectedFile(vaultId: string, filePath: string): Promise<Result<void, ArtifactError>> {
+    try {
+      // 规范化路径：确保使用 / 作为分隔符（vault 路径格式）
+      const normalizedFilePath = filePath.replace(/\\/g, '/');
+      
+      // 从文件路径中提取父文件夹路径和文件名
+      // 使用字符串操作而不是 path.dirname，因为 vault 路径使用 / 分隔符
+      const lastSlashIndex = normalizedFilePath.lastIndexOf('/');
+      const parentFolderPath = lastSlashIndex === -1 ? '' : normalizedFilePath.substring(0, lastSlashIndex);
+      const fileName = lastSlashIndex === -1 ? normalizedFilePath : normalizedFilePath.substring(lastSlashIndex + 1);
+
+      // 如果父文件夹路径是 ''，说明文件在 vault 根目录
+      const normalizedParentPath = parentFolderPath;
+
+      // 读取父文件夹的元数据
+      const folderMetadata = await this.readFolderMetadata(vaultId, normalizedParentPath);
+      if (!folderMetadata) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Parent folder metadata not found for path: ${normalizedParentPath}`
+          ),
+        };
+      }
+
+      // 从 expectedFiles 中移除匹配的文件
+      if (folderMetadata.expectedFiles && folderMetadata.expectedFiles.length > 0) {
+        const originalLength = folderMetadata.expectedFiles.length;
+        
+        // 计算相对于父文件夹的路径
+        // filePath 是完整路径（相对于 vault 根目录），例如：folder1/subfolder/file.md
+        // expectedFile.path 是相对于父文件夹的路径，例如：file.md
+        let relativePath: string;
+        if (normalizedParentPath === '') {
+          relativePath = fileName;
+        } else {
+          // 使用 path.relative 或手动移除前缀
+          // 确保使用正确的路径分隔符
+          const prefix = normalizedParentPath.endsWith('/') 
+            ? normalizedParentPath 
+            : normalizedParentPath + '/';
+          relativePath = filePath.startsWith(prefix)
+            ? filePath.substring(prefix.length)
+            : fileName; // 如果前缀不匹配，使用文件名作为备用
+        }
+        
+        folderMetadata.expectedFiles = folderMetadata.expectedFiles.filter(expectedFile => {
+          // 构建 expectedFile 的完整路径（相对于父文件夹）
+          const expectedFilePath = expectedFile.path;
+          const expectedFileName = expectedFile.extension
+            ? `${expectedFile.name}.${expectedFile.extension}`
+            : expectedFile.name;
+          
+          // 匹配条件：expectedFile.path 应该等于 relativePath
+          // 或者 expectedFileName 应该等于 fileName（作为备用匹配）
+          const pathMatches = expectedFilePath === relativePath;
+          const nameMatches = expectedFileName === fileName;
+          
+          // 如果匹配，则过滤掉（返回 false），否则保留（返回 true）
+          return !(pathMatches || nameMatches);
+        });
+
+        // 如果成功移除了文件，更新元数据
+        if (folderMetadata.expectedFiles.length < originalLength) {
+          folderMetadata.updatedAt = new Date().toISOString();
+          await this.saveFolderMetadata(vaultId, folderMetadata);
+          
+          this.logger.info('Expected file removed from metadata', {
+            vaultId,
+            parentFolderPath: normalizedParentPath,
+            filePath,
+            remainingExpectedFiles: folderMetadata.expectedFiles.length
+          });
+        } else {
+          this.logger.warn('Expected file not found in metadata', {
+            vaultId,
+            parentFolderPath: normalizedParentPath,
+            filePath
+          });
+        }
+      }
+
+      return { success: true, value: undefined };
+    } catch (error: any) {
+      this.logger.error('Failed to remove expected file from metadata', {
+        vaultId,
+        filePath,
+        error: error.message
+      });
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to remove expected file: ${error.message}`,
+          { vaultId, filePath },
+          error
+        ),
+      };
     }
   }
 

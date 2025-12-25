@@ -11,4 +11,5 @@ export interface DocumentApplicationService {
   updateDocument(vaultId: string, path: string, content: string): Promise<Result<Artifact, ArtifactError>>;
   deleteDocument(vaultId: string, path: string): Promise<Result<void, ArtifactError>>;
   readFolderMetadata(vaultId: string, folderPath: string): Promise<FolderMetadata | null>;
+  removeExpectedFile(vaultId: string, filePath: string): Promise<Result<void, ArtifactError>>;
 }
