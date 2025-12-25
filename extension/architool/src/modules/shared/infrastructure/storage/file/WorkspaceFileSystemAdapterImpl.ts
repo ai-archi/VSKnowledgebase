@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import fg from 'fast-glob';
 import ignore from 'ignore';
+import { ARCHITOOL_PATHS } from '../../../../../core/constants/Paths';
 import { WorkspaceFileSystemAdapter, WorkspaceFolder, WorkspaceFileItem, WorkspaceFileSearchOptions } from './WorkspaceFileSystemAdapter';
 import { Result, ArtifactError, ArtifactErrorCode } from '../../../domain/errors';
 
@@ -40,7 +41,7 @@ export class WorkspaceFileSystemAdapterImpl implements WorkspaceFileSystemAdapte
   /**
    * 构建 ignore 实例
    * 如果 options.exclude 已指定，使用它；否则读取 .gitignore
-   * 始终排除 .architool 和 .git 目录
+   * 始终排除 archidocs 和 .git 目录
    * @param folderUri 工作区文件夹 URI
    * @param options 搜索选项
    * @returns ignore 实例
@@ -48,8 +49,8 @@ export class WorkspaceFileSystemAdapterImpl implements WorkspaceFileSystemAdapte
   private async buildIgnoreInstance(folderUri: string, options?: WorkspaceFileSearchOptions): Promise<ReturnType<typeof ignore>> {
     const ig = ignore();
 
-    // 始终排除 .architool 和 .git 目录
-    ig.add('.architool');
+    // 始终排除 archidocs 和 .git 目录
+    ig.add(ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR);
     ig.add('.git');
     ig.add('**/.git');
     

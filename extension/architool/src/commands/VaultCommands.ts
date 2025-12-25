@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { CommandAdapter, CommandDefinition } from '../core/vscode-api/CommandAdapter';
 import { Logger } from '../core/logger/Logger';
+import { ARCHITOOL_PATHS } from '../core/constants/Paths';
 import { VaultApplicationService } from '../modules/shared/application/VaultApplicationService';
 import { RemoteEndpoint } from '../modules/shared/domain/value_object/RemoteEndpoint';
 import { GitVaultAdapter } from '../modules/shared/infrastructure/storage/git/GitVaultAdapter';
@@ -63,7 +64,7 @@ export class VaultCommands {
           if (!selectedType) return;
 
           const workspaceRoot = workspaceFolder.uri.fsPath;
-          const vaultPath = path.join(workspaceRoot, '.architool', vaultName);
+          const vaultPath = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultName);
 
           const result = await this.vaultService.addLocalVault({
             name: vaultName,
@@ -165,7 +166,7 @@ export class VaultCommands {
 
           if (result.success) {
             const workspaceRoot = workspaceFolder.uri.fsPath;
-            const vaultPath = path.join(workspaceRoot, '.architool', vaultName);
+            const vaultPath = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultName);
             vscode.window.showInformationMessage(`Vault '${vaultName}' cloned from Git to ${vaultPath}`);
             this.refreshViews();
           } else {

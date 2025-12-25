@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Logger } from '../logger/Logger';
+import { ARCHITOOL_PATHS } from '../constants/Paths';
 
 /**
- * .architool 目录管理器
- * 负责创建和管理 .architool 目录结构
+ * archidocs 目录管理器
+ * 负责创建和管理工作区根目录下的 archidocs 目录结构
  */
 export class ArchitoolDirectoryManager {
   private rootPath: string;
@@ -17,7 +18,7 @@ export class ArchitoolDirectoryManager {
   }
 
   /**
-   * 初始化 .architool 目录结构
+   * 初始化 archidocs 目录结构
    */
   async initialize(): Promise<void> {
     // 创建根目录
@@ -25,21 +26,15 @@ export class ArchitoolDirectoryManager {
       fs.mkdirSync(this.rootPath, { recursive: true });
     }
 
-    // 创建 cache 目录（用于缓存文件）
-    const cacheDir = path.join(this.rootPath, 'cache');
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir, { recursive: true });
-    }
-
     // 创建 mcp-server 目录（用于 IPC 端点、注册表和 MCP Server 脚本）
-    const mcpServerDir = path.join(os.homedir(), '.architool', 'mcp-server');
+    const mcpServerDir = path.join(os.homedir(), ARCHITOOL_PATHS.USER_HOME_DIR, ARCHITOOL_PATHS.MCP_SERVER_DIR);
     if (!fs.existsSync(mcpServerDir)) {
       fs.mkdirSync(mcpServerDir, { recursive: true });
     }
   }
 
   /**
-   * 检查 .architool 目录是否有任何 vault（除了系统目录）
+   * 检查 archidocs 目录是否有任何 vault（除了系统目录）
    * @returns 如果没有 vault 返回 true，否则返回 false
    */
   private hasNoVaults(): boolean {
@@ -50,7 +45,7 @@ export class ArchitoolDirectoryManager {
     const entries = fs.readdirSync(this.rootPath, { withFileTypes: true });
     
     // 系统目录和文件，应该被忽略
-    const systemDirs = ['cache', 'generated-prisma-client'];
+    const systemDirs = ['generated-prisma-client'];
     const systemFiles = ['meta.json', 'architool.yml'];
     
     // 检查是否有 vault 目录
@@ -79,7 +74,7 @@ export class ArchitoolDirectoryManager {
   }
 
   /**
-   * 如果 .architool 目录没有 vault，则复制 demo-vaults 下的所有 vault 到 .architool 目录
+   * 如果 archidocs 目录没有 vault，则复制 demo-vaults 下的所有 vault 到 archidocs 目录
    * @param demoVaultsSourcePath demo-vaults 源路径
    */
   async initializeDemoVaultsIfEmpty(demoVaultsSourcePath: string): Promise<void> {
@@ -208,8 +203,8 @@ export class ArchitoolDirectoryManager {
    * @param mcpServerSourcePath MCP Server 源路径（扩展安装目录中的路径）
    */
   async copyMCPServer(mcpServerSourcePath: string): Promise<void> {
-    const mcpServerTargetDir = path.join(os.homedir(), '.architool', 'mcp-server');
-    const mcpServerTargetPath = path.join(mcpServerTargetDir, 'mcp-server.js');
+    const mcpServerTargetDir = path.join(os.homedir(), ARCHITOOL_PATHS.USER_HOME_DIR, ARCHITOOL_PATHS.MCP_SERVER_DIR);
+    const mcpServerTargetPath = path.join(mcpServerTargetDir, ARCHITOOL_PATHS.MCP_SERVER_SCRIPT);
 
     // 如果目标文件已存在且是最新的，跳过复制
     if (fs.existsSync(mcpServerTargetPath) && fs.existsSync(mcpServerSourcePath)) {
@@ -251,6 +246,6 @@ export class ArchitoolDirectoryManager {
    * 获取 MCP Server 目标路径（固定位置）
    */
   getMCPServerPath(): string {
-    return path.join(os.homedir(), '.architool', 'mcp-server', 'mcp-server.js');
+    return path.join(os.homedir(), ARCHITOOL_PATHS.USER_HOME_DIR, ARCHITOOL_PATHS.MCP_SERVER_DIR, ARCHITOOL_PATHS.MCP_SERVER_SCRIPT);
   }
 }

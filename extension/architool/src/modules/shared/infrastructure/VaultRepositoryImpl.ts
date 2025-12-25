@@ -107,7 +107,7 @@ export class VaultRepositoryImpl implements VaultRepository {
 
   /**
    * 扫描文件系统中的 vault 目录
-   * 零配置识别：任何在 .architool 下的目录都可以被识别为 vault
+   * 零配置识别：任何在 archidocs 下的目录都可以被识别为 vault
    */
   private async scanFileSystemVaults(architoolRoot: string): Promise<Vault[]> {
     const vaults: Vault[] = [];
@@ -117,7 +117,7 @@ export class VaultRepositoryImpl implements VaultRepository {
     }
 
     const entries = fs.readdirSync(architoolRoot, { withFileTypes: true });
-    const systemDirs = ['cache', 'generated-prisma-client'];
+    const systemDirs = ['generated-prisma-client'];
     
     for (const entry of entries) {
       // 忽略系统目录和隐藏文件

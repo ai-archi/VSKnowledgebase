@@ -4,6 +4,7 @@ import { Template } from '@huggingface/jinja';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { ARCHITOOL_PATHS } from '../../../../core/constants/Paths';
 
 /**
  * 文件操作领域服务接口
@@ -325,9 +326,9 @@ Rel_Serving(appService1, tech1, "部署在")
 
     // ========== artifact.xxx - 要创建的文件/Artifact 信息 ==========
     const targetFilePath = artifact.path || fileName;
-    const targetFullRelativePath = `.architool/${vaultId}/${targetFilePath}`;
+    const targetFullRelativePath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${vaultId}/${targetFilePath}`;
     const targetAbsolutePath = workspaceRoot 
-      ? path.join(workspaceRoot, '.architool', vaultId, targetFilePath)
+      ? path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultId, targetFilePath)
       : targetFilePath;
 
     // 从 custom 中提取 folderPath 和 diagramType（如果存在）
@@ -360,10 +361,10 @@ Rel_Serving(appService1, tech1, "部署在")
     if (artifact.templateFile && artifact.templateFile.path && artifact.templateFile.name) {
       const f = artifact.templateFile;
       const fullRelativePath = f.vault 
-        ? `.architool/${f.vault.id}/${f.path}`
+        ? `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${f.vault.id}/${f.path}`
         : f.path;
       const absolutePath = f.vault && workspaceRoot
-        ? path.join(workspaceRoot, '.architool', f.vault.id, f.path)
+        ? path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, f.vault.id, f.path)
         : f.path;
 
       variables['templateFile'] = {
@@ -388,10 +389,10 @@ Rel_Serving(appService1, tech1, "部署在")
         .filter(f => f.path && f.name) // 只保留有 path 和 name 的文件
         .map(f => {
           const fullRelativePath = f.vault 
-            ? `.architool/${f.vault.id}/${f.path}`
+            ? `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${f.vault.id}/${f.path}`
             : f.path;
           const absolutePath = f.vault && workspaceRoot
-            ? path.join(workspaceRoot, '.architool', f.vault.id, f.path)
+            ? path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, f.vault.id, f.path)
             : f.path;
 
           return {

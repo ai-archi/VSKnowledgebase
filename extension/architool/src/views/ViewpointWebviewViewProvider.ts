@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
+import { ARCHITOOL_PATHS } from '../core/constants/Paths';
 import { VaultApplicationService } from '../modules/shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../modules/shared/application/ArtifactApplicationService';
 import { TaskApplicationService } from '../modules/task/application/TaskApplicationService';
@@ -880,8 +881,8 @@ export class ViewpointWebviewViewProvider {
       // 尝试读取 vault 的 .metadata/vault.yaml 文件来获取路径
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (workspaceFolder) {
-        // 假设 .architool 在工作区根目录下
-        const architoolRoot = path.join(workspaceFolder.uri.fsPath, '.architool');
+        // 假设 archidocs 在工作区根目录下
+        const architoolRoot = path.join(workspaceFolder.uri.fsPath, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR);
         const vaultPath = path.join(architoolRoot, vaultId);
         if (fs.existsSync(vaultPath)) {
           return vaultPath;
@@ -1347,9 +1348,9 @@ export class ViewpointWebviewViewProvider {
         throw new Error(`Step ${stepId} does not have a prompt template`);
       }
 
-      // 构建方案路径（从 .architool 开始）
+      // 构建方案路径（从 archidocs 开始）
       const solutionFileName = task.artifactPath.replace(/\.yml$/, '.solution.md').replace(/\.yaml$/, '.solution.md');
-      const solutionPath = `.architool/${task.vaultId}/${solutionFileName}`;
+      const solutionPath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${task.vaultId}/${solutionFileName}`;
 
       // 确保 formData 是可序列化的（深拷贝并移除不可序列化的属性）
       const serializableFormData = this.sanitizeForSerialization(formData || {});

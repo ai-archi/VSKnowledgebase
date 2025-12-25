@@ -55,7 +55,7 @@
 
 1. 在 VS Code 中打开扩展市场
 2. 搜索 "ArchiTool" 并安装
-3. 扩展会在工作区根目录创建 `.architool` 目录
+3. 扩展会在工作区根目录创建 `archidocs` 目录
 
 ### 基本使用
 
@@ -241,7 +241,7 @@ VSKnowledgebase/
 
 ### 关键目录说明
 
-- **`.architool/`**：工作区根目录下的配置和数据目录
+- **`archidocs/`**：工作区根目录下的配置和数据目录
   - 每个 Vault 一个子目录
   - 包含 artifacts、metadata、templates 等
 

@@ -16,6 +16,7 @@ import { LookupCommands } from './commands/LookupCommands';
 import { DocumentTreeViewProvider } from './views/DocumentTreeViewProvider';
 import { Logger } from './core/logger/Logger';
 import { ArchitoolDirectoryManager } from './core/storage/ArchitoolDirectoryManager';
+import { ARCHITOOL_PATHS } from './core/constants/Paths';
 import { createContainer } from './infrastructure/di/container';
 import { TYPES } from './infrastructure/di/types';
 import { VaultApplicationService } from './modules/shared/application/VaultApplicationService';
@@ -66,7 +67,7 @@ export async function activate(context: vscode.ExtensionContext) {
  * 初始化工作区
  */
 async function initializeWorkspace(logger: Logger, context: vscode.ExtensionContext): Promise<{ workspaceRoot: string; architoolRoot: string }> { 
-	// 初始化工作区路径和 .architool 目录
+	// 初始化工作区路径和 archidocs 目录
 	try {
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		let workspaceRoot: string;
@@ -74,17 +75,17 @@ async function initializeWorkspace(logger: Logger, context: vscode.ExtensionCont
 
 		if (!workspaceFolder) {
 			workspaceRoot = os.homedir();
-			architoolRoot = path.join(workspaceRoot, '.architool');
+			architoolRoot = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR);
 			logger.warn('No workspace folder found, using home directory as fallback');
 		} else {
 			workspaceRoot = workspaceFolder.uri.fsPath;
-			architoolRoot = path.join(workspaceRoot, '.architool');
+			architoolRoot = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR);
 		}
 
 		logger.info(`Workspace root: ${workspaceRoot}`);
 		logger.info(`Architool root: ${architoolRoot}`);
 
-		// 初始化 .architool 目录
+		// 初始化 archidocs 目录
 		const architoolManager = new ArchitoolDirectoryManager(architoolRoot, logger);
 		await architoolManager.initialize();
 

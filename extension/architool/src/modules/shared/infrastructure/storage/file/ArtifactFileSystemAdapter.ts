@@ -11,14 +11,14 @@ export class ArtifactFileSystemAdapter {
   }
 
   /**
-   * 获取统一的 .architool 根目录路径
+   * 获取统一的 archidocs 根目录路径
    */
   getArtifactRoot(): string {
     return this.architoolRoot;
   }
 
   /**
-   * 获取 Vault 在 .architool 下的存储路径
+   * 获取 Vault 在 archidocs 下的存储路径
    * @param vaultIdOrName Vault ID（目录名）或名称，优先使用 ID
    */
   getVaultPath(vaultIdOrName: string): string {
