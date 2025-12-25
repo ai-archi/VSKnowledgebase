@@ -7,8 +7,6 @@ import { RemoteEndpoint } from '../domain/value_object/RemoteEndpoint';
 import { VaultRepository } from '../infrastructure/VaultRepository';
 import { VaultFileSystemAdapter } from '../infrastructure/storage/file/VaultFileSystemAdapter';
 import { GitVaultAdapter } from '../infrastructure/storage/git/GitVaultAdapter';
-import { ConfigManager } from '../../../core/config/ConfigManager';
-import { ArchitoolDirectoryManager } from '../../../core/storage/ArchitoolDirectoryManager';
 import { Logger } from '../../../core/logger/Logger';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
@@ -20,7 +18,6 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     @inject(TYPES.VaultRepository) private vaultRepo: VaultRepository,
     @inject(TYPES.VaultFileSystemAdapter) private fileAdapter: VaultFileSystemAdapter,
     @inject(TYPES.GitVaultAdapter) private gitAdapter: GitVaultAdapter,
-    @inject(TYPES.ConfigManager) private configManager: ConfigManager,
     @inject(TYPES.Logger) private logger: Logger
   ) {}
 
@@ -228,40 +225,11 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     const vault = vaultResult.value;
     this.logger.info(`[VaultApplicationService] Found vault: id=${vault.id}, name=${vault.name}`);
 
-    // 检查 vault 是否在配置中
-    // 需要同时匹配 id 和 name，因为 config 中的 name 可能是目录名，而 vault.yaml 中的 name 可能是显示名称
-    const configVaultsResult = await this.configManager.getVaults();
-    const configVaults = configVaultsResult.success ? configVaultsResult.value : [];
-    const vaultInConfig = configVaults.some((v: Vault) => {
-      // 匹配 id
-      if (v.id === vaultId || v.id === vault.id) {
-        return true;
-      }
-      // 匹配 name（可能是目录名或显示名称）
-      if (v.name === vaultId || v.name === vault.name || v.name === vault.id) {
-        return true;
-      }
-      // 匹配 vault 的 id 和 name
-      if (v.id === vault.name || v.name === vault.id) {
-        return true;
-      }
-      return false;
-    });
-    
     // 如果指定了 deleteFiles，使用指定值
-    // 否则，如果 vault 在配置中，默认不删除文件（需要用户明确指定）
-    // 如果 vault 不在配置中，自动删除文件
-    const shouldDeleteFiles = opts?.deleteFiles !== undefined 
-      ? opts.deleteFiles 
-      : !vaultInConfig; // 如果不在配置中，自动删除文件
-    
-    if (!vaultInConfig) {
-      this.logger.info(`[VaultApplicationService] Vault ${vaultId} only exists in file system. Will automatically delete files.`);
-    } else {
-      this.logger.info(`[VaultApplicationService] Vault ${vaultId} found in config. deleteFiles=${shouldDeleteFiles}`);
-    }
+    // 否则，默认删除文件（因为不再有配置文件的概念）
+    const shouldDeleteFiles = opts?.deleteFiles !== undefined ? opts.deleteFiles : true;
 
-    // 如果指定删除文件（或自动删除），先删除文件目录
+    // 如果指定删除文件（或默认删除），先删除文件目录
     if (shouldDeleteFiles) {
       const vaultPath = this.fileAdapter.getVaultPath(vault.id);
       this.logger.info(`[VaultApplicationService] Attempting to delete vault directory: ${vaultPath}`);
@@ -286,7 +254,7 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
       }
     }
 
-    // 从配置中删除 Vault（如果存在）
+    // 从仓库中删除 Vault（清理缓存和 SecretStorage）
     this.logger.info(`[VaultApplicationService] Calling vaultRepo.delete with vaultId: ${vaultId}`);
     const deleteResult = await this.vaultRepo.delete(vaultId);
     if (deleteResult.success) {

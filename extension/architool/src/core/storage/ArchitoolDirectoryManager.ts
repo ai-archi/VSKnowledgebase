@@ -46,7 +46,7 @@ export class ArchitoolDirectoryManager {
     
     // 系统目录和文件，应该被忽略
     const systemDirs = ['generated-prisma-client'];
-    const systemFiles = ['meta.json', 'architool.yml'];
+    const systemFiles = ['meta.json'];
     
     // 检查是否有 vault 目录
     for (const entry of entries) {

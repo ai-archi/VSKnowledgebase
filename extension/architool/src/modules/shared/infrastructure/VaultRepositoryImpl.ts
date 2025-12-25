@@ -59,40 +59,21 @@ export class VaultRepositoryImpl implements VaultRepository {
     const architoolRoot = this.configManager.getArchitoolRoot();
     const fileSystemVaults = await this.scanFileSystemVaults(architoolRoot);
     
-    // 获取配置中的 vault（可能包含额外信息如 remote）
-    const configVaultsResult = await this.configManager.getVaults();
-    const configVaults = configVaultsResult.success ? configVaultsResult.value : [];
-
-    // 合并：以文件系统为主，配置信息为辅
+    // 从 SecretStorage 恢复认证信息
     const vaultMap = new Map<string, Vault>();
     
-    // 首先添加文件系统中发现的 vault
     for (const vault of fileSystemVaults) {
-      vaultMap.set(vault.id, vault);
-    }
-    
-    // 然后合并配置中的信息（如 remote、description 等）
-    for (const configVault of configVaults) {
-      const existingVault = vaultMap.get(configVault.id);
-      
       // 从 SecretStorage 恢复认证信息
-      if (this.secretStorage && configVault.remote) {
-        const credentials = await this.secretStorage.getVaultCredentials(configVault.id);
+      if (this.secretStorage && vault.remote) {
+        const credentials = await this.secretStorage.getVaultCredentials(vault.id);
         if (credentials) {
-          configVault.remote = {
-            ...configVault.remote,
+          vault.remote = {
+            ...vault.remote,
             ...credentials,
           };
         }
       }
-      
-      if (existingVault) {
-        // 合并配置信息
-        vaultMap.set(configVault.id, { ...existingVault, ...configVault });
-      } else {
-        // 配置中有但文件系统中没有的 vault（可能是远程 vault）
-        vaultMap.set(configVault.id, configVault);
-      }
+      vaultMap.set(vault.id, vault);
     }
 
     const allVaults = Array.from(vaultMap.values());
@@ -220,42 +201,26 @@ export class VaultRepositoryImpl implements VaultRepository {
 
   async save(vault: Vault): Promise<Result<void, VaultError>> {
     try {
-    // 保存认证信息到 SecretStorage（如果存在）
-    if (this.secretStorage && vault.remote) {
-      const credentials: {
-        username?: string;
-        password?: string;
-        accessToken?: string;
-      } = {};
-      
-      if (vault.remote.accessToken) {
-        credentials.accessToken = vault.remote.accessToken;
-      } else if (vault.remote.username && vault.remote.password) {
-        credentials.username = vault.remote.username;
-        credentials.password = vault.remote.password;
+      // 保存认证信息到 SecretStorage（如果存在）
+      if (this.secretStorage && vault.remote) {
+        const credentials: {
+          username?: string;
+          password?: string;
+          accessToken?: string;
+        } = {};
+        
+        if (vault.remote.accessToken) {
+          credentials.accessToken = vault.remote.accessToken;
+        } else if (vault.remote.username && vault.remote.password) {
+          credentials.username = vault.remote.username;
+          credentials.password = vault.remote.password;
+        }
+        
+        // 只有在有认证信息时才保存
+        if (credentials.accessToken || (credentials.username && credentials.password)) {
+          await this.secretStorage.storeVaultCredentials(vault.id, credentials);
+        }
       }
-      
-      // 只有在有认证信息时才保存
-      if (credentials.accessToken || (credentials.username && credentials.password)) {
-        await this.secretStorage.storeVaultCredentials(vault.id, credentials);
-      }
-      
-      // 创建不包含敏感信息的 remote 对象用于保存到配置文件
-      const remoteWithoutCredentials: RemoteEndpoint = {
-        url: vault.remote.url,
-        branch: vault.remote.branch,
-        sync: vault.remote.sync,
-      };
-      
-      const vaultWithoutCredentials: Vault = {
-        ...vault,
-        remote: remoteWithoutCredentials,
-      };
-      
-      await this.configManager.addVault(vaultWithoutCredentials);
-    } else {
-      await this.configManager.addVault(vault);
-    }
       
       // 保存 vault.yaml 到 .metadata/vault.yaml
       // 如果 vault.yaml 已存在，则不覆盖它（保留原有内容）
@@ -290,6 +255,7 @@ export class VaultRepositoryImpl implements VaultRepository {
         vaultData.remote = {
           url: vault.remote.url,
           branch: vault.remote.branch,
+          sync: vault.remote.sync,
         };
       }
       
@@ -316,8 +282,8 @@ export class VaultRepositoryImpl implements VaultRepository {
       });
       fs.writeFileSync(vaultYamlPath, yamlContent, 'utf-8');
     
-    this.vaultsCache.set(vault.id, vault);
-    return { success: true, value: undefined };
+      this.vaultsCache.set(vault.id, vault);
+      return { success: true, value: undefined };
     } catch (error: any) {
       return {
         success: false,
@@ -340,9 +306,8 @@ export class VaultRepositoryImpl implements VaultRepository {
       this.logger?.info(`[VaultRepository] Deleted vault credentials from SecretStorage`);
     }
     
-    await this.configManager.removeVault(vaultId);
     this.vaultsCache.delete(vaultId);
-    this.logger?.info(`[VaultRepository] Deleted vault from cache and config`);
+    this.logger?.info(`[VaultRepository] Deleted vault from cache`);
     
     return { success: true, value: undefined };
   }
