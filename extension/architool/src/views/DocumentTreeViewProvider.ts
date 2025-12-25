@@ -114,13 +114,16 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
   }
 
   protected async getRootVaults(): Promise<DocumentTreeItem[]> {
+    this.logger.info('[DocumentTreeViewProvider] Getting root vaults');
     const vaultsResult = await this.vaultService.listVaults();
     if (!vaultsResult.success || vaultsResult.value.length === 0) {
+      this.logger.info('[DocumentTreeViewProvider] No vaults found or error occurred');
       return [];
     }
     
     // 默认返回所有 vault，不再过滤
     const filteredVaults = this.filterVaults(vaultsResult.value);
+    this.logger.info(`[DocumentTreeViewProvider] Found ${filteredVaults.length} vaults: ${filteredVaults.map(v => v.name).join(', ')}`);
     
     return filteredVaults.map(vault =>
       this.createTreeItem(

@@ -218,10 +218,7 @@ const handleExportMarkdown = () => {
       if (view && serializer) {
         try {
           const markdown = serializer(view.state.doc);
-          vscode.postMessage({
-            method: 'exportMarkdown',
-            params: { content: markdown },
-          });
+          extensionService.postEvent('exportMarkdown', { content: markdown });
         } catch (error) {
           console.error('Failed to serialize markdown:', error);
         }

@@ -218,7 +218,9 @@ export class WebviewRPC {
         vaultId: params.vaultId, 
         path: params.path, 
         title: params.title,
-        templateId: params.templateId
+        templateId: params.templateId,
+        relatedArtifacts: params.relatedArtifacts,
+        relatedCodePaths: params.relatedCodePaths
       });
       try {
         const result = await this.documentService.createDocument(
@@ -230,26 +232,77 @@ export class WebviewRPC {
         );
 
         // 如果创建成功且有关联关系，保存关联关系
+        this.logger.info('[WebviewRPC] Checking if need to save relations', {
+          resultSuccess: result.success,
+          hasRelatedArtifacts: !!params.relatedArtifacts,
+          hasRelatedCodePaths: !!params.relatedCodePaths,
+          relatedArtifactsLength: params.relatedArtifacts?.length || 0,
+          relatedCodePathsLength: params.relatedCodePaths?.length || 0
+        });
+        
         if (result.success && (params.relatedArtifacts || params.relatedCodePaths)) {
           const artifact = result.value;
-          await Promise.all([
+          this.logger.info('[WebviewRPC] Saving related artifacts and code paths', {
+            artifactId: artifact.id,
+            artifactPath: artifact.path,
+            relatedArtifacts: params.relatedArtifacts,
+            relatedCodePaths: params.relatedCodePaths
+          });
+          
+          // 使用 file:vaultId:filePath 格式查找 metadata，所以使用 targetType: 'file' 和 artifact.path
+          const updateResults = await Promise.all([
             params.relatedArtifacts && params.relatedArtifacts.length > 0
               ? this.artifactService.updateRelatedArtifacts(
                   artifact.vault.id,
-                  artifact.id,
-                  'artifact',
+                  artifact.path,  // 使用文件路径而不是 artifact ID
+                  'file',  // 使用 'file' 类型，这样能通过 file:vaultId:filePath 格式找到 metadata
                   params.relatedArtifacts
                 )
               : Promise.resolve({ success: true } as any),
             params.relatedCodePaths && params.relatedCodePaths.length > 0
               ? this.artifactService.updateRelatedCodePaths(
                   artifact.vault.id,
-                  artifact.id,
-                  'artifact',
+                  artifact.path,  // 使用文件路径而不是 artifact ID
+                  'file',  // 使用 'file' 类型，这样能通过 file:vaultId:filePath 格式找到 metadata
                   params.relatedCodePaths
                 )
               : Promise.resolve({ success: true } as any),
           ]);
+          
+          // 检查更新结果
+          for (let i = 0; i < updateResults.length; i++) {
+            const updateResult = updateResults[i];
+            if (!updateResult.success) {
+              const errorDetails = updateResult.error ? {
+                message: updateResult.error.message || String(updateResult.error),
+                code: updateResult.error.code,
+                stack: updateResult.error.stack,
+                fullError: JSON.stringify(updateResult.error, Object.getOwnPropertyNames(updateResult.error))
+              } : { message: 'Unknown error' };
+              
+              const errorMessage = errorDetails.message || 'Unknown error';
+              const errorCode = errorDetails.code || 'UNKNOWN';
+              this.logger.error(`[WebviewRPC] Failed to update ${i === 0 ? 'relatedArtifacts' : 'relatedCodePaths'}`, {
+                artifactId: artifact.id,
+                errorMessage,
+                errorCode,
+                errorStack: errorDetails.stack,
+                fullError: errorDetails.fullError,
+                updateResult: JSON.stringify(updateResult, Object.getOwnPropertyNames(updateResult))
+              });
+            } else {
+              this.logger.info(`[WebviewRPC] Successfully updated ${i === 0 ? 'relatedArtifacts' : 'relatedCodePaths'}`, {
+                artifactId: artifact.id,
+                count: i === 0 ? params.relatedArtifacts?.length : params.relatedCodePaths?.length
+              });
+            }
+          }
+        } else if (result.success) {
+          this.logger.info('[WebviewRPC] No related artifacts or code paths to save', {
+            artifactId: result.value.id,
+            hasRelatedArtifacts: !!params.relatedArtifacts,
+            hasRelatedCodePaths: !!params.relatedCodePaths
+          });
         }
         if (!result.success) {
           this.logger.error('[WebviewRPC] document.create failed', { 

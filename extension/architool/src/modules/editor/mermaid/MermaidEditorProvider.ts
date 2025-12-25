@@ -4,6 +4,7 @@ import * as path from 'path';
 import { mermaidToDiagramData, diagramDataToMermaid, DiagramData, Point } from './mermaidConverter';
 import { IDEAdapter } from '../../../core/ide-api/ide-adapter';
 import { CustomTextEditorProvider, TextDocument, WebviewPanel, CancellationToken, Uri, WorkspaceEdit, Range, ViewColumn, WebviewOptions, Disposable } from '../../../core/ide-api/ide-types';
+import { injectIDEAPIScript } from '../../../core/ide-api/webview-api-injector';
 
 // API 消息类型定义
 interface LayoutUpdate {
@@ -604,18 +605,10 @@ Please run: cd packages/webview && pnpm build`;
       }
     );
 
-    // 注入 VSCode API 和视图名称
-    const vscodeScript = `
-      <script>
-        const vscode = acquireVsCodeApi();
-        window.acquireVsCodeApi = () => vscode;
-        if (!window.initialData) {
-          window.initialData = {};
-        }
-        window.initialData.view = 'mermaid-editor';
-      </script>
-    `;
-    htmlContent = htmlContent.replace('</head>', `${vscodeScript}</head>`);
+    // 使用统一的 IDE API 注入工具（支持多 IDE）
+    htmlContent = injectIDEAPIScript(htmlContent, 'vscode', {
+      view: 'mermaid-editor',
+    });
 
     return htmlContent;
   }

@@ -296,10 +296,7 @@ onMounted(() => {
       ElMessage.error('无法获取 Vault 信息，请从 Vault 或文件夹节点右键创建');
       // 延迟关闭
       setTimeout(() => {
-        if (window.acquireVsCodeApi) {
-          const vscode = window.acquireVsCodeApi();
-          vscode.postMessage({ method: 'close' });
-        }
+        extensionService.postEvent('close');
       }, 2000);
       return;
     }
@@ -310,10 +307,7 @@ onMounted(() => {
     ElMessage.error('无法获取初始数据，请从 Vault 或文件夹节点右键创建');
     // 延迟关闭
     setTimeout(() => {
-      if (window.acquireVsCodeApi) {
-        const vscode = window.acquireVsCodeApi();
-        vscode.postMessage({ method: 'close' });
-      }
+        extensionService.postEvent('close');
     }, 2000);
     return;
   }
@@ -508,28 +502,19 @@ const handleCreate = async () => {
     emit('created', result);
     
     // 通知后端刷新和展开
-    if (window.acquireVsCodeApi) {
-      const vscode = window.acquireVsCodeApi();
       const vault = vaults.value.find(v => v.id === formData.value.vaultId);
       // 使用创建结果中的路径，这是相对于 artifacts 目录的路径
       const createdFolderPath = result?.folderPath || result?.path || '';
       const parentFolderPath = initialFolderPath.value || '';
-      vscode.postMessage({ 
-        method: 'folderCreated',
-        params: {
+    extensionService.postEvent('folderCreated', {
           vaultName: vault?.name,
           folderPath: createdFolderPath,
           parentFolderPath: parentFolderPath,
-        }
       });
-    }
     
     // 延迟关闭，确保刷新完成
     setTimeout(() => {
-      if (window.acquireVsCodeApi) {
-        const vscode = window.acquireVsCodeApi();
-        vscode.postMessage({ method: 'close' });
-      }
+      extensionService.postEvent('close');
     }, 100);
   } catch (err: any) {
     console.error('Failed to create folder', err);

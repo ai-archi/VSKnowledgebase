@@ -4,6 +4,7 @@ import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { IDEAdapter } from '../../../core/ide-api/ide-adapter';
 import { CustomTextEditorProvider, TextDocument, WebviewPanel, CancellationToken, Uri, WorkspaceEdit, Range, WebviewOptions, Disposable } from '../../../core/ide-api/ide-types';
+import { injectIDEAPIScript } from '../../../core/ide-api/webview-api-injector';
 
 /**
  * PlantUML 编辑器提供者
@@ -443,20 +444,10 @@ Please run: pnpm run build:webview`;
       }
     );
     
-    // 3. 注入 VSCode API 脚本和视图名称（在 </head> 标签前）
-    // 调用一次 acquireVsCodeApi() 并保存，然后重写 acquireVsCodeApi 以避免重复调用
-    const vscodeApiScript = `
-    <script>
-        const vscode = acquireVsCodeApi();
-        window.vscode = vscode;
-      window.acquireVsCodeApi = () => vscode;
-      if (!window.initialData) {
-        window.initialData = {};
-      }
-      window.initialData.view = 'plantuml-editor';
-    </script>
-    `;
-    htmlContent = htmlContent.replace('</head>', vscodeApiScript + '</head>');
+    // 3. 使用统一的 IDE API 注入工具（支持多 IDE）
+    htmlContent = injectIDEAPIScript(htmlContent, 'vscode', {
+      view: 'plantuml-editor',
+    });
     
     return htmlContent;
   }

@@ -12,6 +12,7 @@ import { FileTreeDomainService } from '../../domain/services/FileTreeDomainServi
 import { FileOperationDomainService } from '../../domain/services/FileOperationDomainService';
 import { PathUtils } from '../../infrastructure/utils/PathUtils';
 import { TreeViewUtils } from '../../infrastructure/utils/TreeViewUtils';
+import { injectIDEAPIScript } from '../../../../core/ide-api/webview-api-injector';
 
 /**
  * 基础文件树命令类
@@ -606,7 +607,15 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
     // 设置 webview 消息处理器
     panel.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
-        this.logger.info(`[BaseFileTreeCommands] Received message in createFile dialog: ${message.method}`, { id: message.id, params: message.params });
+        this.logger.info(`[BaseFileTreeCommands] Received message in createFile dialog: ${message.method}`, { 
+          id: message.id, 
+          method: message.method,
+          params: message.params,
+          hasRelatedArtifacts: !!(message.params as any)?.relatedArtifacts,
+          hasRelatedCodePaths: !!(message.params as any)?.relatedCodePaths,
+          relatedArtifacts: (message.params as any)?.relatedArtifacts,
+          relatedCodePaths: (message.params as any)?.relatedCodePaths
+        });
         if (message.method === 'close') {
           panel.dispose();
           return;
@@ -650,8 +659,14 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           }, 100);
           return;
         }
-        this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`);
+        this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`, {
+          method: message.method,
+          params: message.params,
+          hasRelatedArtifacts: !!(message.params as any)?.relatedArtifacts,
+          hasRelatedCodePaths: !!(message.params as any)?.relatedCodePaths
+        });
         await this.webviewAdapter.handleMessage(panel.webview, message);
+        this.logger.info(`[BaseFileTreeCommands] Message forwarded to WebviewAdapter completed: ${message.method}`);
       },
       null,
       this.context.subscriptions
@@ -987,21 +1002,14 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
         return match;
       });
 
-      // 注入 VSCode API 和初始数据
+      // 使用统一的 IDE API 注入工具（支持多 IDE）
       const initialData = {
         vaultId: initialVaultId,
         folderPath: initialFolderPath,
         designType: designType,
         ...(additionalData || {}),
       };
-      const vscodeScript = `
-        <script>
-          const vscode = acquireVsCodeApi();
-          window.acquireVsCodeApi = () => vscode;
-          window.initialData = ${JSON.stringify(initialData)};
-        </script>
-      `;
-      html = html.replace('</head>', `${vscodeScript}</head>`);
+      html = injectIDEAPIScript(html, 'vscode', initialData);
 
       return html;
     }

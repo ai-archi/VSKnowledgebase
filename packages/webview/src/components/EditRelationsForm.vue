@@ -542,10 +542,7 @@ const handleSave = async () => {
     emit('saved');
     
     // 通知后端关闭 webview
-    if (window.acquireVsCodeApi) {
-      const vscode = window.acquireVsCodeApi();
-      vscode.postMessage({ method: 'close' });
-    }
+    extensionService.postEvent('close');
   } catch (err: any) {
     console.error('Failed to save', err);
     ElMessage.error(`保存失败: ${err.message || '未知错误'}`);
@@ -555,10 +552,7 @@ const handleSave = async () => {
 };
 
 const handleClose = () => {
-  if (window.acquireVsCodeApi) {
-    const vscode = window.acquireVsCodeApi();
-    vscode.postMessage({ method: 'close' });
-  }
+  extensionService.postEvent('close');
   emit('close');
 };
 </script>

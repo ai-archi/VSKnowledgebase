@@ -602,8 +602,6 @@ const handleCreate = async () => {
     emit('created', result);
     
     // 通知后端刷新和展开
-    if (window.acquireVsCodeApi) {
-      const vscode = window.acquireVsCodeApi();
       // 获取 vault 名称用于刷新
       const vaultsResult = await extensionService.call<Vault[]>('vault.list', {});
       const vault = vaultsResult?.find(v => v.id === initialVaultId.value);
@@ -615,18 +613,8 @@ const handleCreate = async () => {
         contentLocation: result?.contentLocation,
       };
       console.log('[CreateDesignForm] Sending designCreated message with params:', messageParams);
-      console.log('[CreateDesignForm] Message will be sent:', JSON.stringify({
-        method: 'designCreated',
-        params: messageParams,
-      }, null, 2));
-      vscode.postMessage({ 
-        method: 'designCreated',
-        params: messageParams,
-      });
+    extensionService.postEvent('designCreated', messageParams);
       // 注意：不需要单独发送 close 消息，后端会在处理完 designCreated 后自动关闭
-    } else {
-      console.error('[CreateDesignForm] VSCode API not available!');
-    }
   } catch (err: any) {
     console.error('[CreateDesignForm] Failed to create design diagram', {
       error: err,

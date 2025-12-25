@@ -94,6 +94,24 @@ export class ExtensionService {
   }
 
   /**
+   * 发送事件消息（不需要响应）
+   * 用于发送通知类消息，如 close, fileCreated 等
+   */
+  postEvent(method: string, params?: any): void {
+    if (!this.ideComm.isAvailable()) {
+      console.warn(`${this.ideComm.getIDEType()} API not available, cannot post event: ${method}`);
+      return;
+    }
+
+    const message: ExtensionMessage = {
+      method,
+      params,
+    };
+
+    this.ideComm.postMessage(message);
+  }
+
+  /**
    * 处理来自 Extension 的消息
    */
   private handleMessage(message: ExtensionResponse): void {

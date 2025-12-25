@@ -42,10 +42,14 @@ export async function activate(context: vscode.ExtensionContext) {
 	// 创建日志记录器
 	const logger = new Logger('ArchiTool');
 	
-	// 初始化工作区
-	const { workspaceRoot, architoolRoot } = await initializeWorkspace(logger, context);
+	// 初始化依赖注入容器（先创建容器以获取 IDE 适配器）
+	const tempContainer = createContainer('', context, logger);
+	const tempIdeAdapter = tempContainer.get<IDEAdapter>(TYPES.IDEAdapter);
 	
-	// 初始化依赖注入容器
+	// 初始化工作区（使用 IDE 适配器获取工作区信息）
+	const { workspaceRoot, architoolRoot } = await initializeWorkspace(logger, context, tempIdeAdapter);
+	
+	// 重新创建容器（使用正确的工作区路径）
 	const container = createContainer(architoolRoot, context, logger);
 	
 	// 获取 IDE 适配器
@@ -66,10 +70,11 @@ export async function activate(context: vscode.ExtensionContext) {
 /**
  * 初始化工作区
  */
-async function initializeWorkspace(logger: Logger, context: vscode.ExtensionContext): Promise<{ workspaceRoot: string; architoolRoot: string }> { 
+async function initializeWorkspace(logger: Logger, context: vscode.ExtensionContext, ideAdapter: IDEAdapter): Promise<{ workspaceRoot: string; architoolRoot: string }> { 
 	// 初始化工作区路径和 archidocs 目录
 	try {
-		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		const workspaceFolders = ideAdapter.getWorkspaceFolders();
+		const workspaceFolder = workspaceFolders?.[0];
 		let workspaceRoot: string;
 		let architoolRoot: string;
 
@@ -142,6 +147,8 @@ async function initializeDocumentViewAndCommand(
 		);
 		// 注意：createTreeView 需要 TreeDataProvider，但 DocumentTreeViewProvider 实现了 vscode.TreeDataProvider
 		// 需要进行类型转换
+		logger.info(`[extension] Creating tree view with provider: ${documentTreeViewProvider.constructor.name}`);
+		logger.info(`[extension] Provider has onDidChangeTreeData: ${!!documentTreeViewProvider.onDidChangeTreeData}`);
 		const documentTreeView = ideAdapter.createTreeView('architool.documentView', documentTreeViewProvider as any) as any;
 		ideAdapter.subscribe(documentTreeView);
 		logger.info('Document tree view registered');
@@ -182,7 +189,8 @@ async function initializeDocumentViewAndCommand(
 		return documentTreeViewProvider;
 	} catch (error: any) {
 		logger.error('Failed to initialize document view and commands:', error);
-		vscode.window.showErrorMessage(`Failed to initialize document view: ${error.message}`);
+		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		ideAdapter.showErrorMessage(`Failed to initialize document view: ${error.message}`);
 		throw error;
 	}
 }
@@ -204,11 +212,15 @@ function initializeOtherCommands(
 		const vaultService = container.get<VaultApplicationService>(TYPES.VaultApplicationService);
 		const artifactService = container.get<ArtifactApplicationService>(TYPES.ArtifactApplicationService);
 		
+		// 获取 IDE 适配器
+		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		
 		// Vault 命令
 		const vaultCommands = new VaultCommands(
 			vaultService,
 			container,
 			logger,
+			ideAdapter,
 			documentTreeViewProvider
 		);
 		vaultCommands.register(commandAdapter);
@@ -276,7 +288,8 @@ function initializeOtherCommands(
 		logger.info('All other commands registered successfully');
 	} catch (error: any) {
 		logger.error('Failed to register some commands:', error);
-		vscode.window.showErrorMessage(`Failed to register some commands: ${error.message}`);
+		const ideAdapter = container.get<IDEAdapter>(TYPES.IDEAdapter);
+		ideAdapter.showErrorMessage(`Failed to register some commands: ${error.message}`);
 	}
 }
 

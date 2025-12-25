@@ -12,6 +12,7 @@ import { Artifact } from '../modules/shared/domain/entity/artifact';
 import { Logger } from '../core/logger/Logger';
 import { IDEAdapter } from '../core/ide-api/ide-adapter';
 import { WebviewView, Webview, CancellationToken, Uri, WebviewOptions } from '../core/ide-api/ide-types';
+import { injectIDEAPIScript } from '../core/ide-api/webview-api-injector';
 
 /**
  * 视点应用服务接口（临时定义，待后续迁移完整服务）
@@ -965,15 +966,11 @@ export class ViewpointWebviewViewProvider {
       }
     );
 
-    // 注入 VSCode API 和初始数据
-    const vscodeScript = `
-      <script>
-        const vscode = acquireVsCodeApi();
-        window.acquireVsCodeApi = () => vscode;
-        window.initialData = ${JSON.stringify({ view: 'create-task-dialog', vaultId: initialVaultId })};
-      </script>
-    `;
-    html = html.replace('</head>', `${vscodeScript}</head>`);
+    // 使用统一的 IDE API 注入工具（支持多 IDE）
+    html = injectIDEAPIScript(html, 'vscode', {
+      view: 'create-task-dialog',
+      vaultId: initialVaultId,
+    });
 
     panel.webview.html = html;
 
@@ -1219,41 +1216,8 @@ export class ViewpointWebviewViewProvider {
       }
       this.logger.info(`[ViewpointWebviewViewProvider] Resource replacement: ${resourceReplaceCount} replaced, ${missingResourceCount} missing`);
 
-      // 注入 VSCode API 和错误处理
-      const vscodeScript = `
-        <script>
-          const vscode = acquireVsCodeApi();
-          window.acquireVsCodeApi = () => vscode;
-          
-          // 监听全局错误
-          window.addEventListener('error', (event) => {
-            console.error('[Webview] Global error:', event.error);
-            vscode.postMessage({
-              method: 'webviewError',
-              params: {
-                message: event.error?.message || event.message,
-                stack: event.error?.stack,
-                filename: event.filename,
-                lineno: event.lineno,
-                colno: event.colno
-              }
-            });
-          });
-          
-          // 监听未处理的 Promise 拒绝
-          window.addEventListener('unhandledrejection', (event) => {
-            console.error('[Webview] Unhandled rejection:', event.reason);
-            vscode.postMessage({
-              method: 'webviewError',
-              params: {
-                message: 'Unhandled Promise Rejection: ' + (event.reason?.message || String(event.reason)),
-                stack: event.reason?.stack
-              }
-            });
-          });
-        </script>
-      `;
-      html = html.replace('</head>', `${vscodeScript}</head>`);
+      // 使用统一的 IDE API 注入工具（支持多 IDE）
+      html = injectIDEAPIScript(html, 'vscode');
 
       return html;
     } catch (error: any) {

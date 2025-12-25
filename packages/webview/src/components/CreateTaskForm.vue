@@ -202,6 +202,7 @@
 declare const window: any;
 
 import { ref, computed, onMounted, watch } from 'vue';
+import { extensionService } from '../services/ExtensionService';
 // 图标已在 create-task-dialog-main.ts 中全局注册，无需导入
 
 interface Vault {
@@ -308,40 +309,10 @@ onMounted(async () => {
 
 const loadVaults = async () => {
   try {
-    const vscode = (window as any).acquireVsCodeApi?.();
-    if (!vscode) {
-      vaults.value = [];
-      return;
-    }
-
-    const requestId = Date.now();
-    const result = await new Promise<Vault[]>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Request timeout'));
-      }, 10000);
-
-      const messageHandler = (event: MessageEvent) => {
-        const message = event.data;
-        if (message.id === requestId && message.method === 'vault.list') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', messageHandler);
-          if (message.error) {
-            reject(new Error(message.error.message));
-          } else {
-            resolve(message.result || []);
-          }
-        }
-      };
-
-      window.addEventListener('message', messageHandler);
-      vscode.postMessage({
-        method: 'vault.list',
-        id: requestId,
-      });
-    });
+    const result = await extensionService.call<Vault[]>('vault.list', {});
 
     // 过滤 vaults，只显示 task 或 document 类型的 vault
-    const allVaults = result || [];
+    const allVaults = (result || []) as Vault[];
     vaults.value = allVaults.filter(vault => vault.type === 'task' || vault.type === 'document');
     
     if (vaults.value.length === 0 && allVaults.length > 0) {
@@ -383,44 +354,14 @@ const loadFiles = async (query?: string) => {
   try {
     loadingFiles.value = true;
     const allResults: FileItem[] = [];
-    const vscode = (window as any).acquireVsCodeApi?.();
-    if (!vscode) {
-      allFiles.value = [];
-      return;
-    }
 
     // 加载所有 vault 的文件（使用 document.list，支持查询）
     if (vaults.value.length > 0) {
       for (const vault of vaults.value) {
         try {
-          const requestId = Date.now();
-          const result = await new Promise<FileItem[]>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('Request timeout'));
-            }, 10000);
-
-            const messageHandler = (event: MessageEvent) => {
-              const message = event.data;
-              if (message.id === requestId && message.method === 'document.list') {
-                clearTimeout(timeout);
-                window.removeEventListener('message', messageHandler);
-                if (message.error) {
-                  reject(new Error(message.error.message));
-                } else {
-                  resolve(message.result || []);
-                }
-              }
-            };
-
-            window.addEventListener('message', messageHandler);
-            vscode.postMessage({
-              method: 'document.list',
-              id: requestId,
-              params: {
+          const result = await extensionService.call<FileItem[]>('document.list', {
                 vaultId: vault.id,
                 query: query,
-              },
-            });
           });
 
           if (result) {
@@ -434,33 +375,8 @@ const loadFiles = async (query?: string) => {
 
     // 同时加载 workspace 的文件（支持查询）
     try {
-      const requestId = Date.now();
-      const workspaceResult = await new Promise<FileItem[]>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Request timeout'));
-        }, 10000);
-
-        const messageHandler = (event: MessageEvent) => {
-          const message = event.data;
-          if (message.id === requestId && message.method === 'workspace.listFiles') {
-            clearTimeout(timeout);
-            window.removeEventListener('message', messageHandler);
-            if (message.error) {
-              reject(new Error(message.error.message));
-            } else {
-              resolve(message.result || []);
-            }
-          }
-        };
-
-        window.addEventListener('message', messageHandler);
-        vscode.postMessage({
-          method: 'workspace.listFiles',
-          id: requestId,
-          params: {
+      const workspaceResult = await extensionService.call<FileItem[]>('workspace.listFiles', {
             query: query,
-          },
-        });
       });
 
       if (workspaceResult) {
@@ -510,50 +426,13 @@ const loadCommands = async () => {
 const loadTaskTemplates = async (vaultId?: string | null) => {
   loadingTemplates.value = true;
   try {
-    const vscode = (window as any).acquireVsCodeApi?.();
-    if (!vscode) {
-      console.warn('VSCode API not available');
-      workflowTemplates.value = [];
-      return;
-    }
-
-    const requestId = Date.now();
     // 如果明确传入了 null 或 undefined，或者没有传入参数，则加载所有 vault 的模板
     // 如果传入了具体的 vaultId，则只加载该 vault 的模板
     const targetVaultId = vaultId === null ? undefined : (vaultId || undefined);
-    console.log('Loading task templates, requestId:', requestId, 'vaultId:', targetVaultId || 'all vaults');
+    console.log('Loading task templates, vaultId:', targetVaultId || 'all vaults');
     
-    const result = await new Promise<WorkflowTemplate[]>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        window.removeEventListener('message', messageHandler);
-        reject(new Error('Request timeout'));
-      }, 10000);
-
-      const messageHandler = (event: MessageEvent) => {
-        const message = event.data;
-        console.log('Received message:', message.method, 'id:', message.id, 'requestId:', requestId);
-        
-        if (message.id === requestId && message.method === 'getTaskTemplates') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', messageHandler);
-          if (message.error) {
-            console.error('Error loading task templates:', message.error);
-            reject(new Error(message.error.message || 'Failed to load task templates'));
-          } else {
-            console.log('Task templates loaded:', message.result);
-            resolve(message.result || []);
-          }
-        }
-      };
-
-      window.addEventListener('message', messageHandler);
-      vscode.postMessage({
-        method: 'getTaskTemplates',
-        id: requestId,
-        params: {
+    const result = await extensionService.call<WorkflowTemplate[]>('getTaskTemplates', {
           vaultId: targetVaultId,
-        },
-      });
     });
 
     workflowTemplates.value = result || [];
@@ -604,64 +483,24 @@ const handleCreate = async () => {
 
   creating.value = true;
   try {
-    // 在弹窗中，需要通过 RPC 调用创建任务
-    const vscode = (window as any).acquireVsCodeApi?.();
-    if (!vscode) {
-      throw new Error('VSCode API not available');
-    }
-
-    // 发送请求并等待响应
-    const requestId = Date.now();
-    const task = await new Promise<any>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Request timeout'));
-      }, 30000);
-
-      const messageHandler = (event: MessageEvent) => {
-        const message = event.data;
-        if (message.id === requestId && message.method === 'createTask') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', messageHandler);
-          if (message.error) {
-            reject(new Error(message.error.message));
-          } else {
-            resolve(message.result);
-          }
-        }
-      };
-
-      window.addEventListener('message', messageHandler);
-      vscode.postMessage({
-        method: 'createTask',
-        id: requestId,
-        params: {
+    // 使用 ExtensionService 创建任务
+    const task = await extensionService.call<any>('createTask', {
           title: formData.value.title,
           vaultId: formData.value.vaultId,
           priority: formData.value.priority,
           relatedFiles: selectedFiles.value.map(f => f.id || f.path),
           workflowTemplate: formData.value.workflowTemplate || 'default',
-        },
-      });
     });
 
     if (task) {
-      // 发送任务创建成功消息
-      vscode.postMessage({
-        method: 'taskCreated',
-        params: { task },
-      });
+      // 发送任务创建成功事件
+      extensionService.postEvent('taskCreated', { task });
       emit('created', task);
     }
   } catch (err: any) {
     console.error('Failed to create task', err);
     // 显示错误消息（在 webview 中无法使用 alert，通过消息通知后端）
-    const vscode = (window as any).acquireVsCodeApi?.();
-    if (vscode) {
-      vscode.postMessage({
-        method: 'showErrorMessage',
-        params: { message: `创建任务失败: ${err.message}` },
-      });
-    }
+    extensionService.postEvent('showErrorMessage', { message: `创建任务失败: ${err.message}` });
     console.error('创建任务失败:', err);
   } finally {
     creating.value = false;

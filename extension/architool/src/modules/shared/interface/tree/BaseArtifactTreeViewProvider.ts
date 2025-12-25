@@ -29,7 +29,10 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
    * @param element 要刷新的元素，如果为 undefined 则刷新整个树
    */
   refresh(element?: T | undefined | null | void): void {
+    this.logger.info(`[BaseArtifactTreeViewProvider] refresh() called, element: ${element ? 'specific' : 'all (undefined)'}`);
+    this.logger.info(`[BaseArtifactTreeViewProvider] _onDidChangeTreeData exists: ${!!this._onDidChangeTreeData}`);
     this._onDidChangeTreeData.fire(element);
+    this.logger.info(`[BaseArtifactTreeViewProvider] _onDidChangeTreeData.fire() completed`);
   }
 
   /**
@@ -62,9 +65,12 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
    */
   async getChildren(element?: T): Promise<T[]> {
     try {
+      this.logger.info(`[BaseArtifactTreeViewProvider] getChildren() called, element: ${element ? element.label || 'has element' : 'root (undefined)'}`);
       // 根节点：返回所有 vault
       if (!element) {
-        return await this.getRootVaults();
+        const rootVaults = await this.getRootVaults();
+        this.logger.info(`[BaseArtifactTreeViewProvider] getChildren() returning ${rootVaults.length} root vaults`);
+        return rootVaults;
       }
 
       // 获取 vault 引用

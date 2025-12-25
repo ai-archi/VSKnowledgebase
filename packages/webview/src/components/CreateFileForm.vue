@@ -521,14 +521,24 @@ const handleCreate = async () => {
       }
     }
 
-    const result = await extensionService.call('document.create', {
+    console.log('[CreateFileForm] Selected files for relations', {
+      selectedFiles: selectedFiles.value,
+      relatedArtifacts,
+      relatedCodePaths
+    });
+
+    const requestParams = {
       vaultId: formData.value.vaultId,
       path: filePath,
       title: formData.value.fileName,
       templateId: formData.value.templateId || undefined, // 传递模板ID，后端会进行渲染
       relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
       relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
-    });
+    };
+    
+    console.log('[CreateFileForm] Request params for document.create:', JSON.stringify(requestParams, null, 2));
+    
+    const result = await extensionService.call('document.create', requestParams);
 
     console.log('[CreateFileForm] Document created successfully', result);
     console.log('[CreateFileForm] Full result object:', JSON.stringify(result, null, 2));
@@ -543,29 +553,18 @@ const handleCreate = async () => {
     emit('created', result);
     
     // 通知后端刷新和展开
-    if (window.acquireVsCodeApi) {
-      const vscode = window.acquireVsCodeApi();
       const vault = vaults.value.find(v => v.id === formData.value.vaultId);
-      const folderPath = initialFolderPath.value || '';
+    // 重用上面定义的 folderPath，如果为 undefined 则使用空字符串
+    const folderPathForMessage = folderPath || '';
       const messageParams = {
         vaultName: vault?.name,
-        folderPath: folderPath,
+      folderPath: folderPathForMessage,
         filePath: filePath,
         contentLocation: result?.contentLocation,
       };
       console.log('[CreateFileForm] Sending fileCreated message with params:', messageParams);
-      console.log('[CreateFileForm] Message will be sent:', JSON.stringify({
-        method: 'fileCreated',
-        params: messageParams,
-      }, null, 2));
-      vscode.postMessage({ 
-        method: 'fileCreated',
-        params: messageParams,
-      });
+    extensionService.postEvent('fileCreated', messageParams);
       // 注意：不需要单独发送 close 消息，后端会在处理完 fileCreated 后自动关闭
-    } else {
-      console.error('[CreateFileForm] VSCode API not available!');
-    }
   } catch (err: any) {
     console.error('[CreateFileForm] Failed to create document', {
       error: err,

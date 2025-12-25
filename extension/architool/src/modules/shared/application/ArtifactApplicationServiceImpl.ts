@@ -157,14 +157,21 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       return writeResult;
     }
 
+    // 统一使用 file:vaultId:filePath 格式作为 artifactId，与编辑时的格式保持一致
+    const fileArtifactId = `file:${opts.vault.id}:${opts.path}`;
+    
     const metadata: ArtifactMetadata = {
       id: metadataId,
-      artifactId,
+      artifactId: fileArtifactId, // 使用 file:vaultId:filePath 格式
       vaultId: opts.vault.id,
       vaultName: opts.vault.name,
       type: opts.viewType,
       category: opts.category,
       tags: opts.tags || [],
+      properties: {
+        targetType: 'file',
+        targetId: opts.path,
+      },
       createdAt: now,
       updatedAt: now,
     };
@@ -427,12 +434,58 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         return deleteFileResult;
       }
 
-      // 如果找到了 artifact 记录，删除 metadata 文件（如果存在）
-      if (artifact && metadataId) {
-        const metadataResult = await this.metadataRepo.delete(metadataId, artifact.id);
-        if (!metadataResult.success) {
+      // 删除 metadata 文件（使用统一的 file:vaultId:filePath 格式）
+      // 首先尝试通过 file:vaultId:filePath 格式查找和删除 metadata（新格式）
+      const fileArtifactId = `file:${vaultId}:${artifactPath}`;
+      this.logger.info(`[ArtifactApplicationService] deleteArtifact: Trying to delete metadata by file format`, {
+        fileArtifactId,
+        artifactPath
+      });
+      
+      const metadataByFileFormatResult = await this.metadataRepo.findByArtifactId(fileArtifactId);
+      if (metadataByFileFormatResult.success && metadataByFileFormatResult.value) {
+        const metadata = metadataByFileFormatResult.value;
+        this.logger.info(`[ArtifactApplicationService] deleteArtifact: Found metadata by file format, deleting`, {
+          metadataId: metadata.id,
+          fileArtifactId
+        });
+        const deleteMetadataResult = await this.metadataRepo.delete(metadata.id);
+        if (!deleteMetadataResult.success) {
           // metadata 删除失败不影响主流程，只记录日志
-          this.logger.warn(`Failed to delete metadata: ${metadataId}`, metadataResult.error);
+          this.logger.warn(`[ArtifactApplicationService] deleteArtifact: Failed to delete metadata by file format`, {
+            metadataId: metadata.id,
+            error: deleteMetadataResult.error?.message
+          });
+        } else {
+          this.logger.info(`[ArtifactApplicationService] deleteArtifact: Metadata deleted successfully by file format`, {
+            metadataId: metadata.id
+          });
+        }
+      } else {
+        // 如果通过 file 格式找不到，尝试通过 metadataId 删除（兼容旧格式）
+        if (artifact && metadataId) {
+          this.logger.info(`[ArtifactApplicationService] deleteArtifact: Trying to delete metadata by metadataId (legacy format)`, {
+            metadataId,
+            artifactId: artifact.id
+          });
+          const metadataResult = await this.metadataRepo.delete(metadataId, artifact.id);
+          if (!metadataResult.success) {
+            // metadata 删除失败不影响主流程，只记录日志
+            this.logger.warn(`[ArtifactApplicationService] deleteArtifact: Failed to delete metadata by metadataId`, {
+              metadataId,
+              error: metadataResult.error?.message
+            });
+          } else {
+            this.logger.info(`[ArtifactApplicationService] deleteArtifact: Metadata deleted successfully by metadataId`, {
+              metadataId
+            });
+          }
+        } else {
+          this.logger.warn(`[ArtifactApplicationService] deleteArtifact: No metadata found to delete`, {
+            fileArtifactId,
+            hasArtifact: !!artifact,
+            metadataId
+          });
         }
       }
 
@@ -774,10 +827,35 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
 
     const vault = vaultResult.value;
 
-    // 如果是artifact，直接获取metadata
+    // 如果是artifact，先通过artifact ID获取artifact信息，然后使用文件路径查找metadata
     if (targetType === 'artifact') {
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Finding metadata for artifact', {
+        vaultId,
+        targetId,
+        targetType
+      });
+      
+      // 首先尝试通过 artifactId 直接查找 metadata（兼容旧格式）
+      const metadataByArtifactIdResult = await this.metadataRepo.findByArtifactId(targetId);
+      if (metadataByArtifactIdResult.success && metadataByArtifactIdResult.value) {
+        this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata found by artifactId (legacy format)', {
+          metadataId: metadataByArtifactIdResult.value.id,
+          artifactId: targetId
+        });
+        return { success: true, value: metadataByArtifactIdResult.value };
+      }
+      
+      // 如果通过 artifactId 找不到，尝试通过 getArtifact 获取 artifact 信息
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata not found by artifactId, trying getArtifact', {
+        artifactId: targetId
+      });
       const artifactResult = await this.getArtifact(vaultId, targetId);
       if (!artifactResult.success) {
+        this.logger.error('[ArtifactApplicationService] getOrCreateMetadata: Failed to get artifact', {
+          error: artifactResult.error?.message,
+          vaultId,
+          targetId
+        });
         return {
           success: false,
           error: artifactResult.error,
@@ -785,60 +863,146 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       }
 
       const artifact = artifactResult.value;
-      if (!artifact.metadataId) {
-        // 创建metadata
-        const metadataId = uuidv4();
-        const now = new Date().toISOString();
-        const metadata: ArtifactMetadata = {
-          id: metadataId,
-          artifactId: artifact.id,
-          vaultId: vault.id,
-          vaultName: vault.name,
-          type: artifact.viewType,
-          category: artifact.category,
-          tags: artifact.tags || [],
-          createdAt: now,
-          updatedAt: now,
-        };
-        const createResult = await this.metadataRepo.create(metadata, {
-          title: artifact.title,
-          description: artifact.description,
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Artifact found', {
+        artifactId: artifact.id,
+        metadataId: artifact.metadataId,
+        path: artifact.path
+      });
+      
+      // 使用文件路径构建 file:vaultId:filePath 格式的 artifactId
+      const fileArtifactId = `file:${vaultId}:${artifact.path}`;
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Trying to find metadata by file format', {
+        fileArtifactId,
+        artifactPath: artifact.path
+      });
+      
+      // 尝试通过 file:vaultId:filePath 格式查找 metadata（新格式）
+      const metadataByFileFormatResult = await this.metadataRepo.findByArtifactId(fileArtifactId);
+      if (metadataByFileFormatResult.success && metadataByFileFormatResult.value) {
+        this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata found by file format', {
+          metadataId: metadataByFileFormatResult.value.id,
+          fileArtifactId
         });
-        if (!createResult.success) {
-          return createResult;
+        return { success: true, value: metadataByFileFormatResult.value };
+      }
+      
+      // 如果通过 metadataId 查找
+      if (artifact.metadataId) {
+        this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Finding existing metadata by metadataId', {
+          metadataId: artifact.metadataId
+        });
+        const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+        if (metadataResult.success && metadataResult.value) {
+          this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata found by metadataId', {
+            metadataId: metadataResult.value.id,
+            artifactId: artifact.id
+          });
+          return { success: true, value: metadataResult.value };
         }
-        return { success: true, value: createResult.value };
       }
-
-      const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
-      if (!metadataResult.success || !metadataResult.value) {
-        return {
-          success: false,
-          error: new ArtifactError(
-            ArtifactErrorCode.NOT_FOUND,
-            `Metadata not found: ${artifact.metadataId}`,
-            { metadataId: artifact.metadataId }
-          ),
-        };
+      
+      // 如果都找不到，创建新的 metadata（使用 file:vaultId:filePath 格式）
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Creating new metadata with file format', {
+        fileArtifactId,
+        artifactPath: artifact.path
+      });
+      const metadataId = uuidv4();
+      const now = new Date().toISOString();
+      const metadata: ArtifactMetadata = {
+        id: metadataId,
+        artifactId: fileArtifactId, // 使用 file:vaultId:filePath 格式
+        vaultId: vault.id,
+        vaultName: vault.name,
+        type: artifact.viewType,
+        category: artifact.category,
+        tags: artifact.tags || [],
+        properties: {
+          targetType: 'file',
+          targetId: artifact.path,
+        },
+        createdAt: now,
+        updatedAt: now,
+      };
+      const createResult = await this.metadataRepo.create(metadata, {
+        title: artifact.title,
+        description: artifact.description,
+      });
+      if (!createResult.success) {
+        this.logger.error('[ArtifactApplicationService] getOrCreateMetadata: Failed to create metadata', {
+          error: createResult.error?.message,
+          fileArtifactId
+        });
+        return createResult;
       }
-      return { success: true, value: metadataResult.value };
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata created with file format', {
+        metadataId: createResult.value.id,
+        fileArtifactId
+      });
+      return { success: true, value: createResult.value };
     }
 
     // 对于file、folder、vault，使用特殊的artifactId格式来查找或创建metadata
     // 格式：${targetType}:${vaultId}:${targetId}
     const specialArtifactId = `${targetType}:${vaultId}:${targetId}`;
     
-    // 先尝试查找
+    // 如果是 file 类型，先尝试通过文件路径查找对应的 artifact，然后使用 artifact ID 查找 metadata
+    if (targetType === 'file') {
+      this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Trying to find artifact by file path', {
+        vaultId,
+        filePath: targetId
+      });
+      const artifactByPathResult = await this.artifactRepository.findByPath(vaultId, targetId);
+      if (artifactByPathResult.success && artifactByPathResult.value) {
+        const artifact = artifactByPathResult.value;
+        this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Found artifact by file path', {
+          artifactId: artifact.id,
+          path: artifact.path,
+          metadataId: artifact.metadataId
+        });
+        
+        // 如果 artifact 有 metadataId，直接查找 metadata
+        if (artifact.metadataId) {
+          const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+          if (metadataResult.success && metadataResult.value) {
+            this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Found metadata by artifact.metadataId', {
+              metadataId: metadataResult.value.id,
+              artifactId: artifact.id
+            });
+            return { success: true, value: metadataResult.value };
+          }
+        }
+        
+        // 如果 artifact 没有 metadataId，尝试通过 artifactId 查找 metadata
+        const metadataByArtifactIdResult = await this.metadataRepo.findByArtifactId(artifact.id);
+        if (metadataByArtifactIdResult.success && metadataByArtifactIdResult.value) {
+          this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Found metadata by artifact.id', {
+            metadataId: metadataByArtifactIdResult.value.id,
+            artifactId: artifact.id
+          });
+          return { success: true, value: metadataByArtifactIdResult.value };
+        }
+      }
+    }
+    
+    // 先尝试查找特殊格式的 metadata
     const existingMetadataResult = await this.metadataRepo.findByArtifactId(specialArtifactId);
     if (existingMetadataResult.success && existingMetadataResult.value) {
       const metadata = existingMetadataResult.value;
       // 验证是否是我们要找的metadata
       if (metadata.vaultId === vaultId && metadata.properties?.targetType === targetType) {
+        this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Found metadata by special artifactId', {
+          metadataId: metadata.id,
+          specialArtifactId
+        });
         return { success: true, value: metadata };
       }
     }
 
     // 如果不存在，创建新的metadata
+    this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Creating new metadata with special artifactId', {
+      targetType,
+      specialArtifactId
+    });
     const metadataId = uuidv4();
     const now = new Date().toISOString();
     const metadata: ArtifactMetadata = {
@@ -855,8 +1019,17 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     };
     const createResult = await this.metadataRepo.create(metadata);
     if (!createResult.success) {
+      this.logger.error('[ArtifactApplicationService] getOrCreateMetadata: Failed to create metadata', {
+        error: createResult.error?.message,
+        targetType,
+        specialArtifactId
+      });
       return createResult;
     }
+    this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata created with special artifactId', {
+      metadataId: createResult.value.id,
+      specialArtifactId
+    });
     return { success: true, value: createResult.value };
   }
 
@@ -922,6 +1095,13 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
     relatedCodePaths: string[]
   ): Promise<Result<ArtifactMetadata, ArtifactError>> {
     try {
+      this.logger.info('[ArtifactApplicationService] updateRelatedCodePaths called', {
+        vaultId,
+        targetId,
+        targetType,
+        relatedCodePathsCount: relatedCodePaths.length
+      });
+      
       // 验证关联代码路径
       const uniquePaths = new Set(relatedCodePaths);
       if (uniquePaths.size !== relatedCodePaths.length) {
@@ -936,12 +1116,28 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       }
 
       // 获取或创建metadata
+      this.logger.info('[ArtifactApplicationService] Getting or creating metadata', {
+        vaultId,
+        targetId,
+        targetType
+      });
       const metadataResult = await this.getOrCreateMetadata(vaultId, targetId, targetType);
       if (!metadataResult.success) {
+        this.logger.error('[ArtifactApplicationService] Failed to get or create metadata', {
+          error: metadataResult.error?.message,
+          vaultId,
+          targetId,
+          targetType
+        });
         return metadataResult;
       }
 
       const metadata = metadataResult.value;
+      this.logger.info('[ArtifactApplicationService] Metadata found/created', {
+        metadataId: metadata.id,
+        artifactId: metadata.artifactId,
+        hasRelatedCodePaths: !!metadata.relatedCodePaths
+      });
 
       // 更新关联代码路径
       const updatedMetadata: ArtifactMetadata = {
@@ -950,11 +1146,24 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         updatedAt: new Date().toISOString(),
       };
 
+      this.logger.info('[ArtifactApplicationService] Updating metadata with relatedCodePaths', {
+        metadataId: updatedMetadata.id,
+        relatedCodePathsCount: relatedCodePaths.length
+      });
       const updateResult = await this.metadataRepo.update(updatedMetadata);
       if (!updateResult.success) {
+        this.logger.error('[ArtifactApplicationService] Failed to update metadata', {
+          error: updateResult.error?.message,
+          metadataId: updatedMetadata.id,
+          vaultId
+        });
         return updateResult;
       }
 
+      this.logger.info('[ArtifactApplicationService] Successfully updated relatedCodePaths', {
+        metadataId: updateResult.value.id,
+        relatedCodePathsCount: relatedCodePaths.length
+      });
       return { success: true, value: updateResult.value };
     } catch (error: any) {
       this.logger.error('Failed to update related code paths', error);

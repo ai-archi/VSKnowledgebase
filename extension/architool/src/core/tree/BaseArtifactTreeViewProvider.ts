@@ -64,6 +64,7 @@ export abstract class BaseArtifactTreeViewProvider<T extends BaseArtifactTreeIte
    * @param element 要刷新的元素，如果为 undefined 则刷新整个树
    */
   refresh(element?: T | undefined | null | void): void {
+    this.logger.info(`[BaseArtifactTreeViewProvider] Refreshing tree view, element: ${element ? 'specific' : 'all'}`);
     this._onDidChangeTreeData.fire(element);
   }
 

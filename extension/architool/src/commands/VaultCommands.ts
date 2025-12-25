@@ -9,6 +9,7 @@ import { GitVaultAdapter } from '../modules/shared/infrastructure/storage/git/Gi
 import { Container } from 'inversify';
 import { TYPES } from '../infrastructure/di/types';
 import { DocumentTreeViewProvider, DocumentTreeItem } from '../views/DocumentTreeViewProvider';
+import { IDEAdapter } from '../core/ide-api/ide-adapter';
 
 /**
  * Vault 相关命令
@@ -18,6 +19,7 @@ export class VaultCommands {
     private vaultService: VaultApplicationService,
     private container: Container,
     private logger: Logger,
+    private ideAdapter: IDEAdapter,
     private documentTreeViewProvider?: DocumentTreeViewProvider
   ) {}
 
@@ -73,10 +75,15 @@ export class VaultCommands {
           });
 
           if (result.success) {
-            vscode.window.showInformationMessage(`Vault '${vaultName}' added at ${vaultPath}`);
+            this.logger.info(`[VaultCommands] Vault '${vaultName}' added successfully at ${vaultPath}`);
+            this.logger.info(`[VaultCommands] Vault result: ${JSON.stringify(result.value, null, 2)}`);
+            this.logger.info('[VaultCommands] About to refresh views');
             this.refreshViews();
+            this.logger.info('[VaultCommands] Views refreshed, showing success message');
+            await this.ideAdapter.showInformationMessage(`Vault '${vaultName}' added at ${vaultPath}`);
+            this.logger.info('[VaultCommands] Success message shown');
           } else {
-            vscode.window.showErrorMessage(`Failed to add vault: ${result.error.message}`);
+            await this.ideAdapter.showErrorMessage(`Failed to add vault: ${result.error.message}`);
           }
         },
       },
@@ -105,7 +112,7 @@ export class VaultCommands {
 
           const vaultName = this.extractRepoName(remoteUrl.trim());
           if (!vaultName || vaultName.length === 0) {
-            vscode.window.showErrorMessage('Failed to extract repository name from URL');
+            await this.ideAdapter.showErrorMessage('Failed to extract repository name from URL');
             return;
           }
 
@@ -155,7 +162,7 @@ export class VaultCommands {
             ...(auth.password && { password: auth.password }),
           };
 
-          vscode.window.showInformationMessage(`Cloning vault '${vaultName}' from Git...`);
+          await this.ideAdapter.showInformationMessage(`Cloning vault '${vaultName}' from Git...`);
 
           const result = await this.vaultService.addVaultFromGit({
             name: vaultName,
@@ -166,10 +173,10 @@ export class VaultCommands {
           if (result.success) {
             const workspaceRoot = workspaceFolder.uri.fsPath;
             const vaultPath = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultName);
-            vscode.window.showInformationMessage(`Vault '${vaultName}' cloned from Git to ${vaultPath}`);
+            await this.ideAdapter.showInformationMessage(`Vault '${vaultName}' cloned from Git to ${vaultPath}`);
             this.refreshViews();
           } else {
-            vscode.window.showErrorMessage(`Failed to clone vault from Git: ${result.error.message}`);
+            await this.ideAdapter.showErrorMessage(`Failed to clone vault from Git: ${result.error.message}`);
           }
         },
       },
@@ -179,9 +186,9 @@ export class VaultCommands {
           const result = await this.vaultService.listVaults();
           if (result.success) {
             const vaultList = result.value.map(v => `- ${v.name} (${v.remote ? 'Git vault' : 'Local vault'})`).join('\n');
-            vscode.window.showInformationMessage(`Vaults:\n${vaultList}`);
+            await this.ideAdapter.showInformationMessage(`Vaults:\n${vaultList}`);
           } else {
-            vscode.window.showErrorMessage(`Failed to list vaults: ${result.error.message}`);
+            await this.ideAdapter.showErrorMessage(`Failed to list vaults: ${result.error.message}`);
           }
         },
       },
@@ -190,13 +197,13 @@ export class VaultCommands {
         callback: async () => {
           const vaultsResult = await this.vaultService.listVaults();
           if (!vaultsResult.success || vaultsResult.value.length === 0) {
-            vscode.window.showErrorMessage('No vaults available.');
+            await this.ideAdapter.showErrorMessage('No vaults available.');
             return;
           }
 
           const gitVaults = vaultsResult.value.filter(v => v.remote);
           if (gitVaults.length === 0) {
-            vscode.window.showErrorMessage('No Git vaults available to fork.');
+            await this.ideAdapter.showErrorMessage('No Git vaults available to fork.');
             return;
           }
 
@@ -230,10 +237,10 @@ export class VaultCommands {
 
           const result = await this.vaultService.forkGitVault(selectedVault.id, newVaultName.trim());
           if (result.success) {
-            vscode.window.showInformationMessage(`Vault '${newVaultName}' forked from '${selectedVault.label}'.`);
+            await this.ideAdapter.showInformationMessage(`Vault '${newVaultName}' forked from '${selectedVault.label}'.`);
             this.refreshViews();
           } else {
-            vscode.window.showErrorMessage(`Failed to fork vault: ${result.error.message}`);
+            await this.ideAdapter.showErrorMessage(`Failed to fork vault: ${result.error.message}`);
           }
         },
       },
@@ -242,13 +249,13 @@ export class VaultCommands {
         callback: async () => {
           const vaultsResult = await this.vaultService.listVaults();
           if (!vaultsResult.success || vaultsResult.value.length === 0) {
-            vscode.window.showErrorMessage('No vaults available.');
+            await this.ideAdapter.showErrorMessage('No vaults available.');
             return;
           }
 
           const gitVaults = vaultsResult.value.filter(v => v.remote);
           if (gitVaults.length === 0) {
-            vscode.window.showErrorMessage('No Git vaults available to sync.');
+            await this.ideAdapter.showErrorMessage('No Git vaults available to sync.');
             return;
           }
 
@@ -264,13 +271,13 @@ export class VaultCommands {
 
           if (!selectedVault) return;
 
-          vscode.window.showInformationMessage(`Syncing vault '${selectedVault.label}'...`);
+          await this.ideAdapter.showInformationMessage(`Syncing vault '${selectedVault.label}'...`);
           const result = await this.vaultService.syncVault(selectedVault.id);
           if (result.success) {
-            vscode.window.showInformationMessage(`Vault '${selectedVault.label}' synced successfully.`);
+            await this.ideAdapter.showInformationMessage(`Vault '${selectedVault.label}' synced successfully.`);
             this.refreshViews();
           } else {
-            vscode.window.showErrorMessage(`Failed to sync vault: ${result.error.message}`);
+            await this.ideAdapter.showErrorMessage(`Failed to sync vault: ${result.error.message}`);
           }
         },
       },
@@ -322,7 +329,7 @@ export class VaultCommands {
         callback: async () => {
           const vaultsResult = await this.vaultService.listVaults();
           if (!vaultsResult.success || vaultsResult.value.length === 0) {
-            vscode.window.showErrorMessage('No vaults available.');
+            await this.ideAdapter.showErrorMessage('No vaults available.');
             return;
           }
 
@@ -381,8 +388,19 @@ export class VaultCommands {
    * 刷新所有视图
    */
   private refreshViews(): void {
+    this.logger.info('[VaultCommands] refreshViews() called');
+    this.logger.info(`[VaultCommands] documentTreeViewProvider exists: ${!!this.documentTreeViewProvider}`);
     if (this.documentTreeViewProvider) {
-      this.documentTreeViewProvider.refresh();
+      this.logger.info('[VaultCommands] Refreshing document tree view');
+      this.logger.info(`[VaultCommands] documentTreeViewProvider type: ${this.documentTreeViewProvider.constructor.name}`);
+      try {
+        this.documentTreeViewProvider.refresh(undefined);
+        this.logger.info('[VaultCommands] documentTreeViewProvider.refresh() called successfully');
+      } catch (error: any) {
+        this.logger.error('[VaultCommands] Error calling refresh()', error);
+      }
+    } else {
+      this.logger.warn('[VaultCommands] documentTreeViewProvider is not available, cannot refresh view');
     }
     // 助手视图已移除，所有 vault 现在在文档视图中显示
   }
