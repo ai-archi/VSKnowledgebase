@@ -215,7 +215,35 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     this.logger.info(`[VaultApplicationService] removeVault called with vaultId: ${vaultId}, deleteFiles: ${opts?.deleteFiles}`);
     
     // 获取 Vault 信息（用于删除文件）
-    const vaultResult = await this.vaultRepo.findById(vaultId);
+    // 先尝试通过 ID 查找
+    let vaultResult = await this.vaultRepo.findById(vaultId);
+    
+    // 如果通过 ID 找不到，尝试通过名称查找（Git clone 的 vault 可能 ID 和名称不一致）
+    if (!vaultResult.success || !vaultResult.value) {
+      this.logger.warn(`[VaultApplicationService] Vault not found by ID: ${vaultId}, trying to find by name`);
+      vaultResult = await this.vaultRepo.findByName(vaultId);
+    }
+    
+    // 如果还是找不到，尝试通过目录名查找（vault 路径是基于目录名的）
+    if (!vaultResult.success || !vaultResult.value) {
+      this.logger.warn(`[VaultApplicationService] Vault not found by name: ${vaultId}, trying to find by directory name`);
+      const vaultPath = this.fileAdapter.getVaultPath(vaultId);
+      if (fs.existsSync(vaultPath)) {
+        // 如果目录存在，尝试从目录加载 vault 信息
+        const allVaultsResult = await this.vaultRepo.findAll();
+        if (allVaultsResult.success) {
+          // 查找目录名匹配的 vault（vault 路径是基于目录名的）
+          const vault = allVaultsResult.value.find((v: Vault) => {
+            const vPath = this.fileAdapter.getVaultPath(v.id);
+            return vPath === vaultPath || v.name === vaultId;
+          });
+          if (vault) {
+            vaultResult = { success: true, value: vault };
+          }
+        }
+      }
+    }
+    
     if (!vaultResult.success || !vaultResult.value) {
       this.logger.error(`[VaultApplicationService] Vault not found: ${vaultId}`);
       return {
@@ -257,10 +285,12 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     }
 
     // 从仓库中删除 Vault（清理缓存和 SecretStorage）
-    this.logger.info(`[VaultApplicationService] Calling vaultRepo.delete with vaultId: ${vaultId}`);
-    const deleteResult = await this.vaultRepo.delete(vaultId);
+    // 使用找到的 vault.id，而不是原始的 vaultId（因为可能是通过名称找到的）
+    const actualVaultId = vault.id;
+    this.logger.info(`[VaultApplicationService] Calling vaultRepo.delete with vaultId: ${actualVaultId} (original: ${vaultId})`);
+    const deleteResult = await this.vaultRepo.delete(actualVaultId);
     if (deleteResult.success) {
-      this.logger.info(`[VaultApplicationService] Vault deleted successfully: ${vaultId}`);
+      this.logger.info(`[VaultApplicationService] Vault deleted successfully: ${actualVaultId}`);
     } else {
       this.logger.error(`[VaultApplicationService] Failed to delete vault: ${deleteResult.error.message}`);
     }
