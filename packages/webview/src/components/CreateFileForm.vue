@@ -235,7 +235,7 @@ const selectedFiles = ref<FileItem[]>([]);
 const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
 const creating = ref(false);
-const searchDebounceTimer = ref<number | null>(null);
+const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 
 // 过滤模板：只显示 markdown 模板，排除 mermaid、plantuml、archimate 和任务模板
 const markdownTemplates = computed(() => {
@@ -297,8 +297,12 @@ watch(
 
 onMounted(() => {
   // 从 window.initialData 获取初始数据
-  if ((window as any).initialData) {
-    const initialData = (window as any).initialData;
+  let initialFileName: string | undefined;
+  let initialTemplateId: string | undefined;
+  
+  const win = globalThis as any;
+  if (win.initialData) {
+    const initialData = win.initialData;
     if (initialData.vaultId) {
       formData.value.vaultId = initialData.vaultId;
     }
@@ -309,16 +313,38 @@ onMounted(() => {
     } else {
       initialFolderPath.value = undefined;
     }
+    // 读取初始文件名和模板ID
+    if (initialData.initialFileName && typeof initialData.initialFileName === 'string') {
+      initialFileName = initialData.initialFileName;
+      formData.value.fileName = initialData.initialFileName;
+    }
+    if (initialData.initialTemplateId && typeof initialData.initialTemplateId === 'string') {
+      initialTemplateId = initialData.initialTemplateId;
+    }
     console.log('[CreateFileForm] Initial data loaded', {
       vaultId: initialData.vaultId,
       folderPath: initialData.folderPath,
-      initialFolderPath: initialFolderPath.value
+      initialFolderPath: initialFolderPath.value,
+      initialFileName: initialFileName,
+      initialTemplateId: initialTemplateId
     });
   }
   loadVaults();
   loadCommands(); // 加载所有 vault 的命令
   // 加载所有模板（不传 vaultId，从所有 vault 加载）
-  loadTemplates(undefined);
+  // 模板加载完成后，设置初始模板ID
+  loadTemplates(undefined).then(() => {
+    if (initialTemplateId) {
+      // 检查模板是否存在于列表中
+      const templateExists = templates.value.some(t => t.id === initialTemplateId);
+      if (templateExists) {
+        formData.value.templateId = initialTemplateId;
+        console.log('[CreateFileForm] Initial template ID set', initialTemplateId);
+      } else {
+        console.warn('[CreateFileForm] Initial template ID not found in templates list', initialTemplateId);
+      }
+    }
+  });
   // 如果有初始 vaultId，加载文件
   if (formData.value.vaultId) {
     loadFiles();
@@ -413,7 +439,7 @@ const triggerAutoSearch = () => {
     clearTimeout(searchDebounceTimer.value);
   }
   // 设置新的定时器，300ms 后执行搜索
-  searchDebounceTimer.value = window.setTimeout(() => {
+  searchDebounceTimer.value = setTimeout(() => {
     const query = formData.value.fileName.trim();
     if (query) {
       // 使用 VSCode API 实时过滤，传入查询条件
