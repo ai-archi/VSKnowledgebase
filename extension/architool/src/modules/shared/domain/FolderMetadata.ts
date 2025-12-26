@@ -30,7 +30,7 @@ export interface FolderMetadata {
     name: string;                // 文件名（不含扩展名）
     extension?: string;          // 文件扩展名（如：md, mmd）
     description?: string;        // 文件描述（来自模板）
-    template?: string;           // 文件模板路径（如果模板中定义了）
+    template?: string;           // 文件模板ID（格式：vault-name/archi-templates/...，与模板列表中的ID格式一致）
   }>;
   
   // 预期子文件夹列表（模板中定义但未创建的子文件夹）

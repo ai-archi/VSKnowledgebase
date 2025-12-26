@@ -293,27 +293,74 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
 
     // 查找对应的 expectedFile
     const fileNameWithExt = path.basename(item.filePath); // 如 "system-context.md"
+    this.logger.info('[DocumentCommands] Finding expectedFile', {
+      filePath: item.filePath,
+      fileNameWithExt,
+      folderPath: normalizedFolderPath,
+      expectedFilesCount: folderMetadata?.expectedFiles?.length || 0,
+      expectedFiles: folderMetadata?.expectedFiles?.map(f => ({
+        path: f.path,
+        name: f.name,
+        extension: f.extension,
+        template: f.template
+      }))
+    });
+    
     const expectedFile = folderMetadata?.expectedFiles?.find(
       f => {
-        // f.path 可能是 "system-context.md" 或 "system-context"
+        // f.path 是相对于文件夹的路径，例如 "stakeholders.md"
+        // fileNameWithExt 是文件名（含扩展名），例如 "stakeholders.md"
+        // 需要匹配：f.path === fileNameWithExt
+        // 或者：如果 f.path 没有扩展名，则比较 f.name + f.extension
         const expectedFileName = f.extension ? `${f.name}.${f.extension}` : f.name;
-        return f.path === fileNameWithExt || f.path === expectedFileName;
+        // 匹配条件：f.path 应该等于 fileNameWithExt，或者 expectedFileName 应该等于 fileNameWithExt
+        const matches = f.path === fileNameWithExt || expectedFileName === fileNameWithExt;
+        if (matches) {
+          this.logger.info('[DocumentCommands] Found expectedFile match', {
+            filePath: item.filePath,
+            fileNameWithExt,
+            expectedFile: {
+              path: f.path,
+              name: f.name,
+              extension: f.extension,
+              expectedFileName,
+              template: f.template
+            }
+          });
+        }
+        return matches;
       }
     );
 
-    // 3. 解析模板ID（如果存在）
+    if (!expectedFile) {
+      this.logger.warn('[DocumentCommands] ExpectedFile not found', {
+        filePath: item.filePath,
+        fileNameWithExt,
+        availableExpectedFiles: folderMetadata?.expectedFiles?.map(f => f.path)
+      });
+    }
+
+    // 3. 获取模板ID（如果存在）
+    // expectedFile.template 存储的就是模板ID，格式为：vault-name/archi-templates/...
+    // 这与模板列表中的ID格式完全一致：${vault.name}/${fileNode.path}
     let templateId: string | undefined;
     if (expectedFile?.template) {
-      // 模板路径可能是 "demo-vault-assistant/archi-templates/content/c4-model/system-context.md"
-      // 需要提取模板ID，通常是路径的最后一部分（去掉扩展名）
-      const templatePath = expectedFile.template;
-      const templateName = path.basename(templatePath, path.extname(templatePath));
-      // 如果模板路径包含 vault 名称，保留完整路径；否则只使用模板名称
-      if (templatePath.includes('/')) {
-        templateId = templatePath;
-      } else {
-        templateId = templateName;
-      }
+      // expectedFile.template 直接就是模板ID，无需解析
+      templateId = expectedFile.template;
+      this.logger.info('[DocumentCommands] Template ID from expectedFile', {
+        templateId,
+        fileName: fileName,
+        expectedFilePath: expectedFile.path
+      });
+    } else {
+      this.logger.warn('[DocumentCommands] No template found for expectedFile', {
+        fileName: fileName,
+        expectedFile: expectedFile ? {
+          path: expectedFile.path,
+          name: expectedFile.name,
+          template: expectedFile.template
+        } : null
+      });
     }
 
     // 4. 打开创建文件弹窗（预填充信息）

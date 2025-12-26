@@ -336,12 +336,45 @@ onMounted(() => {
   loadTemplates(undefined).then(() => {
     if (initialTemplateId) {
       // 检查模板是否存在于列表中
-      const templateExists = templates.value.some(t => t.id === initialTemplateId);
-      if (templateExists) {
+      const matchedTemplate = templates.value.find(t => t.id === initialTemplateId);
+      if (matchedTemplate) {
         formData.value.templateId = initialTemplateId;
-        console.log('[CreateFileForm] Initial template ID set', initialTemplateId);
+        console.log('[CreateFileForm] Initial template ID set', {
+          templateId: initialTemplateId,
+          templateName: matchedTemplate.name
+        });
       } else {
-        console.warn('[CreateFileForm] Initial template ID not found in templates list', initialTemplateId);
+        // 输出调试信息，帮助排查问题
+        // 检查是否有相似的模板ID（可能是vault名称不同）
+        const similarTemplates = templates.value.filter(t => {
+          // 提取路径部分（去掉vault名称）
+          const templatePath = t.id.includes('/') ? t.id.split('/').slice(1).join('/') : t.id;
+          const initialPath = initialTemplateId.includes('/') ? initialTemplateId.split('/').slice(1).join('/') : initialTemplateId;
+          return templatePath === initialPath;
+        });
+        
+        console.warn('[CreateFileForm] Initial template ID not found in templates list', {
+          initialTemplateId,
+          similarTemplates: similarTemplates.length > 0 ? similarTemplates.map(t => ({
+            id: t.id,
+            name: t.name,
+            type: t.type
+          })) : null,
+          availableTemplates: templates.value.map(t => ({
+            id: t.id,
+            name: t.name,
+            type: t.type
+          })).slice(0, 10) // 只显示前10个，避免日志过长
+        });
+        
+        // 如果有相似的模板（路径匹配但vault名称不同），使用第一个
+        if (similarTemplates.length > 0) {
+          formData.value.templateId = similarTemplates[0].id;
+          console.log('[CreateFileForm] Using similar template (different vault name)', {
+            original: initialTemplateId,
+            matched: similarTemplates[0].id
+          });
+        }
       }
     }
   });
