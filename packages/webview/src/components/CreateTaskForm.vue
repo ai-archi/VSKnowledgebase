@@ -130,7 +130,8 @@
               class="file-item selected"
             >
               <el-icon class="file-icon">
-                <Document v-if="file.type === 'document'" />
+                <Folder v-if="file.type === 'folder'" />
+                <Document v-else-if="file.type === 'document'" />
                 <Picture v-else-if="file.type === 'design'" />
                 <Document v-else />
               </el-icon>
@@ -179,7 +180,8 @@
               @click="toggleFile(file)"
             >
               <el-icon class="file-icon">
-                <Document v-if="file.type === 'document'" />
+                <Folder v-if="file.type === 'folder'" />
+                <Document v-else-if="file.type === 'document'" />
                 <Picture v-else-if="file.type === 'design'" />
                 <Document v-else />
               </el-icon>
@@ -223,7 +225,7 @@ interface FileItem {
   id?: string;
   path: string;
   name: string;
-  type?: 'document' | 'design';
+  type?: 'document' | 'design' | 'folder' | 'file';
   vault?: {
     id: string;
     name: string;

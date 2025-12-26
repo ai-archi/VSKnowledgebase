@@ -1,0 +1,643 @@
+id: feb7b781-8397-4018-bdc1-26800a640212
+title: ddd
+status: pending
+priority: medium
+category: task
+createdAt: '2025-12-26T08:56:44.167Z'
+updatedAt: '2025-12-26T08:56:44.167Z'
+steps:
+  - id: current-state-analysis
+    type: DraftProposalStep
+    form:
+      title: 现状分析
+      schema:
+        refactoringGoal:
+          type: textarea
+          title: 重构目标
+          description: 描述本次重构的目标和期望达到的效果
+          required: false
+        focusAreas:
+          type: textarea
+          title: 关注点
+          description: 重点关注哪些方面（如：性能、可维护性、扩展性、代码质量等）
+          required: false
+        knownIssues:
+          type: textarea
+          title: 已知问题
+          description: 已经发现的问题或痛点
+          required: false
+        constraints:
+          type: textarea
+          title: 约束条件
+          description: 时间、资源、技术栈等约束条件
+          required: false
+    prompt: |
+      你是一个专业的系统架构师，需要分析当前代码库的现状，为架构重构做准备：
+
+      任务名称：{{ task.name }}
+      任务描述：{{ task.description }}
+      方案路径：{{ solutionPath }}
+
+      关联文件（需要分析的架构文档）：
+      {% if relatedFiles %}
+      {% for file in relatedFiles %}
+      - {{ file.name }} ({{ file.type }}): {{ file.path }}
+        {% if file.vaultName %}所属 Vault: {{ file.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文件）
+      {% endif %}
+
+      关联的代码路径（需要分析的代码目录）：
+      {% if relatedCodePaths %}
+      {% for codePath in relatedCodePaths %}
+      - {{ codePath }}
+      {% endfor %}
+      {% else %}
+      （暂无关联代码路径）
+      {% endif %}
+
+      关联的文档（参考文档）：
+      {% if relatedDocuments %}
+      {% for doc in relatedDocuments %}
+      - {{ doc.name }}: {{ doc.path }}
+        {% if doc.vaultName %}所属 Vault: {{ doc.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文档）
+      {% endif %}
+
+      {% if formData %}
+      {% if formData.refactoringGoal %}
+      重构目标：
+      {{ formData.refactoringGoal }}
+      {% endif %}
+
+      {% if formData.focusAreas %}
+      关注点：
+      {{ formData.focusAreas }}
+      {% endif %}
+
+      {% if formData.knownIssues %}
+      已知问题：
+      {{ formData.knownIssues }}
+      {% endif %}
+
+      {% if formData.constraints %}
+      约束条件：
+      {{ formData.constraints }}
+      {% endif %}
+      {% endif %}
+
+      请基于以上信息，进行详细的现状分析，包括：
+      1. **代码结构分析**：分析当前代码的组织方式，识别需要重构的模块和需要保留的模块
+      2. **依赖关系分析**：分析模块间的依赖关系，绘制依赖图，识别循环依赖和紧耦合
+      3. **耦合点识别**：找出代码中的耦合点，识别违反单一职责原则、依赖倒置原则的地方
+      4. **受影响文件清单**：列出所有需要迁移、修改或删除的文件，按优先级分类
+      5. **潜在风险识别**：识别重构过程中可能遇到的技术风险、业务风险、兼容性风险
+      6. **数据统计**：统计代码量、文件数量、依赖数量、测试覆盖率等关键指标
+
+      在分析时，请特别关注用户提供的重构目标、关注点和已知问题。
+    depends_on: []
+    status: in-progress
+    formData: {}
+    createdAt: '2025-12-26T08:56:44.167Z'
+    startedAt: '2025-12-26T08:56:44.167Z'
+  - id: architecture-design
+    type: ReviewAlignmentStep
+    form:
+      title: 架构设计
+      schema:
+        designPrinciples:
+          type: textarea
+          title: 设计原则
+          description: 希望遵循的设计原则（如：SOLID、DDD、分层架构等）
+          required: false
+        techStack:
+          type: textarea
+          title: 技术选型
+          description: 技术栈偏好或约束（如：必须使用的框架、不能使用的技术等）
+          required: false
+        referenceArchitecture:
+          type: textarea
+          title: 参考架构
+          description: 参考的架构模式或现有架构（如：微服务、模块化、插件化等）
+          required: false
+        specialRequirements:
+          type: textarea
+          title: 特殊要求
+          description: 其他特殊需求或约束
+          required: false
+    prompt: |
+      你是一个专业的系统架构师，需要基于现状分析设计目标架构：
+
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+
+      关联文件（架构设计参考）：
+      {% if relatedFiles %}
+      {% for file in relatedFiles %}
+      - {{ file.name }} ({{ file.type }}): {{ file.path }}
+        {% if file.vaultName %}所属 Vault: {{ file.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文件）
+      {% endif %}
+
+      关联的代码路径（需要重构的代码）：
+      {% if relatedCodePaths %}
+      {% for codePath in relatedCodePaths %}
+      - {{ codePath }}
+      {% endfor %}
+      {% else %}
+      （暂无关联代码路径）
+      {% endif %}
+
+      关联的文档（参考文档）：
+      {% if relatedDocuments %}
+      {% for doc in relatedDocuments %}
+      - {{ doc.name }}: {{ doc.path }}
+        {% if doc.vaultName %}所属 Vault: {{ doc.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文档）
+      {% endif %}
+
+      关联的设计（参考设计）：
+      {% if relatedDesigns %}
+      {% for design in relatedDesigns %}
+      - {{ design.name }}: {{ design.path }}
+        {% if design.vaultName %}所属 Vault: {{ design.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联设计）
+      {% endif %}
+
+      {% if formData %}
+      {% if formData.designPrinciples %}
+      设计原则：
+      {{ formData.designPrinciples }}
+      {% endif %}
+
+      {% if formData.techStack %}
+      技术选型：
+      {{ formData.techStack }}
+      {% endif %}
+
+      {% if formData.referenceArchitecture %}
+      参考架构：
+      {{ formData.referenceArchitecture }}
+      {% endif %}
+
+      {% if formData.specialRequirements %}
+      特殊要求：
+      {{ formData.specialRequirements }}
+      {% endif %}
+      {% endif %}
+
+      请基于以上信息，设计详细的目标架构，包括：
+      1. **目标架构设计**：
+         - 新的目录结构设计（符合项目规范和最佳实践）
+         - 模块划分方案（按职责、按层次、按功能等）
+         - 依赖关系设计（消除循环依赖，降低耦合度）
+         - 接口抽象设计（定义清晰的接口边界）
+      2. **迁移策略**：
+         - 分阶段迁移计划（每个阶段的具体任务和验收标准）
+         - 迁移顺序（识别关键路径，确定迁移优先级）
+         - 迁移步骤（详细的步骤清单，包括前置条件和后置条件）
+         - 回滚方案（如果出现问题如何快速回滚到稳定状态）
+      3. **包结构设计**（如适用）：
+         - 包命名规范
+         - 依赖管理方案（根据项目使用的包管理工具）
+         - 版本管理策略
+      4. **构建系统设计**（如适用）：
+         - 构建脚本设计
+         - 构建流程设计
+         - 发布流程设计
+      5. **风险评估与应对**：
+         - 技术风险评估（识别可能的技术难点和风险点）
+         - 业务风险评估（评估对现有功能的影响）
+         - 应对措施（针对每个风险点的缓解策略）
+
+      在设计时，请遵循用户指定的设计原则，考虑技术选型约束，参考提供的架构模式。
+    depends_on:
+      - current-state-analysis
+    status: pending
+    formData: {}
+    createdAt: '2025-12-26T08:56:44.167Z'
+  - id: migration-plan
+    type: ImplementationStep
+    form:
+      title: 迁移计划
+      schema:
+        timeConstraints:
+          type: textarea
+          title: 时间约束
+          description: 时间要求和截止日期
+          required: false
+        priorities:
+          type: textarea
+          title: 优先级
+          description: 功能或模块的优先级排序
+          required: false
+        resourceLimits:
+          type: textarea
+          title: 资源限制
+          description: 人力、环境等资源限制
+          required: false
+        riskTolerance:
+          type: textarea
+          title: 风险容忍度
+          description: 对风险的容忍度和应对策略偏好
+          required: false
+    prompt: |
+      你是一个专业的项目管理者，需要基于架构设计制定详细的迁移计划：
+
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+
+      关联的代码路径（需要迁移的代码）：
+      {% if relatedCodePaths %}
+      {% for codePath in relatedCodePaths %}
+      - {{ codePath }}
+      {% endfor %}
+      {% else %}
+      （暂无关联代码路径）
+      {% endif %}
+
+      关联的文档（参考文档）：
+      {% if relatedDocuments %}
+      {% for doc in relatedDocuments %}
+      - {{ doc.name }}: {{ doc.path }}
+        {% if doc.vaultName %}所属 Vault: {{ doc.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文档）
+      {% endif %}
+
+      关联的设计（参考设计）：
+      {% if relatedDesigns %}
+      {% for design in relatedDesigns %}
+      - {{ design.name }}: {{ design.path }}
+        {% if design.vaultName %}所属 Vault: {{ design.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联设计）
+      {% endif %}
+
+      {% if formData %}
+      {% if formData.timeConstraints %}
+      时间约束：
+      {{ formData.timeConstraints }}
+      {% endif %}
+
+      {% if formData.priorities %}
+      优先级：
+      {{ formData.priorities }}
+      {% endif %}
+
+      {% if formData.resourceLimits %}
+      资源限制：
+      {{ formData.resourceLimits }}
+      {% endif %}
+
+      {% if formData.riskTolerance %}
+      风险容忍度：
+      {{ formData.riskTolerance }}
+      {% endif %}
+      {% endif %}
+
+      请基于以上信息，制定详细的迁移计划，包括：
+      1. **阶段划分**：
+         - 每个阶段的名称和目标
+         - 每个阶段的具体任务清单
+         - 每个阶段的预计时间（考虑时间约束）
+         - 阶段间的依赖关系
+         - 每个阶段的验收标准
+      2. **文件迁移清单**：
+         - 每个文件的源路径和目标路径
+         - 文件迁移时需要修改的内容（导入路径、依赖等）
+         - 文件迁移的优先级（考虑用户指定的优先级）
+         - 需要删除的文件清单
+      3. **依赖更新计划**：
+         - 依赖配置文件的更新（根据项目使用的包管理工具）
+         - 依赖版本管理策略
+         - 依赖关系调整（新增、删除、更新依赖）
+         - 其他配置文件的更新（构建配置、环境配置等）
+      4. **构建脚本更新计划**：
+         - 需要新增的构建脚本
+         - 需要修改的构建脚本
+         - 构建流程的调整
+      5. **测试计划**：
+         - 每个阶段的测试策略
+         - 测试用例设计
+         - 回归测试计划
+         - 性能测试计划
+
+      在制定计划时，请充分考虑时间约束、优先级和资源限制，根据风险容忍度调整策略。
+    depends_on:
+      - architecture-design
+    status: pending
+    formData: {}
+    createdAt: '2025-12-26T08:56:44.167Z'
+  - id: phase-implementation
+    type: ImplementationStep
+    form:
+      title: 分阶段实施
+      schema:
+        currentPhase:
+          type: textarea
+          title: 当前阶段
+          description: 当前正在实施的阶段名称和主要任务
+          required: false
+        implementationFocus:
+          type: textarea
+          title: 实施重点
+          description: 本阶段重点关注的内容或需要特别注意的事项
+          required: false
+        specialInstructions:
+          type: textarea
+          title: 特殊说明
+          description: 实施过程中的特殊要求或注意事项
+          required: false
+    prompt: |
+      你是一个专业的软件开发工程师，需要基于迁移计划进行分阶段实施：
+
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+
+      关联的代码路径（需要实施迁移的代码）：
+      {% if relatedCodePaths %}
+      {% for codePath in relatedCodePaths %}
+      - {{ codePath }}
+      {% endfor %}
+      {% else %}
+      （暂无关联代码路径）
+      {% endif %}
+
+      关联的文档（参考文档）：
+      {% if relatedDocuments %}
+      {% for doc in relatedDocuments %}
+      - {{ doc.name }}: {{ doc.path }}
+        {% if doc.vaultName %}所属 Vault: {{ doc.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文档）
+      {% endif %}
+
+      关联的设计（参考设计）：
+      {% if relatedDesigns %}
+      {% for design in relatedDesigns %}
+      - {{ design.name }}: {{ design.path }}
+        {% if design.vaultName %}所属 Vault: {{ design.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联设计）
+      {% endif %}
+
+      {% if formData %}
+      {% if formData.currentPhase %}
+      当前阶段：
+      {{ formData.currentPhase }}
+      {% endif %}
+
+      {% if formData.implementationFocus %}
+      实施重点：
+      {{ formData.implementationFocus }}
+      {% endif %}
+
+      {% if formData.specialInstructions %}
+      特殊说明：
+      {{ formData.specialInstructions }}
+      {% endif %}
+      {% endif %}
+
+      请基于以上信息，进行分阶段实施，包括：
+      1. **当前阶段实施**：
+         - 根据迁移计划，执行当前阶段的任务
+         - 按照文件迁移清单，逐个迁移或重构文件
+         - 更新导入路径、引用关系和依赖关系
+         - 更新构建脚本、配置文件和相关文档
+      2. **代码实现**：
+         - 创建新的目录结构（如需要）
+         - 迁移代码到新位置（如需要）
+         - 重构代码以符合新架构（提取接口、消除耦合、优化结构等）
+         - 更新所有导入路径、引用和依赖
+         - 更新依赖配置和构建配置
+      3. **问题处理**：
+         - 记录实施过程中遇到的问题（技术问题、兼容性问题等）
+         - 提供解决方案和替代方案
+         - 如果遇到阻塞问题，评估影响并调整迁移计划
+      4. **进度跟踪**：
+         - 记录已完成的文件和任务
+         - 记录待完成的文件和任务
+         - 更新实施进度和完成度
+         - 识别可能的延期风险
+      5. **下一步计划**：
+         - 明确下一阶段的任务和目标
+         - 准备下一阶段的实施环境和前置条件
+         - 评估是否需要调整后续阶段的计划
+
+      在实施时，请重点关注用户指定的实施重点，遵循特殊说明。
+    depends_on:
+      - migration-plan
+    status: pending
+    formData: {}
+    createdAt: '2025-12-26T08:56:44.167Z'
+  - id: test-verification
+    type: TestVerificationStep
+    form:
+      title: 测试验证
+      schema:
+        testFocus:
+          type: textarea
+          title: 测试重点
+          description: 重点关注哪些方面的测试（如：功能、性能、兼容性等）
+          required: false
+        verificationCriteria:
+          type: textarea
+          title: 验证标准
+          description: 验证通过的标准或指标
+          required: false
+        knownIssues:
+          type: textarea
+          title: 已知问题
+          description: 实施过程中已知的问题，需要在测试中重点关注
+          required: false
+    prompt: |
+      你是一个专业的测试工程师，需要基于重构后的代码进行全面的测试验证：
+
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+
+      关联的代码路径（需要测试的代码）：
+      {% if relatedCodePaths %}
+      {% for codePath in relatedCodePaths %}
+      - {{ codePath }}
+      {% endfor %}
+      {% else %}
+      （暂无关联代码路径）
+      {% endif %}
+
+      关联的文档（测试参考文档）：
+      {% if relatedDocuments %}
+      {% for doc in relatedDocuments %}
+      - {{ doc.name }}: {{ doc.path }}
+        {% if doc.vaultName %}所属 Vault: {{ doc.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文档）
+      {% endif %}
+
+      {% if formData %}
+      {% if formData.testFocus %}
+      测试重点：
+      {{ formData.testFocus }}
+      {% endif %}
+
+      {% if formData.verificationCriteria %}
+      验证标准：
+      {{ formData.verificationCriteria }}
+      {% endif %}
+
+      {% if formData.knownIssues %}
+      已知问题：
+      {{ formData.knownIssues }}
+      {% endif %}
+      {% endif %}
+
+      请基于以上信息，进行全面的测试验证，包括：
+      1. **构建验证**：
+         - 验证新架构下的构建脚本是否正常工作
+         - 验证所有包能否正确构建
+         - 验证依赖关系是否正确
+         - 验证构建产物是否完整
+      2. **功能测试**：
+         - 设计功能测试用例
+         - 执行功能测试
+         - 验证所有功能是否正常
+         - 记录测试结果
+      3. **集成测试**：
+         - 验证模块间的集成是否正常
+         - 验证接口调用和消息通信是否正常
+         - 验证依赖注入和配置管理是否正常
+         - 验证跨模块的数据流和业务流程是否正常
+      4. **回归测试**：
+         - 执行完整的回归测试套件
+         - 验证原有功能未受影响
+         - 验证性能未下降
+         - 验证兼容性
+      5. **性能测试**：
+         - 测试启动时间
+         - 测试响应时间
+         - 测试内存使用
+         - 对比重构前后的性能指标
+      6. **问题跟踪**：
+         - 记录发现的所有问题
+         - 跟踪问题的修复进度
+         - 验证问题修复后的效果
+
+      在测试时，请重点关注用户指定的测试重点，按照验证标准进行验证，特别关注已知问题。
+    depends_on:
+      - phase-implementation
+    status: pending
+    formData: {}
+    createdAt: '2025-12-26T08:56:44.167Z'
+  - id: documentation-update
+    type: ArchiveUpdateStep
+    form:
+      title: 文档更新
+      schema:
+        docTypes:
+          type: textarea
+          title: 文档类型
+          description: 需要更新的文档类型（如：架构文档、API文档、用户手册等）
+          required: false
+        targetAudience:
+          type: textarea
+          title: 文档受众
+          description: 文档的目标受众（如：开发者、用户、运维人员等）
+          required: false
+        specialRequirements:
+          type: textarea
+          title: 特殊要求
+          description: 文档更新的特殊要求或格式要求
+          required: false
+    prompt: |
+      你是一个专业的文档管理专家，需要基于重构结果更新相关文档：
+
+      任务名称：{{ task.name }}
+      方案路径：{{ solutionPath }}
+
+      关联的文档（需要更新的文档）：
+      {% if relatedDocuments %}
+      {% for doc in relatedDocuments %}
+      - {{ doc.name }}: {{ doc.path }}
+        {% if doc.vaultName %}所属 Vault: {{ doc.vaultName }}{% endif %}
+      {% endfor %}
+      {% else %}
+      （暂无关联文档）
+      {% endif %}
+
+      关联的代码路径（重构后的代码，用于更新文档）：
+      {% if relatedCodePaths %}
+      {% for codePath in relatedCodePaths %}
+      - {{ codePath }}
+      {% endfor %}
+      {% else %}
+      （暂无关联代码路径）
+      {% endif %}
+
+      {% if formData %}
+      {% if formData.docTypes %}
+      文档类型：
+      {{ formData.docTypes }}
+      {% endif %}
+
+      {% if formData.targetAudience %}
+      文档受众：
+      {{ formData.targetAudience }}
+      {% endif %}
+
+      {% if formData.specialRequirements %}
+      特殊要求：
+      {{ formData.specialRequirements }}
+      {% endif %}
+      {% endif %}
+
+      请基于以上信息，更新相关文档，包括：
+      1. **架构文档更新**：
+         - 更新架构设计文档，反映新的架构结构
+         - 更新目录结构说明
+         - 更新模块划分说明
+         - 更新依赖关系图
+      2. **API文档更新**：
+         - 更新公共API文档
+         - 更新接口定义文档
+         - 更新使用示例和最佳实践
+         - 更新废弃API的迁移指南
+      3. **迁移指南**：
+         - 编写详细的迁移指南
+         - 说明如何从旧架构迁移到新架构
+         - 提供迁移步骤和注意事项
+         - 提供常见问题解答
+      4. **变更日志**：
+         - 记录所有文件迁移
+         - 记录所有配置变更
+         - 记录所有API变更
+         - 记录破坏性变更
+      5. **README更新**：
+         - 更新项目README
+         - 更新构建说明
+         - 更新开发指南
+         - 更新贡献指南
+
+      在更新文档时，请考虑文档受众的需求，遵循特殊要求，确保文档清晰易懂。
+    depends_on:
+      - test-verification
+    status: pending
+    formData: {}
+    createdAt: '2025-12-26T08:56:44.167Z'
+currentStep: current-state-analysis
+templateId: refactoring-task-template
+description: ''

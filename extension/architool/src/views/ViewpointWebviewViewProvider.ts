@@ -1442,7 +1442,7 @@ export class ViewpointWebviewViewProvider {
             });
           }
         } else if (message.method === 'workspace.listFiles') {
-          // 获取工作区文件列表（支持查询）
+          // 获取工作区文件列表（支持查询，包含文件和文件夹）
           try {
             const params = message.params || {};
             const query = params.query?.trim().toLowerCase() || '';
@@ -1458,53 +1458,82 @@ export class ViewpointWebviewViewProvider {
               return;
             }
 
-            // 使用 VSCode API 查找文件
-            const allFiles: any[] = [];
-            for (const folder of workspaceFolders) {
+            // 递归遍历文件夹，获取所有文件和文件夹
+            const allItems: any[] = [];
+            const maxResults = 10000;
+            const excludePatterns = ['node_modules', '.git', '.architool'];
+            
+            // 递归遍历函数
+            const traverseDirectory = async (dirPath: string, basePath: string, relativeBase: string): Promise<void> => {
               try {
-                // folder.uri 是自定义 Uri 类型，需要转换为 vscode.Uri
-                // 使用 fsPath 属性来创建 vscode.Uri
-                const folderUri = vscode.Uri.file(folder.uri.fsPath);
+                const entries = fs.readdirSync(dirPath, { withFileTypes: true });
                 
-                // 使用 findFiles 查找所有文件（排除 .git, node_modules 等）
-                const pattern = new vscode.RelativePattern(
-                  folderUri,
-                  '**/*'
-                );
-                
-                const files = await vscode.workspace.findFiles(
-                  pattern,
-                  '**/{node_modules,.git,.architool}/**',
-                  10000 // 限制结果数量
-                );
-
-                for (const file of files) {
-                  const folderPath = folderUri.fsPath;
-                  const relativePath = path.relative(folderPath, file.fsPath);
+                for (const entry of entries) {
+                  // 检查是否应该排除
+                  if (excludePatterns.includes(entry.name)) {
+                    continue;
+                  }
+                  
+                  const fullPath = path.join(dirPath, entry.name);
+                  const relativePath = path.relative(basePath, fullPath).replace(/\\/g, '/');
                   
                   // 如果有关键词，进行过滤
                   if (query && !relativePath.toLowerCase().includes(query)) {
+                    // 如果是文件夹，仍然需要递归检查子项
+                    if (entry.isDirectory()) {
+                      await traverseDirectory(fullPath, basePath, relativePath);
+                    }
                     continue;
                   }
-
-                  const fileName = path.basename(relativePath);
-                  allFiles.push({
+                  
+                  // 检查是否超过最大结果数
+                  if (allItems.length >= maxResults) {
+                    return;
+                  }
+                  
+                  const fileName = entry.name;
+                  const itemType = entry.isDirectory() ? 'folder' : 'file';
+                  
+                  allItems.push({
                     id: relativePath,
                     path: relativePath,
                     name: fileName,
-                    title: fileName.replace(/\.[^/.]+$/, ''),
-                    type: 'code',
+                    title: itemType === 'file' ? fileName.replace(/\.[^/.]+$/, '') : fileName,
+                    type: itemType,
                   });
+                  
+                  // 如果是文件夹，递归遍历
+                  if (entry.isDirectory()) {
+                    await traverseDirectory(fullPath, basePath, relativePath);
+                  }
                 }
+              } catch (error: any) {
+                // 忽略权限错误等
+                this.logger.debug(`Failed to traverse directory: ${dirPath}`, error);
+              }
+            };
+
+            // 遍历所有工作区文件夹
+            for (const folder of workspaceFolders) {
+              try {
+                const folderPath = folder.uri.fsPath;
+                await traverseDirectory(folderPath, folderPath, '');
               } catch (error: any) {
                 this.logger.warn(`Failed to list files in workspace folder: ${folder.uri}`, error);
               }
             }
 
+            // 排序：文件夹在前，文件在后，都按路径排序
+            allItems.sort((a, b) => {
+              if (a.type === 'folder' && b.type === 'file') return -1;
+              if (a.type === 'file' && b.type === 'folder') return 1;
+              return a.path.localeCompare(b.path);
+            });
+
             panel.webview.postMessage({
               id: message.id,
               method: message.method,
-              result: allFiles,
+              result: allItems,
             });
           } catch (error: any) {
             this.logger.error('[ViewpointWebviewViewProvider] Failed to list workspace files', error);
