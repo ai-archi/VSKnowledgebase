@@ -91,7 +91,8 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
     }
 
     // Create new local vault by copying source vault
-    const sourcePath = path.join(this.fileAdapter.getVaultsRoot(), sourceVault.name);
+    // 使用 vault.id（目录名）而不是 vault.name（显示名称）来构建路径
+    const sourcePath = this.fileAdapter.getVaultPath(sourceVault.id);
     const targetPath = path.join(this.fileAdapter.getVaultsRoot(), newVaultName);
 
     try {
@@ -174,7 +175,8 @@ export class VaultApplicationServiceImpl implements VaultApplicationService {
 
     const vault = vaultResult.value;
     if (vault.remote) {
-      const vaultPath = path.join(this.fileAdapter.getVaultsRoot(), vault.name);
+      // 使用 vault.id（目录名）而不是 vault.name（显示名称）来构建路径
+      const vaultPath = this.fileAdapter.getVaultPath(vault.id);
       
       // 更新 remote URL（如果认证信息已更新）
       const updateRemoteResult = await this.updateRemoteUrl(vaultPath, vault.remote);

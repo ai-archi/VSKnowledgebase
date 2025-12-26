@@ -616,25 +616,38 @@ export class WebviewRPC {
         }
 
         // 如果创建成功且有关联关系，保存关联关系
+        // 使用 file:vaultId:filePath 格式查找 metadata，所以使用 targetType: 'file' 和 artifact.path
         if (params.relatedArtifacts || params.relatedCodePaths) {
+          this.logger.info('[WebviewRPC] Saving related artifacts and code paths for artifact', {
+            artifactId: result.value.id,
+            artifactPath: result.value.path,
+            relatedArtifacts: params.relatedArtifacts,
+            relatedCodePaths: params.relatedCodePaths
+          });
+          
           await Promise.all([
             params.relatedArtifacts && params.relatedArtifacts.length > 0
               ? this.artifactService.updateRelatedArtifacts(
                   result.value.vault.id,
-                  result.value.id,
-                  'artifact',
+                  result.value.path,
+                  'file',
                   params.relatedArtifacts
                 )
               : Promise.resolve({ success: true } as any),
             params.relatedCodePaths && params.relatedCodePaths.length > 0
               ? this.artifactService.updateRelatedCodePaths(
                   result.value.vault.id,
-                  result.value.id,
-                  'artifact',
+                  result.value.path,
+                  'file',
                   params.relatedCodePaths
                 )
               : Promise.resolve({ success: true } as any),
           ]);
+          
+          this.logger.info('[WebviewRPC] Successfully saved related artifacts and code paths for artifact', {
+            artifactId: result.value.id,
+            artifactPath: result.value.path
+          });
         }
 
         return {

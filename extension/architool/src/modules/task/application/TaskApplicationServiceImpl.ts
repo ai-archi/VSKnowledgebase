@@ -24,6 +24,25 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
     private logger: Logger
   ) {}
 
+  /**
+   * 生成任务文件夹名称：<年月日时分秒>-<UUID>
+   * 格式：YYYYMMDDHHmmss-UUID
+   */
+  private generateTaskFolderName(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    const timestamp = `${year}${month}${day}${hours}${minutes}${seconds}`;
+    const uuid = uuidv4();
+    
+    return `${timestamp}-${uuid}`;
+  }
+
   async listTasks(vaultId?: string, status?: Task['status']): Promise<Result<Task[], ArtifactError>> {
     try {
       // 使用 Artifact 能力扫描所有 vault 的任务文件
@@ -40,11 +59,27 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
       }
 
       // 过滤出 archi-tasks/ 目录下的 artifact，排除方案文件（.solution.md）
-      const taskArtifacts = artifactsResult.value.filter(a => 
-        a.path.startsWith('archi-tasks/') && 
-        !a.path.endsWith('.solution.md') &&
-        (a.path.endsWith('.yml') || a.path.endsWith('.yaml'))
-      );
+      // 只支持新结构：archi-tasks/<年月日时分秒>-<UUID>/ddds.yml
+      const taskArtifacts = artifactsResult.value.filter(a => {
+        if (!a.path.startsWith('archi-tasks/')) {
+          return false;
+        }
+        if (a.path.endsWith('.solution.md')) {
+          return false;
+        }
+        if (!a.path.endsWith('.yml') && !a.path.endsWith('.yaml')) {
+          return false;
+        }
+        // 新结构：archi-tasks/<年月日时分秒>-<UUID>/ddds.yml
+        // 必须在子文件夹中且文件名为 ddds.yml
+        const relativePath = a.path.replace('archi-tasks/', '');
+        const pathParts = relativePath.split('/');
+        // 必须在子文件夹中且文件名为 ddds.yml
+        if (pathParts.length > 1) {
+          return pathParts[pathParts.length - 1] === 'ddds.yml' || pathParts[pathParts.length - 1] === 'ddds.yaml';
+        }
+        return false;
+      });
 
       const tasks: Task[] = [];
 
@@ -112,22 +147,11 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         };
       }
       
-      // 确保路径以 archi-tasks/ 开头，使用 YAML 格式
-      let artifactPath = options.artifactPath;
-      if (!artifactPath.startsWith('archi-tasks/')) {
-        const fileName = path.basename(artifactPath) || `${options.title || '新任务'}.yml`;
-        // 如果原路径是 .md，改为 .yml
-        if (fileName.endsWith('.md')) {
-          artifactPath = `archi-tasks/${fileName.replace(/\.md$/, '.yml')}`;
-        } else if (!fileName.endsWith('.yml') && !fileName.endsWith('.yaml')) {
-          artifactPath = `archi-tasks/${fileName}.yml`;
-        } else {
-          artifactPath = `archi-tasks/${fileName}`;
-        }
-      } else if (artifactPath.endsWith('.md')) {
-        // 如果路径是 .md，改为 .yml
-        artifactPath = artifactPath.replace(/\.md$/, '.yml');
-      }
+      // 生成任务文件夹名称：<年月日时分秒>-<UUID>
+      const taskFolderName = this.generateTaskFolderName();
+      
+      // 构建新的路径结构：archi-tasks/<年月日时分秒>-<UUID>/ddds.yml
+      const artifactPath = `archi-tasks/${taskFolderName}/ddds.yml`;
 
       // 构建任务内容（YAML 格式，支持新格式 steps 和旧格式 workflow）
       const taskId = uuidv4();
@@ -225,10 +249,8 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         };
       }
 
-      // 创建任务方案 Markdown 文件
-      const solutionPath = artifactPath
-        .replace(/\.yml$/, '.solution.md')
-        .replace(/\.yaml$/, '.solution.md');
+      // 创建任务方案 Markdown 文件：archi-tasks/<年月日时分秒>-<UUID>/ddds.solution.md
+      const solutionPath = `archi-tasks/${taskFolderName}/ddds.solution.md`;
       
       // 生成方案文件的初始内容
       const solutionContent = this.generateSolutionContent(options.title, steps);
@@ -301,13 +323,13 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
 
   /**
    * 从文件内容解析任务信息
-   * 支持 YAML 格式和 Markdown + Front Matter 格式（向后兼容）
+   * 只支持 YAML 格式
    */
   private parseTaskFromContent(filePath: string, content: string, vaultId: string): Task | null {
     try {
       const ext = path.extname(filePath).toLowerCase();
       
-      // YAML 格式（.yml 或 .yaml）
+      // 只支持 YAML 格式（.yml 或 .yaml）
       if (ext === '.yml' || ext === '.yaml') {
         const taskData = yaml.load(content) as any;
         
@@ -325,41 +347,10 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
           };
         }
       }
-      
-      // Markdown + Front Matter 格式（向后兼容）
-      const frontMatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
-      const match = content.match(frontMatterRegex);
 
-      if (match) {
-        const frontMatterText = match[1];
-        const frontMatter = yaml.load(frontMatterText) as any;
-        
-        if (frontMatter && frontMatter.id) {
-          return {
-            id: frontMatter.id,
-            title: frontMatter.title || path.basename(filePath, path.extname(filePath)),
-            status: frontMatter.status || 'pending',
-            priority: frontMatter.priority,
-            dueDate: frontMatter.dueDate ? new Date(frontMatter.dueDate) : undefined,
-            category: frontMatter.category || 'task', // 默认分类为 'task'
-            artifactId: frontMatter.id,
-            artifactPath: filePath,
-            vaultId: vaultId,
-          };
-        }
-      }
-
-      // 如果无法解析，从文件名推断
-      const fileName = path.basename(filePath, path.extname(filePath));
-      return {
-        id: uuidv4(), // 临时 ID
-        title: fileName,
-        status: 'pending',
-        category: 'task', // 默认分类为 'task'
-        artifactId: '',
-        artifactPath: filePath,
-        vaultId: vaultId,
-      };
+      // 如果无法解析，返回 null
+      this.logger.warn(`Failed to parse task from content: ${filePath} - unsupported format or missing id`);
+      return null;
     } catch (error: any) {
       this.logger.warn(`Failed to parse task from content: ${filePath}`, error);
       return null;
@@ -436,10 +427,8 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         };
       }
 
-      // 删除方案文件（将 .yml 或 .yaml 替换为 .solution.md）
-      const solutionPath = task.artifactPath
-        .replace(/\.yml$/, '.solution.md')
-        .replace(/\.yaml$/, '.solution.md');
+      // 删除方案文件：archi-tasks/<年月日时分秒>-<UUID>/ddds.solution.md
+      const solutionPath = task.artifactPath.replace(/ddds\.yml$/, 'ddds.solution.md');
       
       // 检查方案文件是否存在
       const solutionExistsResult = await this.artifactService.exists(
@@ -460,6 +449,27 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         } else {
           this.logger.info('Solution file deleted', { taskId, solutionPath });
         }
+      }
+
+      // 删除整个任务文件夹：archi-tasks/<年月日时分秒>-<UUID>
+      const taskFolderPath = path.dirname(task.artifactPath);
+      
+      // 删除任务文件夹（递归删除）
+      const deleteFolderResult = await this.artifactService.delete(
+        { id: vault.id, name: vault.name },
+        taskFolderPath,
+        true // recursive: true
+      );
+      
+      if (!deleteFolderResult.success) {
+        // 文件夹删除失败，记录警告但不影响任务删除（文件已删除）
+        this.logger.warn('Failed to delete task folder', {
+          taskId,
+          taskFolderPath,
+          error: deleteFolderResult.error
+        });
+      } else {
+        this.logger.info('Task folder deleted', { taskId, taskFolderPath });
       }
 
       this.logger.info('Task deleted', { taskId, artifactPath: task.artifactPath, solutionPath, vaultId: task.vaultId });

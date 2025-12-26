@@ -74,11 +74,41 @@
           </div>
         </div>
       </div>
+      <!-- 关联文件区域 -->
+      <div class="related-files-section">
+        <div class="related-files-header">
+          <h3>关联文件</h3>
+          <el-button size="small" @click="handleEditRelations">编辑</el-button>
+        </div>
+        <RelatedFiles
+          :files="relatedFiles"
+          :loading="relatedFilesLoading"
+          @open="handleOpenRelatedFile"
+        />
+      </div>
     </div>
   </div>
   <div v-else class="empty-task">
     <el-empty description="请选择一个任务查看详情" :image-size="100" />
   </div>
+  <!-- 编辑关联文件对话框 -->
+  <el-dialog
+    v-model="editRelationsDialogVisible"
+    title="编辑关联文件"
+    width="80%"
+    :close-on-click-modal="false"
+  >
+    <EditRelationsForm
+      v-if="editRelationsDialogVisible"
+      :target-type="'file'"
+      :target-id="task?.artifactPath"
+      :vault-id="task?.vaultId"
+      :initial-related-artifacts="relatedArtifacts"
+      :initial-related-code-paths="relatedCodePaths"
+      @saved="handleRelationsSaved"
+      @close="editRelationsDialogVisible = false"
+    />
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -86,7 +116,9 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { ElEmpty, ElMessage } from 'element-plus';
 import TaskWorkflowDiagram from './TaskWorkflowDiagram.vue';
 import StepDetailArea from './StepDetailArea.vue';
-import type { Task } from '@/types';
+import RelatedFiles from './RelatedFiles.vue';
+import EditRelationsForm from './EditRelationsForm.vue';
+import type { Task, RelatedFile } from '@/types';
 import { extensionService } from '@/services/ExtensionService';
 
 interface Props {
@@ -111,6 +143,13 @@ const selectedFormData = ref<Record<string, any>>({});
 const canGoNext = ref<boolean>(false);
 const canGoPrev = ref<boolean>(false);
 const stepDetailAreaRef = ref<InstanceType<typeof StepDetailArea> | null>(null);
+
+// 关联文件相关
+const relatedFiles = ref<RelatedFile[]>([]);
+const relatedFilesLoading = ref<boolean>(false);
+const relatedArtifacts = ref<string[]>([]);
+const relatedCodePaths = ref<string[]>([]);
+const editRelationsDialogVisible = ref<boolean>(false);
 
 // 计算是否有表单（用于显示生成提示词按钮）
 const hasForm = computed(() => {
@@ -137,12 +176,15 @@ watch(() => props.task?.id, async (newTaskId, oldTaskId) => {
   if (!newTaskId) {
     console.log('[TaskDetail] Task cleared, resetting state');
     resetTaskState();
+    relatedFiles.value = [];
+    relatedArtifacts.value = [];
+    relatedCodePaths.value = [];
     return;
   }
   
-  // 如果任务 ID 变化（切换任务），先重置状态，再加载新任务数据
-  if (newTaskId !== oldTaskId) {
-    console.log('[TaskDetail] Task switched', { from: oldTaskId, to: newTaskId });
+  // 如果任务 ID 变化（切换任务）或首次加载（oldTaskId 为 undefined），先重置状态，再加载新任务数据
+  if (newTaskId !== oldTaskId || oldTaskId === undefined) {
+    console.log('[TaskDetail] Task switched or initial load', { from: oldTaskId, to: newTaskId });
     resetTaskState();
     await nextTick();
     
@@ -151,7 +193,10 @@ watch(() => props.task?.id, async (newTaskId, oldTaskId) => {
         taskId: props.task.id,
         stepsCount: (props.task as any).steps?.length || 0
       });
-      await openCurrentStep();
+      await Promise.all([
+        openCurrentStep(),
+        loadRelatedFiles(),
+      ]);
     } else {
       console.warn('[TaskDetail] Task is null after reset');
     }
@@ -510,6 +555,83 @@ async function handleOpenSolution() {
   }
 }
 
+/**
+ * 加载任务的关联文件
+ */
+async function loadRelatedFiles() {
+  if (!props.task) {
+    console.log('[TaskDetail] loadRelatedFiles: task is null');
+    relatedFiles.value = [];
+    return;
+  }
+
+  console.log('[TaskDetail] loadRelatedFiles: loading files for task', { taskId: props.task.id });
+  relatedFilesLoading.value = true;
+  try {
+    const files = await extensionService.call<RelatedFile[]>('getTaskRelatedFiles', {
+      taskId: props.task.id,
+    });
+    console.log('[TaskDetail] loadRelatedFiles: received files', { count: files?.length || 0, files });
+    relatedFiles.value = files || [];
+
+    // 分离 artifacts 和 code paths，用于编辑对话框
+    relatedArtifacts.value = files
+      ?.filter(f => f.type === 'document' || f.type === 'design')
+      .map(f => f.id) || [];
+    relatedCodePaths.value = files
+      ?.filter(f => f.type === 'code')
+      .map(f => f.path) || [];
+  } catch (error: any) {
+    console.error('[TaskDetail] Failed to load related files:', error);
+    ElMessage.error(`加载关联文件失败：${error.message || '未知错误'}`);
+    relatedFiles.value = [];
+  } finally {
+    relatedFilesLoading.value = false;
+  }
+}
+
+/**
+ * 打开关联文件
+ */
+async function handleOpenRelatedFile(file: RelatedFile) {
+  try {
+    if (file.type === 'code') {
+      // 代码文件，使用 openFile
+      await extensionService.call('openFile', {
+        filePath: file.path,
+      });
+    } else {
+      // 文档或设计文件，使用 openFile
+      await extensionService.call('openFile', {
+        filePath: file.path,
+        vaultId: file.vault?.id,
+      });
+    }
+  } catch (error: any) {
+    console.error('Failed to open related file:', error);
+    ElMessage.error(`打开文件失败：${error.message || '未知错误'}`);
+  }
+}
+
+/**
+ * 打开编辑关联文件对话框
+ */
+function handleEditRelations() {
+  if (!props.task) return;
+  editRelationsDialogVisible.value = true;
+}
+
+/**
+ * 关联文件保存后的处理
+ */
+async function handleRelationsSaved() {
+  if (!props.task) return;
+  
+  // 重新加载关联文件
+  await loadRelatedFiles();
+  editRelationsDialogVisible.value = false;
+}
+
 async function ensureSolutionFileAndChapter(_stepId: string) {
   if (!props.task) return;
   try {
@@ -712,6 +834,26 @@ async function ensureSolutionFileAndChapter(_stepId: string) {
   justify-content: center;
   height: 100%;
   color: var(--vscode-descriptionForeground, #999999);
+}
+
+.related-files-section {
+  border-top: 1px solid var(--vscode-panel-border, #3e3e3e);
+  background: var(--vscode-panel-background, #1e1e1e);
+}
+
+.related-files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+}
+
+.related-files-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
 }
 </style>
 

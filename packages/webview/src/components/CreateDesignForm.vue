@@ -527,7 +527,7 @@ const handleCreate = async () => {
     const extension = getExtension(formData.value.diagramType);
     const diagramName = formData.value.diagramName.trim();
     
-    // 构建文件路径：如果有初始文件夹路径，在文件夹下创建；否则在 design 目录下创建
+    // 构建文件路径：如果有初始文件夹路径，在文件夹下创建；否则直接在 vault 根目录下创建
     let diagramPath: string;
     // 确保 initialFolderPath 是有效的非空字符串
     const folderPath = initialFolderPath.value && typeof initialFolderPath.value === 'string' && initialFolderPath.value.trim() !== ''
@@ -538,8 +538,8 @@ const handleCreate = async () => {
       // 在文件夹下创建：文件夹路径/文件名.扩展名
       diagramPath = `${folderPath}/${diagramName}.${extension}`;
     } else {
-      // 默认在 design 目录下创建：design/文件名.扩展名
-      diagramPath = `design/${diagramName}.${extension}`;
+      // 直接在 vault 根目录下创建：文件名.扩展名（不再添加 design 前缀）
+      diagramPath = `${diagramName}.${extension}`;
     }
     
     console.log('[CreateDesignForm] Path building', {

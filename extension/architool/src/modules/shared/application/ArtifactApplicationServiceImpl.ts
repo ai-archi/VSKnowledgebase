@@ -463,14 +463,14 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         }
       } else {
         // 如果通过 file 格式找不到，尝试通过 metadataId 删除（兼容旧格式）
-        if (artifact && metadataId) {
+      if (artifact && metadataId) {
           this.logger.info(`[ArtifactApplicationService] deleteArtifact: Trying to delete metadata by metadataId (legacy format)`, {
             metadataId,
             artifactId: artifact.id
           });
-          const metadataResult = await this.metadataRepo.delete(metadataId, artifact.id);
-          if (!metadataResult.success) {
-            // metadata 删除失败不影响主流程，只记录日志
+        const metadataResult = await this.metadataRepo.delete(metadataId, artifact.id);
+        if (!metadataResult.success) {
+          // metadata 删除失败不影响主流程，只记录日志
             this.logger.warn(`[ArtifactApplicationService] deleteArtifact: Failed to delete metadata by metadataId`, {
               metadataId,
               error: metadataResult.error?.message
@@ -906,40 +906,40 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         fileArtifactId,
         artifactPath: artifact.path
       });
-      const metadataId = uuidv4();
-      const now = new Date().toISOString();
-      const metadata: ArtifactMetadata = {
-        id: metadataId,
+        const metadataId = uuidv4();
+        const now = new Date().toISOString();
+        const metadata: ArtifactMetadata = {
+          id: metadataId,
         artifactId: fileArtifactId, // 使用 file:vaultId:filePath 格式
-        vaultId: vault.id,
-        vaultName: vault.name,
-        type: artifact.viewType,
-        category: artifact.category,
-        tags: artifact.tags || [],
+          vaultId: vault.id,
+          vaultName: vault.name,
+          type: artifact.viewType,
+          category: artifact.category,
+          tags: artifact.tags || [],
         properties: {
           targetType: 'file',
           targetId: artifact.path,
         },
-        createdAt: now,
-        updatedAt: now,
-      };
-      const createResult = await this.metadataRepo.create(metadata, {
-        title: artifact.title,
-        description: artifact.description,
-      });
-      if (!createResult.success) {
+          createdAt: now,
+          updatedAt: now,
+        };
+        const createResult = await this.metadataRepo.create(metadata, {
+          title: artifact.title,
+          description: artifact.description,
+        });
+        if (!createResult.success) {
         this.logger.error('[ArtifactApplicationService] getOrCreateMetadata: Failed to create metadata', {
           error: createResult.error?.message,
           fileArtifactId
         });
-        return createResult;
-      }
+          return createResult;
+        }
       this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Metadata created with file format', {
         metadataId: createResult.value.id,
         fileArtifactId
       });
-      return { success: true, value: createResult.value };
-    }
+        return { success: true, value: createResult.value };
+      }
 
     // 对于file、folder、vault，使用特殊的artifactId格式来查找或创建metadata
     // 格式：${targetType}:${vaultId}:${targetId}
@@ -962,14 +962,14 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
         
         // 如果 artifact 有 metadataId，直接查找 metadata
         if (artifact.metadataId) {
-          const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
+      const metadataResult = await this.metadataRepo.findById(artifact.metadataId);
           if (metadataResult.success && metadataResult.value) {
             this.logger.info('[ArtifactApplicationService] getOrCreateMetadata: Found metadata by artifact.metadataId', {
               metadataId: metadataResult.value.id,
               artifactId: artifact.id
             });
-            return { success: true, value: metadataResult.value };
-          }
+      return { success: true, value: metadataResult.value };
+    }
         }
         
         // 如果 artifact 没有 metadataId，尝试通过 artifactId 查找 metadata
@@ -1003,6 +1003,20 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       targetType,
       specialArtifactId
     });
+    
+    // 根据文件路径判断类型和分类
+    let type: string | undefined;
+    let category: string | undefined;
+    
+    if (targetType === 'file' && typeof targetId === 'string') {
+      // 判断是否是任务文件
+      if (targetId.startsWith('archi-tasks/') && targetId.includes('/ddds.yml')) {
+        type = 'task';
+        category = 'task';
+      }
+      // 可以在这里添加其他文件类型的判断逻辑
+    }
+    
     const metadataId = uuidv4();
     const now = new Date().toISOString();
     const metadata: ArtifactMetadata = {
@@ -1010,6 +1024,8 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
       artifactId: specialArtifactId, // 使用特殊格式的artifactId
       vaultId: vault.id,
       vaultName: vault.name,
+      type: type,
+      category: category,
       createdAt: now,
       updatedAt: now,
       properties: {

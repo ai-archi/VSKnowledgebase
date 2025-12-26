@@ -233,6 +233,24 @@ interface Emits {
 
 const emit = defineEmits<Emits>();
 
+interface Props {
+  targetType?: 'artifact' | 'file' | 'folder' | 'vault';
+  targetId?: string;
+  vaultId?: string;
+  displayName?: string;
+  initialRelatedArtifacts?: string[];
+  initialRelatedCodePaths?: string[];
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  targetType: 'artifact',
+  targetId: '',
+  vaultId: '',
+  displayName: '',
+  initialRelatedArtifacts: () => [],
+  initialRelatedCodePaths: () => [],
+});
+
 const displayName = ref<string>('');
 const vaultId = ref<string>('');
 const targetId = ref<string>('');
@@ -317,8 +335,30 @@ const getFileKey = (file: FileItem): string => {
 };
 
 onMounted(async () => {
-  // 从 window.initialData 获取初始数据
-  if ((window as any).initialData) {
+  // 优先使用 props，如果没有则从 window.initialData 获取初始数据
+  if (props.targetId || props.vaultId) {
+    // 使用 props
+    vaultId.value = props.vaultId || '';
+    targetId.value = props.targetId || '';
+    targetType.value = props.targetType || 'artifact';
+    displayName.value = props.displayName || '';
+
+    if (targetType.value === 'vault') {
+      // 加载 vault 元数据
+      await loadVaultMetadata();
+    } else {
+      // 如果有初始关联数据，直接使用；否则加载当前的关联关系
+      if (props.initialRelatedArtifacts && props.initialRelatedArtifacts.length > 0 || 
+          props.initialRelatedCodePaths && props.initialRelatedCodePaths.length > 0) {
+        await loadFiles();
+        await setInitialRelations();
+      } else {
+        // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
+        await loadCurrentRelations();
+      }
+    }
+  } else if ((window as any).initialData) {
+    // 从 window.initialData 获取初始数据（向后兼容）
     const initialData = (window as any).initialData;
     vaultId.value = initialData.vaultId || '';
     targetId.value = initialData.targetId || '';
@@ -358,6 +398,36 @@ const loadVaultMetadata = async () => {
   } catch (err: any) {
     console.error('Failed to load vault metadata', err);
     ElMessage.error(`加载 vault 元数据失败: ${err.message || '未知错误'}`);
+  }
+};
+
+const setInitialRelations = async () => {
+  try {
+    const artifactIds = props.initialRelatedArtifacts || [];
+    const codePaths = props.initialRelatedCodePaths || [];
+
+    // 设置初始选中的文件
+    const selected: FileItem[] = [];
+    for (const file of allFiles.value) {
+      const fileKey = getFileKey(file);
+      
+      // 检查是否是关联的文档（通过ID或path匹配）
+      if (file.id && artifactIds.includes(file.id)) {
+        selected.push(file);
+        initialSelectedFileKeys.value.add(fileKey);
+      } else if (!file.isCodeFile && artifactIds.includes(file.path)) {
+        selected.push(file);
+        initialSelectedFileKeys.value.add(fileKey);
+      } else if (file.isCodeFile && codePaths.includes(file.path)) {
+        selected.push(file);
+        initialSelectedFileKeys.value.add(fileKey);
+      }
+    }
+    
+    selectedFiles.value = selected;
+  } catch (err: any) {
+    console.error('Failed to set initial relations', err);
+    ElMessage.error(`设置初始关联关系失败: ${err.message || '未知错误'}`);
   }
 };
 

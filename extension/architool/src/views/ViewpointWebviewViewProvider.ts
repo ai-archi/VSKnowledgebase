@@ -257,6 +257,18 @@ export class ViewpointWebviewViewProvider {
           result = await this.getTasks();
           break;
 
+        case 'getTaskRelatedFiles':
+          result = await this.getTaskRelatedFilesByTaskId(message.params?.taskId);
+          break;
+
+        case 'updateTaskRelatedFiles':
+          result = await this.updateTaskRelatedFiles(
+            message.params?.taskId,
+            message.params?.relatedArtifacts,
+            message.params?.relatedCodePaths
+          );
+          break;
+
         case 'createTask':
           result = await this.createTask(message.params);
           break;
@@ -371,6 +383,7 @@ export class ViewpointWebviewViewProvider {
 
   /**
    * 获取关联文件
+   * 支持代码文件、文档文件和任务文件
    */
   private async getRelatedFiles(): Promise<any[]> {
     const activeEditor = vscode.window.activeTextEditor;
@@ -389,6 +402,28 @@ export class ViewpointWebviewViewProvider {
       currentFilePath
     );
 
+    // 判断是否是任务文件（archi-tasks/ 目录下的文件）
+    const isTaskFile = relativePath.includes('archi-tasks/') && 
+                       (relativePath.endsWith('.yml') || relativePath.endsWith('.yaml'));
+    
+    // 判断是否是任务方案文件（archi-tasks/ 目录下的 .solution.md 文件）
+    const isTaskSolutionFile = relativePath.includes('archi-tasks/') && 
+                                relativePath.endsWith('.solution.md');
+
+    if (isTaskFile) {
+      // 处理任务文件：获取任务的关联文件
+      return await this.getTaskRelatedFiles(relativePath);
+    } else if (isTaskSolutionFile) {
+      // 处理任务方案文件：找到对应的任务文件（将 .solution.md 替换为 .yml）
+      const taskFilePath = relativePath.replace(/\.solution\.md$/, '.yml');
+      this.logger.info('[ViewpointWebviewViewProvider] Detected task solution file, using task file', {
+        solutionPath: relativePath,
+        taskFilePath,
+      });
+      return await this.getTaskRelatedFiles(taskFilePath);
+    }
+
+    // 处理代码文件：获取关联的文档
     // 获取关联的 Artifacts
     // 优先使用 viewpointService，如果不存在则直接使用 artifactService
     let artifactsResult: { success: boolean; value?: any[]; error?: any };
@@ -435,6 +470,293 @@ export class ViewpointWebviewViewProvider {
         name: artifact.vault.name,
       },
     }));
+  }
+
+  /**
+   * 从任务文件路径中提取 vaultId 和相对路径
+   * 路径格式：archidocs/{vaultId}/archi-tasks/...
+   */
+  private extractVaultAndPathFromTaskFile(taskFilePath: string): { vaultId: string; relativeTaskPath: string } | null {
+    // 使用常量匹配 archidocs/{vaultId}/archi-tasks/... 格式
+    const match = taskFilePath.match(new RegExp(`${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/([^/]+)/(.+)`));
+    if (match) {
+      return {
+        vaultId: match[1],
+        relativeTaskPath: match[2],
+      };
+    }
+    return null;
+  }
+
+  /**
+   * 获取任务的关联文件（公共方法）
+   * 根据 vaultId 和相对路径获取关联文件
+   */
+  private async getTaskRelatedFilesByPath(vaultId: string, relativeTaskPath: string): Promise<any[]> {
+    try {
+      // 获取任务的关联文档和代码路径
+      const [artifactsResult, codePathsResult] = await Promise.all([
+        this.artifactService.getRelatedArtifacts(vaultId, relativeTaskPath, 'file'),
+        this.artifactService.getRelatedCodePaths(vaultId, relativeTaskPath, 'file'),
+      ]);
+
+      return await this.buildRelatedFilesList(artifactsResult, codePathsResult, vaultId);
+    } catch (error: any) {
+      this.logger.error('[ViewpointWebviewViewProvider] Failed to get task related files by path', error);
+      return [];
+    }
+  }
+
+  /**
+   * 构建关联文件列表（公共方法）
+   * 将关联的 artifacts 和 code paths 转换为统一的文件列表格式
+   * @param artifactsResult 关联的 artifacts 结果
+   * @param codePathsResult 关联的代码路径结果
+   * @param defaultVaultId 默认 vaultId，用于处理非 file: 格式的 artifactId
+   */
+  private async buildRelatedFilesList(
+    artifactsResult: { success: boolean; value?: string[]; error?: any },
+    codePathsResult: { success: boolean; value?: string[]; error?: any },
+    defaultVaultId?: string
+  ): Promise<any[]> {
+    const relatedFiles: any[] = [];
+
+    // 处理关联的文档
+    if (artifactsResult.success && artifactsResult.value && artifactsResult.value.length > 0) {
+      for (const artifactId of artifactsResult.value) {
+        // artifactId 可能是 file:vaultId:filePath 格式
+        if (artifactId.startsWith('file:')) {
+          const parts = artifactId.split(':');
+          if (parts.length >= 3) {
+            const artifactVaultId = parts[1];
+            const artifactPath = parts.slice(2).join(':');
+            
+            // 获取 artifact 详细信息
+            const artifactResult = await this.artifactService.getArtifact(artifactVaultId, artifactId);
+            if (artifactResult.success && artifactResult.value) {
+              const artifact = artifactResult.value;
+              relatedFiles.push({
+                id: artifact.id,
+                name: path.basename(artifact.path),
+                path: artifact.path,
+                contentLocation: artifact.contentLocation,
+                type: artifact.viewType === 'design' ? 'design' : 'document',
+                vault: {
+                  id: artifact.vault.id,
+                  name: artifact.vault.name,
+                },
+              });
+            }
+          }
+        } else if (defaultVaultId) {
+          // 直接是路径，使用默认 vaultId 尝试查找
+          const artifactResult = await this.artifactService.getArtifact(defaultVaultId, artifactId);
+          if (artifactResult.success && artifactResult.value) {
+            const artifact = artifactResult.value;
+            relatedFiles.push({
+              id: artifact.id,
+              name: path.basename(artifact.path),
+              path: artifact.path,
+              contentLocation: artifact.contentLocation,
+              type: artifact.viewType === 'design' ? 'design' : 'document',
+              vault: {
+                id: artifact.vault.id,
+                name: artifact.vault.name,
+              },
+            });
+          }
+        } else {
+          // 没有默认 vaultId，跳过
+          this.logger.warn('[ViewpointWebviewViewProvider] Artifact ID without vault prefix and no default vaultId, skipping', { artifactId });
+        }
+      }
+    }
+
+    // 处理关联的代码路径
+    if (codePathsResult.success && codePathsResult.value && codePathsResult.value.length > 0) {
+      for (const codePath of codePathsResult.value) {
+        relatedFiles.push({
+          id: codePath,
+          name: path.basename(codePath),
+          path: codePath,
+          type: 'code',
+          vault: undefined,
+        });
+      }
+    }
+
+    return relatedFiles;
+  }
+
+  /**
+   * 获取任务的关联文件
+   * 从任务文件路径中提取信息并获取关联文件
+   */
+  private async getTaskRelatedFiles(taskFilePath: string): Promise<any[]> {
+    const extracted = this.extractVaultAndPathFromTaskFile(taskFilePath);
+    if (!extracted) {
+      this.logger.warn('[ViewpointWebviewViewProvider] Invalid task file path format', { taskFilePath });
+      return [];
+    }
+
+    this.logger.info('[ViewpointWebviewViewProvider] Extracted vault and path from task file', {
+      taskFilePath,
+      vaultId: extracted.vaultId,
+      relativeTaskPath: extracted.relativeTaskPath,
+    });
+
+    return await this.getTaskRelatedFilesByPath(extracted.vaultId, extracted.relativeTaskPath);
+  }
+
+  /**
+   * 通过 taskId 获取任务的关联文件
+   */
+  private async getTaskRelatedFilesByTaskId(taskId: string): Promise<any[]> {
+    this.logger.info('[ViewpointWebviewViewProvider] getTaskRelatedFilesByTaskId called', { taskId });
+    try {
+      // 获取任务列表，找到对应的任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success) {
+        this.logger.warn('[ViewpointWebviewViewProvider] Failed to list tasks', tasksResult.error);
+        return [];
+      }
+      if (!tasksResult.value) {
+        this.logger.warn('[ViewpointWebviewViewProvider] Tasks list is empty');
+        return [];
+      }
+
+      this.logger.info('[ViewpointWebviewViewProvider] Found tasks', { count: tasksResult.value.length });
+      const task = tasksResult.value.find(t => t.id === taskId);
+      if (!task) {
+        this.logger.warn('[ViewpointWebviewViewProvider] Task not found', { taskId, availableTaskIds: tasksResult.value.map(t => t.id) });
+        return [];
+      }
+
+      this.logger.info('[ViewpointWebviewViewProvider] Task found', { taskId, artifactPath: task.artifactPath, vaultId: task.vaultId });
+
+      // 获取 vault 信息
+      const vaultResult = await this.vaultService.getVault(task.vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        this.logger.warn('[ViewpointWebviewViewProvider] Vault not found', { vaultId: task.vaultId });
+        return [];
+      }
+
+      // 获取任务的关联文档和代码路径
+      this.logger.info('[ViewpointWebviewViewProvider] Getting related artifacts and code paths', {
+        vaultId: task.vaultId,
+        artifactPath: task.artifactPath,
+      });
+      const [artifactsResult, codePathsResult] = await Promise.all([
+        this.artifactService.getRelatedArtifacts(task.vaultId, task.artifactPath, 'file'),
+        this.artifactService.getRelatedCodePaths(task.vaultId, task.artifactPath, 'file'),
+      ]);
+
+      this.logger.info('[ViewpointWebviewViewProvider] Related artifacts result', {
+        success: artifactsResult.success,
+        count: artifactsResult.success ? artifactsResult.value?.length || 0 : 0,
+        artifacts: artifactsResult.success ? artifactsResult.value : undefined,
+      });
+      this.logger.info('[ViewpointWebviewViewProvider] Related code paths result', {
+        success: codePathsResult.success,
+        count: codePathsResult.success ? codePathsResult.value?.length || 0 : 0,
+        codePaths: codePathsResult.success ? codePathsResult.value : undefined,
+      });
+
+      const relatedFiles = await this.buildRelatedFilesList(artifactsResult, codePathsResult, task.vaultId);
+
+      this.logger.info('[ViewpointWebviewViewProvider] Returning related files', {
+        count: relatedFiles.length,
+        files: relatedFiles.map(f => ({ id: f.id, name: f.name, type: f.type })),
+      });
+
+      return relatedFiles;
+    } catch (error: any) {
+      this.logger.error('[ViewpointWebviewViewProvider] Failed to get task related files by taskId', error);
+      return [];
+    }
+  }
+
+  /**
+   * 更新任务的关联文件
+   */
+  private async updateTaskRelatedFiles(
+    taskId: string,
+    relatedArtifacts?: string[],
+    relatedCodePaths?: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // 获取任务列表，找到对应的任务
+      const tasksResult = await this.taskService.listTasks();
+      if (!tasksResult.success) {
+        return {
+          success: false,
+          error: tasksResult.error?.message || 'Failed to list tasks',
+        };
+      }
+      if (!tasksResult.value) {
+        return {
+          success: false,
+          error: 'Tasks list is empty',
+        };
+      }
+
+      const task = tasksResult.value.find(t => t.id === taskId);
+      if (!task) {
+        return {
+          success: false,
+          error: `Task not found: ${taskId}`,
+        };
+      }
+
+      // 更新关联关系
+      const updateResults = await Promise.all([
+        relatedArtifacts && relatedArtifacts.length > 0
+          ? this.artifactService.updateRelatedArtifacts(
+              task.vaultId,
+              task.artifactPath,
+              'file',
+              relatedArtifacts
+            )
+          : this.artifactService.updateRelatedArtifacts(
+              task.vaultId,
+              task.artifactPath,
+              'file',
+              []
+            ),
+        relatedCodePaths !== undefined
+          ? this.artifactService.updateRelatedCodePaths(
+              task.vaultId,
+              task.artifactPath,
+              'file',
+              relatedCodePaths || []
+            )
+          : Promise.resolve({ success: true } as any),
+      ]);
+
+      // 检查更新结果
+      for (let i = 0; i < updateResults.length; i++) {
+        const updateResult = updateResults[i];
+        if (!updateResult.success) {
+          this.logger.warn('[ViewpointWebviewViewProvider] Failed to update task relations', {
+            taskId,
+            updateIndex: i,
+            error: updateResult.error,
+          });
+          return {
+            success: false,
+            error: updateResult.error?.message || 'Failed to update task relations',
+          };
+        }
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error('[ViewpointWebviewViewProvider] Failed to update task related files', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to update task related files',
+      };
+    }
   }
 
   /**
@@ -571,11 +893,71 @@ export class ViewpointWebviewViewProvider {
 
     // 如果有关联文件，创建关联关系
     if (params.relatedFiles && params.relatedFiles.length > 0) {
-      // TODO: 创建任务与文件的关联关系
-      this.logger.info('[ViewpointWebviewViewProvider] Task created with related files', {
+      // 分离文档和代码文件
+      // relatedFiles 是字符串数组，可能是：
+      // 1. 文档：file:vaultId:filePath 格式的 ID，或者直接的 filePath（需要判断）
+      // 2. 代码文件：代码路径
+      const relatedArtifacts: string[] = [];
+      const relatedCodePaths: string[] = [];
+
+      for (const fileIdOrPath of params.relatedFiles) {
+        // 判断是否是文档 ID 格式：file:vaultId:filePath
+        if (fileIdOrPath.startsWith('file:')) {
+          relatedArtifacts.push(fileIdOrPath);
+        } else {
+          // 尝试通过 artifactService 查找，判断是否是文档
+          // 如果是代码路径，直接添加到 relatedCodePaths
+          // 这里简化处理：如果路径不包含 .architool/，认为是代码路径
+          // 更准确的方法是尝试在所有 vault 中查找该路径
+          const isCodePath = !fileIdOrPath.includes('.architool/');
+          if (isCodePath) {
+            relatedCodePaths.push(fileIdOrPath);
+          } else {
+            // 可能是文档路径，尝试查找对应的 artifact
+            // 这里简化处理，直接作为 artifact ID 处理
+            relatedArtifacts.push(fileIdOrPath);
+          }
+        }
+      }
+
+      this.logger.info('[ViewpointWebviewViewProvider] Saving task relations', {
         taskId: task.id,
-        relatedFiles: params.relatedFiles,
+        taskPath: task.artifactPath,
+        relatedArtifactsCount: relatedArtifacts.length,
+        relatedCodePathsCount: relatedCodePaths.length,
       });
+
+      // 保存关联关系
+      const updateResults = await Promise.all([
+        relatedArtifacts.length > 0
+          ? this.artifactService.updateRelatedArtifacts(
+              vaultId,
+              task.artifactPath,  // 使用任务文件路径
+              'file',  // 使用 'file' 类型
+              relatedArtifacts
+            )
+          : Promise.resolve({ success: true } as any),
+        relatedCodePaths.length > 0
+          ? this.artifactService.updateRelatedCodePaths(
+              vaultId,
+              task.artifactPath,  // 使用任务文件路径
+              'file',  // 使用 'file' 类型
+              relatedCodePaths
+            )
+          : Promise.resolve({ success: true } as any),
+      ]);
+
+      // 检查更新结果
+      for (let i = 0; i < updateResults.length; i++) {
+        const updateResult = updateResults[i];
+        if (!updateResult.success) {
+          this.logger.warn('[ViewpointWebviewViewProvider] Failed to save task relations', {
+            taskId: task.id,
+            updateIndex: i,
+            error: updateResult.error,
+          });
+        }
+      }
     }
 
     // 刷新任务树视图
@@ -1007,15 +1389,15 @@ export class ViewpointWebviewViewProvider {
           });
         } else if (message.method === 'document.list') {
           // 获取文档列表（支持查询）
-          // 注意：只处理 document 类型的 vault
+          // 在任务创建对话框中，支持 task 和 document 类型的 vault
           const params = message.params || {};
           
           // 如果指定了 vaultId，验证 vault 类型
           if (params.vaultId) {
             const vaultResult = await this.vaultService.getVault(params.vaultId);
             if (vaultResult.success && vaultResult.value) {
-              // 只处理 document 类型的 vault
-              if (vaultResult.value.type !== 'document') {
+              // 支持 task 和 document 类型的 vault（任务创建对话框需要）
+              if (vaultResult.value.type !== 'document' && vaultResult.value.type !== 'task') {
                 panel.webview.postMessage({
                   id: message.id,
                   method: message.method,
@@ -1061,14 +1443,80 @@ export class ViewpointWebviewViewProvider {
           }
         } else if (message.method === 'workspace.listFiles') {
           // 获取工作区文件列表（支持查询）
-          // 注意：这个功能需要 CodeFileSystemApplicationService，但当前 ViewpointWebviewViewProvider 没有注入
-          // 暂时返回空结果，或者可以通过 WebviewRPC 来处理
-          // TODO: 考虑通过 WebviewRPC 统一处理，或者注入 CodeFileSystemApplicationService
-          panel.webview.postMessage({
-            id: message.id,
-            method: message.method,
-            result: [],
-          });
+          try {
+            const params = message.params || {};
+            const query = params.query?.trim().toLowerCase() || '';
+            
+            // 获取工作区文件夹
+            const workspaceFolders = this.ideAdapter.getWorkspaceFolders();
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: [],
+              });
+              return;
+            }
+
+            // 使用 VSCode API 查找文件
+            const allFiles: any[] = [];
+            for (const folder of workspaceFolders) {
+              try {
+                // folder.uri 是自定义 Uri 类型，需要转换为 vscode.Uri
+                // 使用 fsPath 属性来创建 vscode.Uri
+                const folderUri = vscode.Uri.file(folder.uri.fsPath);
+                
+                // 使用 findFiles 查找所有文件（排除 .git, node_modules 等）
+                const pattern = new vscode.RelativePattern(
+                  folderUri,
+                  '**/*'
+                );
+                
+                const files = await vscode.workspace.findFiles(
+                  pattern,
+                  '**/{node_modules,.git,.architool}/**',
+                  10000 // 限制结果数量
+                );
+
+                for (const file of files) {
+                  const folderPath = folderUri.fsPath;
+                  const relativePath = path.relative(folderPath, file.fsPath);
+                  
+                  // 如果有关键词，进行过滤
+                  if (query && !relativePath.toLowerCase().includes(query)) {
+                    continue;
+                  }
+
+                  const fileName = path.basename(relativePath);
+                  allFiles.push({
+                    id: relativePath,
+                    path: relativePath,
+                    name: fileName,
+                    title: fileName.replace(/\.[^/.]+$/, ''),
+                    type: 'code',
+                  });
+                }
+              } catch (error: any) {
+                this.logger.warn(`Failed to list files in workspace folder: ${folder.uri}`, error);
+              }
+            }
+
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: allFiles,
+            });
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Failed to list workspace files', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
         } else if (message.method === 'getTaskTemplates') {
           // 获取任务模板列表
           try {
@@ -1334,6 +1782,41 @@ export class ViewpointWebviewViewProvider {
         formDataEntriesCount: formDataForTemplate.length
       });
 
+      // 获取任务的关联文件
+      this.logger.info('[ViewpointWebviewViewProvider] Getting related files for prompt generation', {
+        taskId,
+        vaultId: task.vaultId,
+        artifactPath: task.artifactPath,
+      });
+      const relatedFiles = await this.getTaskRelatedFilesByPath(task.vaultId, task.artifactPath);
+      
+      this.logger.info('[ViewpointWebviewViewProvider] Related files retrieved', {
+        count: relatedFiles.length,
+        files: relatedFiles.map(f => ({ id: f.id, name: f.name, type: f.type })),
+      });
+      
+      // 将关联文件转换为适合模板使用的格式
+      const relatedFilesForTemplate = relatedFiles.map(file => ({
+        id: file.id,
+        name: file.name,
+        path: file.path,
+        type: file.type, // 'document', 'design', 'code'
+        vaultId: file.vault?.id,
+        vaultName: file.vault?.name,
+        contentLocation: file.contentLocation,
+      }));
+
+      // 分离不同类型的关联文件
+      const relatedDocuments = relatedFilesForTemplate.filter(f => f.type === 'document');
+      const relatedDesigns = relatedFilesForTemplate.filter(f => f.type === 'design');
+      const relatedCodePaths = relatedFilesForTemplate.filter(f => f.type === 'code').map(f => f.path);
+
+      this.logger.info('[ViewpointWebviewViewProvider] Related files categorized', {
+        documents: relatedDocuments.length,
+        designs: relatedDesigns.length,
+        codePaths: relatedCodePaths.length,
+      });
+
       // 确保 task 对象是可序列化的
       const serializableTask = {
         id: String(taskData.id || taskId),
@@ -1361,12 +1844,16 @@ export class ViewpointWebviewViewProvider {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'draft',
-        // 自定义上下文信息（task, formData, solutionPath 等）
+        // 自定义上下文信息（task, formData, solutionPath, relatedFiles 等）
         custom: {
         task: serializableTask,
         formData: serializableFormData, // 保持对象格式，Jinja2 应该支持 {% for key, value in formData.items() %}
         formDataItems: formDataForTemplate, // 数组格式，用于 {% for item in formDataItems %}
         solutionPath: String(solutionPath),
+        relatedFiles: relatedFilesForTemplate, // 所有关联文件
+        relatedDocuments: relatedDocuments, // 关联的文档
+        relatedDesigns: relatedDesigns, // 关联的设计
+        relatedCodePaths: relatedCodePaths, // 关联的代码路径（字符串数组）
         },
       };
 
