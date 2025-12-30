@@ -57,7 +57,6 @@
             style="width: 100%"
             :disabled="!formData.vaultId"
             :render-after-expand="false"
-            default-expand-all
             node-key="value"
             :default-checked-keys="[]"
           >
