@@ -347,6 +347,7 @@ export class WebviewRPC {
       folderPath: string;
       folderName: string;
       templateId?: string; // 模板 ID，后端会根据 ID 读取模板文件
+      subFolderPath?: string; // 子文件夹路径，例如 "domain" 或 "domain/subdomain"
       relatedArtifacts?: string[];
       relatedCodePaths?: string[];
     }) => {
@@ -354,7 +355,8 @@ export class WebviewRPC {
         params.vaultId,
         params.folderPath,
         params.folderName,
-        params.templateId
+        params.templateId,
+        params.subFolderPath
       );
       if (!result.success) {
         throw new Error(result.error.message);
@@ -418,13 +420,14 @@ export class WebviewRPC {
 
     this.webviewAdapter.registerMethod('template.getContent', async (params: {
       templateId: string;
-      vaultId: string;
+      vaultId?: string;
     }) => {
-      // 先获取模板
+      // 从指定vault获取模板
       const templateResult = await this.templateService.getTemplate(
         params.templateId,
         params.vaultId
       );
+      
       if (!templateResult.success) {
         throw new Error(templateResult.error.message);
       }

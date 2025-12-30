@@ -246,14 +246,28 @@ export class TemplateApplicationServiceImpl implements TemplateApplicationServic
 
   /**
    * 获取模板
+   * @param templateId 模板ID，可能是完整路径（包含vault名称）或相对路径
+   * @param vaultId 可选的vault ID，如果未指定则从所有vault中查找
    */
-  async getTemplate(templateId: string, vaultId: string): Promise<Result<Template, ArtifactError>> {
-    const templatesResult = await this.getTemplates(vaultId);
-    if (!templatesResult.success) {
-      return templatesResult;
+  async getTemplate(templateId: string, vaultId?: string): Promise<Result<Template, ArtifactError>> {
+    // 如果指定了vaultId，先在该vault中查找
+    if (vaultId) {
+      const templatesResult = await this.getTemplates(vaultId);
+      if (templatesResult.success) {
+        const template = templatesResult.value.find(t => t.id === templateId);
+        if (template) {
+          return { success: true, value: template };
+        }
+      }
+    }
+    
+    // 如果指定vault中找不到，或者未指定vaultId，从所有vault中查找
+    const allTemplatesResult = await this.getTemplates(undefined);
+    if (!allTemplatesResult.success) {
+      return allTemplatesResult;
     }
 
-    const template = templatesResult.value.find(t => t.id === templateId);
+    const template = allTemplatesResult.value.find(t => t.id === templateId);
     if (!template) {
       return {
         success: false,

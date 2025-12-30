@@ -8,7 +8,7 @@ import { VaultReference } from '../../shared/domain/value_object/VaultReference'
 import { Artifact } from '../../shared/domain/entity/artifact';
 import { ArtifactError, ArtifactErrorCode, Result } from '../../shared/domain/errors';
 import { Logger } from '../../../core/logger/Logger';
-import { TemplateStructureDomainServiceImpl } from '../../shared/domain/services/TemplateStructureDomainService';
+import { TemplateStructureDomainServiceImpl, TemplateStructureItem } from '../../shared/domain/services/TemplateStructureDomainService';
 import { ArtifactTemplate } from '../../shared/domain/entity/ArtifactTemplate';
 import { FolderMetadata } from '../../shared/domain/FolderMetadata';
 import { YamlFolderMetadataRepository } from '../../shared/infrastructure/storage/yaml/YamlFolderMetadataRepository';
@@ -101,7 +101,8 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
     vaultId: string,
     folderPath: string,
     folderName: string,
-    templateId?: string
+    templateId?: string,
+    subFolderPath?: string
   ): Promise<Result<string, ArtifactError>> {
     this.logger.info('[DocumentApplicationService] createFolder called', {
       vaultId,
@@ -266,15 +267,37 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
                 templateId,
                 targetVaultId: vault.id,
                 targetFolderPath: targetFolderPath,
+                subFolderPath: subFolderPath,
                 structureItemCount: artifactTemplate.structure.length
               });
+
+              // 如果指定了子文件夹路径，只创建该子文件夹的内容（children），不包含子文件夹本身
+              let structureToCreate = artifactTemplate.structure;
+              if (subFolderPath) {
+                const subFolderItem = this.findSubFolderInStructure(artifactTemplate.structure, subFolderPath);
+                if (subFolderItem) {
+                  // 只创建子文件夹的内容，不创建子文件夹本身
+                  structureToCreate = subFolderItem.children || [];
+                  this.logger.info('Found subfolder in template structure, creating only its children', {
+                    subFolderPath,
+                    subFolderName: subFolderItem.name,
+                    childrenCount: structureToCreate.length,
+                    hasChildren: !!(subFolderItem.children && subFolderItem.children.length > 0)
+                  });
+                } else {
+                  this.logger.warn('Subfolder not found in template structure, creating full structure', {
+                    subFolderPath,
+                    templateId
+                  });
+                }
+              }
 
               // 使用 ArtifactTemplate 创建文件夹结构
               // targetFolderPath 是相对于 vault 根目录的路径（不包含 artifacts/ 前缀）
               const structureResult = await this.artifactService.createFolderStructureFromTemplate(
                 vault,
                 targetFolderPath,
-                artifactTemplate
+                new ArtifactTemplate(structureToCreate, artifactTemplate.variables, artifactTemplate.rawTemplate)
               );
               
               if (!structureResult.success) {
@@ -299,7 +322,7 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
                   vault.id,
                   vault.name,
                   targetFolderPath,
-                  artifactTemplate.structure,
+                  structureToCreate,
                   {
                     templateId: templateId,
                     templatePath: templateFilePath,
@@ -743,6 +766,63 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
         );
       }
     }
+  }
+
+  /**
+   * 在模板结构中查找指定的子文件夹
+   * @param structure 模板结构数组
+   * @param subFolderPath 子文件夹路径，例如 "domain" 或 "domain/subdomain"
+   * @returns 找到的子文件夹项，如果未找到则返回 null
+   */
+  private findSubFolderInStructure(
+    structure: Array<{ type: string; name: string; description?: string; template?: string; children?: any[] }>,
+    subFolderPath: string
+  ): TemplateStructureItem | null {
+    if (!subFolderPath || subFolderPath.trim() === '') {
+      return null;
+    }
+
+    const pathParts = subFolderPath.split('/').filter(p => p.trim() !== '');
+    if (pathParts.length === 0) {
+      return null;
+    }
+
+    // 递归查找
+    const findInItems = (
+      items: Array<{ type: string; name: string; description?: string; template?: string; children?: any[] }>,
+      remainingPath: string[]
+    ): TemplateStructureItem | null => {
+      if (remainingPath.length === 0) {
+        return null;
+      }
+
+      const targetName = remainingPath[0];
+      const foundItem = items.find(item => item.type === 'directory' && item.name === targetName);
+
+      if (!foundItem) {
+        return null;
+      }
+
+      // 如果这是最后一个路径部分，返回找到的项（确保类型正确）
+      if (remainingPath.length === 1) {
+        // 类型断言，因为我们已经验证了 type === 'directory'
+        return {
+          type: 'directory' as const,
+          name: foundItem.name,
+          description: foundItem.description,
+          children: foundItem.children as TemplateStructureItem[] | undefined,
+        };
+      }
+
+      // 继续在子项中查找
+      if (foundItem.children && Array.isArray(foundItem.children)) {
+        return findInItems(foundItem.children, remainingPath.slice(1));
+      }
+
+      return null;
+    };
+
+    return findInItems(structure, pathParts);
   }
 
   /**

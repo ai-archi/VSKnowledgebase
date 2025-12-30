@@ -47,8 +47,10 @@ export interface TemplateApplicationService {
 
   /**
    * 获取模板
+   * @param templateId 模板ID，可能是完整路径（包含vault名称）或相对路径
+   * @param vaultId 可选的vault ID，如果未指定则从所有vault中查找
    */
-  getTemplate(templateId: string, vaultId: string): Promise<Result<Template, ArtifactError>>;
+  getTemplate(templateId: string, vaultId?: string): Promise<Result<Template, ArtifactError>>;
 
   /**
    * 创建模板

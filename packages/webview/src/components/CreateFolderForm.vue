@@ -46,29 +46,30 @@
           </div>
         </el-form-item>
         <el-form-item label="文件夹模板">
-          <el-select
-            v-model="formData.templateId"
-            :placeholder="folderTemplates.length === 0 ? '暂无文件夹模板' : '选择文件夹模板（可选）'"
+          <el-tree-select
+            v-model="formData.templatePath"
+            :data="templateTreeData"
+            :props="treeProps"
+            :placeholder="folderTemplates.length === 0 ? '暂无文件夹模板' : '选择文件夹模板或子文件夹（可选）'"
             filterable
             clearable
+            check-strictly
             style="width: 100%"
             :disabled="!formData.vaultId"
+            :render-after-expand="false"
+            default-expand-all
+            node-key="value"
+            :default-checked-keys="[]"
           >
-            <el-option
-              v-for="template in folderTemplates"
-              :key="template.id"
-              :label="template.name"
-              :value="template.id"
-            >
-              <div class="template-option">
-                <span class="template-name">{{ template.name }}</span>
-                <span v-if="template.description" class="template-description">{{ template.description }}</span>
-                <el-tag type="success" size="small" style="margin-left: 8px">
-                  结构
-                </el-tag>
-              </div>
-            </el-option>
-          </el-select>
+            <template #default="{ node, data }">
+              <span class="tree-node-label">
+                <el-icon v-if="data.type === 'directory'"><Folder /></el-icon>
+                <el-icon v-else><Document /></el-icon>
+                <span class="node-name">{{ data.label }}</span>
+                <span v-if="data.description" class="node-description">{{ data.description }}</span>
+              </span>
+            </template>
+          </el-tree-select>
           <div v-if="formData.vaultId && folderTemplates.length === 0" class="template-hint">
             <span style="font-size: 12px; color: var(--vscode-descriptionForeground, #999999);">
               所有 Vault 都没有可用的文件夹模板（structure 类型）
@@ -185,6 +186,7 @@ import {
   ElEmpty,
   ElTag,
   ElMessage,
+  ElTreeSelect,
 } from 'element-plus';
 import {
   Folder,
@@ -227,6 +229,16 @@ interface FormData {
   folderName: string;
   vaultId: string;
   templateId: string;
+  templatePath: string; // 格式: templateId|subFolderPath，例如: "template-id|domain" 或 "template-id|" (根)
+}
+
+interface TemplateTreeNode {
+  label: string;
+  value: string;
+  type: 'directory' | 'file' | 'template';
+  description?: string;
+  disabled?: boolean; // 是否禁用（文件节点应该禁用）
+  children?: TemplateTreeNode[];
 }
 
 interface Emits {
@@ -240,6 +252,7 @@ const formData = ref<FormData>({
   folderName: '',
   vaultId: '',
   templateId: '',
+  templatePath: '',
 });
 
 const initialFolderPath = ref<string | undefined>(undefined);
@@ -256,6 +269,215 @@ const searchDebounceTimer = ref<number | null>(null);
 const folderTemplates = computed(() => {
   return allTemplates.value.filter(t => t.type === 'structure');
 });
+
+// 树形选择器配置
+const treeProps = {
+  children: 'children',
+  label: 'label',
+  value: 'value',
+  disabled: 'disabled', // 支持禁用节点
+};
+
+// 模板树形数据
+const templateTreeData = ref<TemplateTreeNode[]>([]);
+const templateStructures = ref<Record<string, any>>({});
+
+// 监听模板列表变化，构建树形数据
+watch(
+  () => [folderTemplates.value, formData.value.vaultId],
+  async (newVal, oldVal) => {
+    // 只有在模板列表或vaultId真正变化时才重新构建
+    if (folderTemplates.value.length > 0) {
+      await buildTemplateTree();
+    } else {
+      templateTreeData.value = [];
+      templateStructures.value = {};
+    }
+  },
+  { immediate: false }
+);
+
+// 监听选中的模板路径变化，解析templateId和subFolderPath
+watch(
+  () => formData.value.templatePath,
+  (newPath) => {
+    if (newPath) {
+      const [templateId, subFolderPath] = newPath.split('|');
+      formData.value.templateId = templateId || '';
+    } else {
+      formData.value.templateId = '';
+    }
+  }
+);
+
+// 构建模板树形数据
+const buildTemplateTree = async () => {
+  const treeData: TemplateTreeNode[] = [];
+  
+  for (const template of folderTemplates.value) {
+    try {
+      // 获取模板结构
+      let structure = templateStructures.value[template.id];
+      if (!structure) {
+        // 从模板ID中提取vault信息
+        // 模板ID格式可能是: "vault名称/archi-templates/structure/template.yml"
+        let templateVaultId: string | undefined = undefined;
+        if (template.id.includes('/')) {
+          const parts = template.id.split('/');
+          // 检查第一部分是否是vault名称（不是"archi-templates"）
+          if (!template.id.startsWith('archi-templates/') && parts.length > 1) {
+            const vaultName = parts[0];
+            // 从vault列表中查找对应的vault
+            const foundVault = vaults.value.find(v => v.name === vaultName);
+            if (foundVault) {
+              templateVaultId = foundVault.id;
+            }
+          }
+        }
+        
+        // 如果没有找到vault，使用目标vault（向后兼容）
+        if (!templateVaultId) {
+          templateVaultId = formData.value.vaultId || undefined;
+        }
+        
+        // 从后端获取模板结构
+        const structureResult = await extensionService.call<any>('template.getContent', {
+          templateId: template.id,
+          vaultId: templateVaultId,
+        });
+        structure = structureResult;
+        templateStructures.value[template.id] = structure;
+        
+        // 调试日志
+        console.log(`[CreateFolderForm] Template structure for ${template.id}:`, {
+          structure,
+          isArray: Array.isArray(structure),
+          type: typeof structure,
+          hasStructure: structure && typeof structure === 'object' && 'structure' in structure
+        });
+      }
+      
+      // 处理结构数据：可能是数组，也可能是包含 structure 字段的对象
+      let structureArray: any[] = [];
+      if (Array.isArray(structure)) {
+        structureArray = structure;
+      } else if (structure && typeof structure === 'object' && structure.structure) {
+        // 如果返回的是对象，尝试获取 structure 字段
+        structureArray = Array.isArray(structure.structure) ? structure.structure : [];
+      } else if (!structure || structure === '') {
+        // 如果结构为空，创建一个简单的模板节点
+        treeData.push({
+          label: template.name,
+          value: `${template.id}|`,
+          type: 'template',
+          description: template.description,
+        });
+        continue;
+      }
+      
+      if (structureArray.length === 0) {
+        // 如果结构数组为空，创建一个简单的模板节点
+        console.warn(`[CreateFolderForm] Template ${template.id} has empty structure`);
+        treeData.push({
+          label: template.name,
+          value: `${template.id}|`,
+          type: 'template',
+          description: template.description,
+        });
+        continue;
+      }
+      
+      // 构建树形结构
+      const buildTreeNodes = (items: any[], parentPath: string = ''): TemplateTreeNode[] => {
+        const nodes: TemplateTreeNode[] = [];
+        
+        if (!items || !Array.isArray(items)) {
+          console.warn('[CreateFolderForm] buildTreeNodes: items is not an array', items);
+          return nodes;
+        }
+        
+        for (const item of items) {
+          if (!item || typeof item !== 'object') {
+            console.warn('[CreateFolderForm] buildTreeNodes: invalid item', item);
+            continue;
+          }
+          
+          // 确保 type 字段存在且是字符串
+          const itemType = item.type;
+          if (!itemType) {
+            console.warn('[CreateFolderForm] buildTreeNodes: item missing type field', item);
+            continue;
+          }
+          
+          if (itemType === 'directory') {
+            // 目录节点：可选择
+            const currentPath = parentPath ? `${parentPath}/${item.name}` : item.name;
+            const nodeValue = `${template.id}|${currentPath}`;
+            
+            const node: TemplateTreeNode = {
+              label: item.name || '未命名目录',
+              value: nodeValue,
+              type: 'directory',
+              description: item.description,
+              disabled: false, // 目录可以选择
+            };
+            
+            // 递归处理子节点（包括文件和目录）
+            if (item.children && Array.isArray(item.children) && item.children.length > 0) {
+              node.children = buildTreeNodes(item.children, currentPath);
+            }
+            
+            nodes.push(node);
+          } else if (itemType === 'file') {
+            // 文件节点：显示但不可选择（禁用）
+            const fileNode: TemplateTreeNode = {
+              label: item.name || '未命名文件',
+              value: `__file__${item.name || ''}`, // 使用特殊前缀标识文件节点，但会被禁用
+              type: 'file',
+              description: item.description,
+              disabled: true, // 文件节点禁用，不可选择
+            };
+            nodes.push(fileNode);
+          } else {
+            console.warn('[CreateFolderForm] buildTreeNodes: unknown item type', itemType, item);
+          }
+        }
+        
+        return nodes;
+      };
+      
+      // 创建模板根节点
+      const children = buildTreeNodes(structureArray);
+      console.log(`[CreateFolderForm] Built tree for template ${template.id}:`, {
+        templateName: template.name,
+        structureArrayLength: structureArray.length,
+        childrenCount: children.length,
+        children: children
+      });
+      
+      const templateNode: TemplateTreeNode = {
+        label: template.name,
+        value: `${template.id}|`,
+        type: 'template',
+        description: template.description,
+        children: children,
+      };
+      
+      treeData.push(templateNode);
+    } catch (err: any) {
+      console.error(`Failed to load structure for template ${template.id}:`, err);
+      // 如果加载失败，至少显示模板名称
+      treeData.push({
+        label: template.name,
+        value: `${template.id}|`,
+        type: 'template',
+        description: template.description,
+      });
+    }
+  }
+  
+  templateTreeData.value = treeData;
+};
 
 const selectedVault = computed(() => {
   return vaults.value.find(v => v.id === formData.value.vaultId);
@@ -335,10 +557,15 @@ const loadTemplates = async (vaultId?: string) => {
   try {
     const templates = await extensionService.call<any[]>('template.list', vaultId ? { vaultId } : {});
     allTemplates.value = templates || [];
+    // 模板加载完成后，构建树形数据
+    if (folderTemplates.value.length > 0) {
+      await buildTemplateTree();
+    }
   } catch (err: any) {
     console.error('Failed to load templates', err);
     ElMessage.error('加载模板失败: ' + (err.message || '未知错误'));
     allTemplates.value = [];
+    templateTreeData.value = [];
   }
 };
 
@@ -488,12 +715,33 @@ const handleCreate = async () => {
       }
     }
 
-    // 只传递模板 ID，后端会读取模板文件并处理
+    // 解析模板路径：templateId|subFolderPath
+    let templateId: string | undefined = undefined;
+    let subFolderPath: string | undefined = undefined;
+    
+    if (formData.value.templatePath) {
+      // 检查是否是文件节点（不应该发生，因为文件节点被禁用）
+      if (formData.value.templatePath.startsWith('__file__')) {
+        ElMessage.warning('不能选择文件节点，请选择文件夹节点');
+        return;
+      }
+      
+      const [id, path] = formData.value.templatePath.split('|');
+      templateId = id || undefined;
+      // 如果path为空字符串或undefined，表示选择根模板，subFolderPath应该是undefined
+      subFolderPath = path && path.trim() !== '' ? path : undefined;
+    } else if (formData.value.templateId) {
+      // 兼容旧格式
+      templateId = formData.value.templateId;
+    }
+    
+    // 传递模板 ID 和子文件夹路径
     const result = await extensionService.call('document.createFolder', {
       vaultId: formData.value.vaultId,
       folderPath: folderPath,
       folderName: formData.value.folderName.trim(),
-      templateId: formData.value.templateId || undefined, // 只传递模板 ID
+      templateId: templateId,
+      subFolderPath: subFolderPath, // 新增：子文件夹路径
       relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
       relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
     });
@@ -653,6 +901,24 @@ const executeCommand = async (commandId: string) => {
 .template-description {
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
+}
+
+.tree-node-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.node-name {
+  font-weight: 500;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.node-description {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin-left: 8px;
 }
 
 .template-hint {
