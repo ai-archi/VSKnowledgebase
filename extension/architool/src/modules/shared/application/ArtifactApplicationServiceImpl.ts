@@ -2359,10 +2359,9 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
   /**
    * 获取模板内容并进行Jinja2渲染
    * 直接读取模板文件，不依赖TemplateApplicationService，避免循环依赖
-   * templateId格式可能是：
-   * 1. my-template.md (只有模板名称，从当前 vault 查找)
-   * 2. Demo Vault - AI Enhancement/archi-templates/content/markdown/my-template.md (完整路径，包含 vault 名称)
-   * 3. archi-templates/content/markdown/my-template.md (相对路径，从当前 vault 查找)
+   * templateId必须是完整路径，格式可能是：
+   * 1. archi-templates/content/markdown/my-template.md (相对路径，从当前 vault 根目录开始)
+   * 2. vault-name/archi-templates/content/markdown/my-template.md (完整路径，包含 vault 名称，用于跨 vault 引用)
    */
   private async getTemplateContentAndRender(
     vault: VaultReference,
@@ -2417,12 +2416,21 @@ export class ArtifactApplicationServiceImpl implements ArtifactApplicationServic
           templatePath = templateId;
         }
       } else {
-        // 如果只是模板名称，尝试构建路径（假设是 content 模板）
-        templatePath = `archi-templates/content/markdown/${templateId}`;
-        // 如果模板名称不包含扩展名，添加 .md
-        if (!templateId.includes('.')) {
-          templatePath = `${templatePath}.md`;
-        }
+        // 如果模板ID不包含路径分隔符，说明格式不正确
+        // 模板ID必须是完整路径，从 vault 根目录开始，例如：vault-assistant/archi-templates/content/markdown/my-template.md
+        this.logger.warn('[ArtifactApplicationService] Template ID must be a full path', {
+          templateId,
+          templateVaultId: templateVault.id,
+          templateVaultName: templateVault.name
+        });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.INVALID_INPUT,
+            `Template ID must be a full path from vault root (e.g., vault-assistant/archi-templates/content/markdown/my-template.md), got: ${templateId}`,
+            { templateId, vaultId: vault.id }
+          ),
+        };
       }
 
       this.logger.info('[ArtifactApplicationService] Reading template file', {

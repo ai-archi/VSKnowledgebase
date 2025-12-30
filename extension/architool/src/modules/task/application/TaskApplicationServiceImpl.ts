@@ -608,38 +608,26 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
 
   async getTaskTemplate(templateId: string, vaultId?: string): Promise<Result<TaskTemplate, ArtifactError>> {
     try {
-      // 先尝试从指定 vault 查找
-      if (vaultId) {
-        const vaultResult = await this.vaultService.getVault(vaultId);
-        if (vaultResult.success && vaultResult.value) {
-          const vaultRef = { id: vaultResult.value.id, name: vaultResult.value.name };
-          const templatePath = `archi-templates/task/${templateId}.yml`;
-          
-          const readResult = await this.artifactService.readFile(vaultRef, templatePath);
-          if (readResult.success) {
-            try {
-              const templateData = yaml.load(readResult.value) as any;
-              if (templateData && templateData.id === templateId && templateData.steps && Array.isArray(templateData.steps)) {
-                return {
-                  success: true,
-                  value: {
-                    id: templateData.id,
-                    name: templateData.name || templateData.id,
-                    description: templateData.description,
-                    category: templateData.category || 'task',
-                    steps: templateData.steps,
-                  },
-                };
-              }
-            } catch (parseError: any) {
-              this.logger.warn(`Failed to parse task template: ${templatePath}`, parseError);
-            }
-          }
-        }
+      // 模板ID必须是完整路径，从 vault 根目录开始
+      // 例如：vault-assistant/archi-templates/task/default-task-template.yml
+      // 或者：archi-templates/task/default-task-template.yml (相对路径，从当前 vault 根目录开始)
+      if (!templateId.includes('/')) {
+        this.logger.error('Task template ID must be a full path', {
+          templateId,
+          vaultId
+        });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.INVALID_INPUT,
+            `Task template ID must be a full path from vault root (e.g., vault-assistant/archi-templates/task/default-task-template.yml), got: ${templateId}`,
+            { templateId, vaultId }
+          ),
+        };
       }
 
-      // 如果指定 vault 没找到，从所有 vault 查找
-      const templatesResult = await this.getTaskTemplates();
+      // 从所有 vault 查找（模板ID可能包含vault名称）
+      const templatesResult = await this.getTaskTemplates(vaultId);
       if (templatesResult.success) {
         const template = templatesResult.value.find(t => t.id === templateId);
         if (template) {

@@ -142,10 +142,9 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
       };
 
       // 从模板ID中提取 vault 名称和文件路径
-      // 模板ID格式可能是：
-      // 1. microservice-template (只有模板名称，从当前 vault 查找)
-      // 2. Demo Vault - AI Enhancement/archi-templates/structure/microservice-template.yml (完整路径，包含 vault 名称)
-      // 3. archi-templates/structure/microservice-template.yml (相对路径，从当前 vault 查找)
+      // 模板ID必须是完整路径，格式可能是：
+      // 1. archi-templates/structure/microservice-template.yml (相对路径，从当前 vault 根目录开始)
+      // 2. vault-name/archi-templates/structure/microservice-template.yml (完整路径，包含 vault 名称，用于跨 vault 引用)
       let templateVault: VaultReference = vault; // 默认使用目标 vault
       let templateFilePath: string;
       
@@ -185,17 +184,24 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
           // 已经是相对路径格式：archi-templates/structure/microservice-template.yml
           templateFilePath = templateId;
         } else {
-          // 其他格式，尝试构建路径
-          const fileName = parts[parts.length - 1];
-          if (fileName.includes('.')) {
-            templateFilePath = `archi-templates/structure/${fileName}`;
-          } else {
-            templateFilePath = `archi-templates/structure/${fileName}.yml`;
-          }
+          // 其他格式，直接使用（可能是相对路径）
+          templateFilePath = templateId;
         }
       } else {
-        // 如果只是模板名称，构建完整路径
-        templateFilePath = `archi-templates/structure/${templateId}.yml`;
+        // 如果模板ID不包含路径分隔符，说明格式不正确
+        // 模板ID必须是完整路径，从 vault 根目录开始，例如：vault-assistant/archi-templates/structure/microservice-template.yml
+        this.logger.error('Template ID must be a full path', {
+          templateId,
+          targetVaultId: vault.id
+        });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.INVALID_INPUT,
+            `Template ID must be a full path from vault root (e.g., vault-assistant/archi-templates/structure/microservice-template.yml), got: ${templateId}`,
+            { templateId, vaultId: vault.id }
+          ),
+        };
       }
 
       this.logger.info('Reading template file', {
