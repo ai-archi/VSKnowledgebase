@@ -25,81 +25,75 @@
             :prefix-icon="Document"
           />
         </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item v-if="formData.diagramType === 'archimate'" label="视图类型">
-              <el-select
-                v-model="formData.archimateViewType"
-                placeholder="选择 Archimate 视图类型"
-                style="width: 100%"
+        <el-form-item v-if="formData.diagramType === 'archimate'" label="视图类型">
+          <el-select
+            v-model="formData.archimateViewType"
+            placeholder="选择 Archimate 视图类型"
+            style="width: 100%"
+          >
+            <el-option-group label="业务层">
+              <el-option label="业务流程图" value="business-process-view" />
+              <el-option label="业务功能视图" value="business-function-view" />
+              <el-option label="业务服务视图" value="business-service-view" />
+              <el-option label="业务协作视图" value="business-collaboration-view" />
+              <el-option label="业务交互视图" value="business-interaction-view" />
+            </el-option-group>
+            <el-option-group label="应用层">
+              <el-option label="应用组件视图" value="application-component-view" />
+              <el-option label="应用协作视图" value="application-collaboration-view" />
+              <el-option label="应用序列视图" value="application-sequence-view" />
+              <el-option label="应用服务视图" value="application-service-view" />
+              <el-option label="应用功能视图" value="application-function-view" />
+            </el-option-group>
+            <el-option-group label="技术层">
+              <el-option label="技术组件视图" value="technology-component-view" />
+              <el-option label="技术节点视图" value="technology-node-view" />
+              <el-option label="技术部署视图" value="technology-deployment-view" />
+              <el-option label="技术服务视图" value="technology-service-view" />
+            </el-option-group>
+            <el-option-group label="其他">
+              <el-option label="跨层视图" value="cross-layered-view" />
+              <el-option label="默认模板" value="" />
+            </el-option-group>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="设计图模板">
+          <el-select
+            v-model="formData.templateId"
+            placeholder="选择模板（可选）"
+            filterable
+            clearable
+            style="width: 100%"
+            :disabled="!initialVaultId || filteredTemplates.length === 0"
+          >
+            <el-option
+              v-for="template in filteredTemplates"
+              :key="template.id"
+              :label="template.name"
+              :value="template.id"
+            >
+              <el-tooltip
+                :content="getTemplateContent(template.id)"
+                placement="bottom"
+                :show-after="300"
+                :hide-after="0"
+                :raw-content="false"
+                effect="dark"
+                popper-class="template-tooltip"
+                :popper-options="{ strategy: 'fixed' }"
+                @show="loadTemplateContent(template.id)"
               >
-                <el-option-group label="业务层">
-                  <el-option label="业务流程图" value="business-process-view" />
-                  <el-option label="业务功能视图" value="business-function-view" />
-                  <el-option label="业务服务视图" value="business-service-view" />
-                  <el-option label="业务协作视图" value="business-collaboration-view" />
-                  <el-option label="业务交互视图" value="business-interaction-view" />
-                </el-option-group>
-                <el-option-group label="应用层">
-                  <el-option label="应用组件视图" value="application-component-view" />
-                  <el-option label="应用协作视图" value="application-collaboration-view" />
-                  <el-option label="应用序列视图" value="application-sequence-view" />
-                  <el-option label="应用服务视图" value="application-service-view" />
-                  <el-option label="应用功能视图" value="application-function-view" />
-                </el-option-group>
-                <el-option-group label="技术层">
-                  <el-option label="技术组件视图" value="technology-component-view" />
-                  <el-option label="技术节点视图" value="technology-node-view" />
-                  <el-option label="技术部署视图" value="technology-deployment-view" />
-                  <el-option label="技术服务视图" value="technology-service-view" />
-                </el-option-group>
-                <el-option-group label="其他">
-                  <el-option label="跨层视图" value="cross-layered-view" />
-                  <el-option label="默认模板" value="" />
-                </el-option-group>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="设计图模板">
-              <el-select
-                v-model="formData.templateId"
-                placeholder="选择模板（可选）"
-                filterable
-                clearable
-                style="width: 100%"
-                :disabled="!initialVaultId || filteredTemplates.length === 0"
-              >
-                <el-option
-                  v-for="template in filteredTemplates"
-                  :key="template.id"
-                  :label="template.name"
-                  :value="template.id"
-                >
-                  <el-tooltip
-                    :content="getTemplateContent(template.id)"
-                    placement="bottom"
-                    :show-after="300"
-                    :hide-after="0"
-                    :raw-content="false"
-                    effect="dark"
-                    popper-class="template-tooltip"
-                    :popper-options="{ strategy: 'fixed' }"
-                    @show="loadTemplateContent(template.id)"
-                >
-                  <div class="template-option">
-                    <span class="template-name">{{ template.name }}</span>
-                    <span v-if="template.description" class="template-description">{{ template.description }}</span>
-                    <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
-                      {{ template.type === 'structure' ? '结构' : '内容' }}
-                    </el-tag>
-                  </div>
-                  </el-tooltip>
-                </el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+                <div class="template-option">
+                  <span class="template-name">{{ template.name }}</span>
+                  <span v-if="template.description" class="template-description">{{ template.description }}</span>
+                  <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
+                    {{ template.type === 'structure' ? '结构' : '内容' }}
+                  </el-tag>
+                </div>
+              </el-tooltip>
+            </el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="提示词">
           <div class="ai-prompt-container">
             <el-input
