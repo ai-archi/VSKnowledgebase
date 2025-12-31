@@ -162,33 +162,43 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
       let currentStep: string | undefined;
       let templateId: string | undefined;
 
-      if (options.templateId) {
+      if (options.templateId && options.templateId.trim() !== '') {
+        this.logger.info(`[TaskApplicationService] Loading task template: ${options.templateId}`);
         const templateResult = await this.getTaskTemplate(options.templateId, options.vaultId);
         if (templateResult.success && templateResult.value) {
           const template = templateResult.value;
           templateId = template.id;
+          this.logger.info(`[TaskApplicationService] Task template loaded successfully: ${templateId}, steps count: ${template.steps?.length || 0}`);
           
           // 从模板创建步骤数组
-          steps = template.steps.map((stepDef: any, index: number) => {
-            const stepId = stepDef.id || `step-${index + 1}`;
-            // 第一个步骤状态为 'in-progress'，其他为 'pending'
-            const status: 'in-progress' | 'pending' = index === 0 ? 'in-progress' : 'pending';
+          if (template.steps && Array.isArray(template.steps) && template.steps.length > 0) {
+            steps = template.steps.map((stepDef: any, index: number) => {
+              const stepId = stepDef.id || `step-${index + 1}`;
+              // 第一个步骤状态为 'in-progress'，其他为 'pending'
+              const status: 'in-progress' | 'pending' = index === 0 ? 'in-progress' : 'pending';
+              
+              return {
+                id: stepId,
+                type: stepDef.type,
+                form: stepDef.form,
+                prompt: stepDef.prompt,
+                depends_on: stepDef.depends_on || [],
+                status: status,
+                formData: {},
+                createdAt: now,
+                ...(status === 'in-progress' ? { startedAt: now } : {}),
+              };
+            });
             
-            return {
-              id: stepId,
-              type: stepDef.type,
-              form: stepDef.form,
-              prompt: stepDef.prompt,
-              depends_on: stepDef.depends_on || [],
-              status: status,
-              formData: {},
-              createdAt: now,
-              ...(status === 'in-progress' ? { startedAt: now } : {}),
-            };
-          });
-          
-          // 设置当前步骤为第一个 in-progress 的步骤
-          currentStep = steps.find(s => s.status === 'in-progress')?.id || steps[0]?.id;
+            // 设置当前步骤为第一个 in-progress 的步骤
+            currentStep = steps.find(s => s.status === 'in-progress')?.id || steps[0]?.id;
+            this.logger.info(`[TaskApplicationService] Created ${steps.length} steps from template, currentStep: ${currentStep}`);
+          } else {
+            this.logger.warn(`[TaskApplicationService] Template has no steps: ${templateId}`);
+          }
+        } else {
+          const errorMessage = !templateResult.success ? templateResult.error.message : 'Unknown error';
+          this.logger.warn(`[TaskApplicationService] Failed to load task template: ${options.templateId}`, errorMessage);
         }
       } else {
         // 默认步骤
@@ -564,14 +574,18 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
                   this.logger.info(`[TaskApplicationService] Parsed template data: id=${templateData?.id}, name=${templateData?.name}, hasSteps=${!!templateData?.steps}`);
                   
                   if (templateData && templateData.id && templateData.steps && Array.isArray(templateData.steps)) {
+                    // 使用完整路径作为模板ID（vault id/相对路径），这样 getTaskTemplate 可以正确查找
+                    // node.path 已经是相对于 vault 根目录的完整路径，例如：archi-templates/task/default-task-template.yml
+                    // 使用 vault.id 而不是 vault.name，因为 id 通常对应目录名（如 vault-assistant）
+                    const fullTemplateId = `${vault.id}/${node.path}`;
                     templates.push({
-                      id: templateData.id,
+                      id: fullTemplateId, // 使用完整路径作为ID（vault id/路径）
                       name: templateData.name || templateData.id,
                       description: templateData.description,
                       category: templateData.category || 'task',
                       steps: templateData.steps,
                     });
-                    this.logger.info(`[TaskApplicationService] Successfully loaded task template: ${templateData.id} (${templateData.name})`);
+                    this.logger.info(`[TaskApplicationService] Successfully loaded task template: ${fullTemplateId} (${templateData.name})`);
                   } else {
                     this.logger.warn(`[TaskApplicationService] Task template file missing required fields: path=${node.path}, hasId=${!!templateData?.id}, hasSteps=${!!templateData?.steps}`);
                   }
@@ -610,6 +624,7 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
     try {
       // 模板ID必须是完整路径，从 vault 根目录开始
       // 例如：vault-assistant/archi-templates/task/default-task-template.yml
+      // 或者：Demo Vault - AI Enhancement/archi-templates/task/default-task-template.yml (使用 vault name)
       // 或者：archi-templates/task/default-task-template.yml (相对路径，从当前 vault 根目录开始)
       if (!templateId.includes('/')) {
         this.logger.error('Task template ID must be a full path', {
@@ -626,10 +641,48 @@ export class TaskApplicationServiceImpl implements TaskApplicationService {
         };
       }
 
-      // 从所有 vault 查找（模板ID可能包含vault名称）
-      const templatesResult = await this.getTaskTemplates(vaultId);
+      // 解析模板ID：可能包含 vault name 或 vault id
+      const parts = templateId.split('/');
+      let targetVaultId = vaultId;
+      let templatePath = templateId;
+
+      // 如果第一部分不是 "archi-templates"，可能是 vault name 或 vault id
+      if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+        const firstPart = parts[0];
+        // 尝试通过 vault name 或 id 查找 vault
+        const vaultsResult = await this.vaultService.listVaults();
+        if (vaultsResult.success) {
+          const foundVault = vaultsResult.value.find(v => v.name === firstPart || v.id === firstPart);
+          if (foundVault) {
+            targetVaultId = foundVault.id;
+            templatePath = parts.slice(1).join('/');
+            this.logger.info(`[TaskApplicationService] Found vault by name/id: ${firstPart} -> ${foundVault.id}, templatePath: ${templatePath}`);
+          }
+        }
+      }
+
+      // 从指定 vault 或所有 vault 查找模板
+      const templatesResult = await this.getTaskTemplates(targetVaultId);
       if (templatesResult.success) {
-        const template = templatesResult.value.find(t => t.id === templateId);
+        // 首先尝试精确匹配原始 templateId
+        let template = templatesResult.value.find(t => t.id === templateId);
+        
+        // 如果没找到，尝试匹配 templatePath（去掉 vault name/id 前缀后的路径）
+        if (!template && templatePath !== templateId) {
+          // 查找所有模板，看是否有匹配的路径
+          for (const t of templatesResult.value) {
+            const tParts = t.id.split('/');
+            if (tParts.length > 1) {
+              const tPath = tParts.slice(1).join('/');
+              if (tPath === templatePath) {
+                template = t;
+                this.logger.info(`[TaskApplicationService] Found template by path: ${templateId} -> ${t.id}`);
+                break;
+              }
+            }
+          }
+        }
+        
         if (template) {
           return {
             success: true,

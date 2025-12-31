@@ -78,24 +78,12 @@
                   :label="template.name"
                   :value="template.id"
                 >
-                  <el-tooltip
-                    :content="getTemplateContent(template.id)"
-                    placement="bottom"
-                    :show-after="300"
-                    :hide-after="0"
-                    :raw-content="false"
-                    effect="dark"
-                    popper-class="template-tooltip"
-                    :popper-options="{ strategy: 'fixed' }"
-                    @show="loadTemplateContent(template.id)"
-                >
                   <div>
                     <span>{{ template.name }}</span>
                     <span v-if="template.description" class="template-description">
                       {{ template.description }}
                     </span>
                   </div>
-                  </el-tooltip>
                 </el-option>
               </el-select>
               <div v-if="workflowTemplates.length === 0 && !loadingTemplates" class="template-hint">
@@ -225,7 +213,7 @@
 // @ts-ignore - window is available in webview context
 declare const window: any;
 
-import { ref, computed, onMounted, watch, reactive } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { extensionService } from '../services/ExtensionService';
 // 图标已在 create-task-dialog-main.ts 中全局注册，无需导入
 
@@ -521,70 +509,6 @@ const executeCommand = async (commandId: string) => {
   }
 };
 
-// 获取模板内容（用于 tooltip 显示）
-const getTemplateContent = (templateId: string): string => {
-  return templateContents[templateId] || '悬停查看模板内容';
-};
-
-// 加载模板内容
-const loadTemplateContent = async (templateId: string) => {
-  if (loadingTemplateContents.value.has(templateId) || templateContents[templateId]) {
-    return;
-  }
-  
-  loadingTemplateContents.value.add(templateId);
-  
-  try {
-    // 从模板ID中提取vault信息
-    let templateVaultId: string | undefined = undefined;
-    if (templateId.includes('/')) {
-      const parts = templateId.split('/');
-      if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
-        const vaultName = parts[0];
-        const foundVault = vaults.value.find(v => v.name === vaultName);
-        if (foundVault) {
-          templateVaultId = foundVault.id;
-        }
-      }
-    }
-    
-    if (!templateVaultId && formData.value.vaultId) {
-      templateVaultId = formData.value.vaultId;
-    }
-    
-    // 获取模板内容（任务模板也是模板文件，可以使用 template.getContent）
-    const content = await extensionService.call<any>('template.getContent', {
-      templateId: templateId,
-      vaultId: templateVaultId,
-    });
-    
-    // 格式化内容用于显示
-    let displayContent = '';
-    if (typeof content === 'string') {
-      // 内容模板：显示文本内容（截断前500字符）
-      // 保留原始换行符，使用 CSS white-space: pre-wrap 来显示
-      displayContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
-    } else if (Array.isArray(content)) {
-      // 结构模板：显示结构信息
-      let jsonStr = JSON.stringify(content, null, 2);
-      displayContent = `结构模板，包含 ${content.length} 个项目\n\n${jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : jsonStr}`;
-    } else if (content && typeof content === 'object') {
-      // 对象格式的结构（任务模板可能是这种格式）
-      let jsonStr = JSON.stringify(content, null, 2);
-      displayContent = `任务模板\n\n${jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : jsonStr}`;
-    } else {
-      displayContent = '模板内容为空';
-    }
-    
-    templateContents[templateId] = displayContent;
-  } catch (err: any) {
-    console.error(`Failed to load template content for ${templateId}:`, err);
-    templateContents[templateId] = `加载失败: ${err.message || '未知错误'}`;
-  } finally {
-    loadingTemplateContents.value.delete(templateId);
-  }
-};
-
 const handleCreate = async () => {
   if (!canCreate.value) {
     return;
@@ -838,21 +762,5 @@ const handleCreate = async () => {
   }
 }
 
-/* 模板 tooltip 样式 */
-:deep(.template-tooltip) {
-  max-width: 800px !important;
-  min-width: 400px;
-  max-height: 500px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  word-break: break-word;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 12px;
-}
-:deep(.template-tooltip .el-tooltip__inner) {
-  white-space: pre-wrap !important;
-}
 </style>
 
