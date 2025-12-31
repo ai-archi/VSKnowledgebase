@@ -924,6 +924,38 @@ const executeCommand = async (commandId: string) => {
   margin-top: 4px;
 }
 
+/* 修复白色背景下文本颜色过浅的问题 */
+:deep(.el-tree-select__popper) {
+  .tree-node-label {
+    .node-name {
+      color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
+    }
+    .node-description {
+      color: #333333 !important; /* 深灰色文本 */
+    }
+    .el-icon {
+      color: #333333 !important; /* 图标颜色 */
+    }
+  }
+  
+  /* 确保树节点文本在白色背景下可见 */
+  .el-tree-node__label {
+    color: #000000 !important;
+  }
+  
+  /* 选中状态的文本颜色 */
+  .el-tree-node.is-current > .el-tree-node__content .tree-node-label .node-name,
+  .el-tree-node.is-current > .el-tree-node__content .el-tree-node__label {
+    color: #409eff !important;
+  }
+  
+  /* hover 状态的文本颜色 */
+  .el-tree-node__content:hover .tree-node-label .node-name,
+  .el-tree-node__content:hover .el-tree-node__label {
+    color: #000000 !important;
+  }
+}
+
 /* 下方区域 */
 .bottom-section {
   flex: 1;

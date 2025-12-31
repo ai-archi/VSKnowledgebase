@@ -63,6 +63,27 @@
                 </el-option>
               </el-select>
             </el-form-item>
+        <el-form-item label="提示词">
+          <div class="ai-prompt-container">
+            <el-input
+              v-model="formData.aiPrompt"
+              type="textarea"
+              :rows="16"
+              placeholder="点击上方AI按钮生成提示词，或手动输入提示词用于指导AI生成内容"
+              clearable
+              class="ai-prompt-input"
+            />
+            <el-button
+              :icon="DocumentCopy"
+              size="small"
+              @click="copyAiPrompt"
+              :disabled="!formData.aiPrompt"
+              class="copy-button"
+            >
+              复制
+            </el-button>
+          </div>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -180,6 +201,7 @@ import {
   Close,
   Check,
   Loading,
+  DocumentCopy,
 } from '@element-plus/icons-vue';
 import { extensionService } from '../services/ExtensionService';
 
@@ -213,6 +235,7 @@ interface FormData {
   fileName: string;
   vaultId: string;
   templateId: string;
+  aiPrompt: string;
 }
 
 interface Emits {
@@ -226,6 +249,7 @@ const formData = ref<FormData>({
   fileName: '',
   vaultId: '',
   templateId: '',
+  aiPrompt: '',
 });
 const initialFolderPath = ref<string | undefined>(undefined);
 const vaults = ref<Vault[]>([]);
@@ -591,6 +615,7 @@ const handleCreate = async () => {
       path: filePath,
       title: formData.value.fileName,
       templateId: formData.value.templateId || undefined, // 传递模板ID，后端会进行渲染
+      aiPrompt: formData.value.aiPrompt.trim() || undefined, // 传递AI生成提示词
       relatedArtifacts: relatedArtifacts.length > 0 ? relatedArtifacts : undefined,
       relatedCodePaths: relatedCodePaths.length > 0 ? relatedCodePaths : undefined,
     };
@@ -713,17 +738,29 @@ const executeCommand = async (commandId: string) => {
       context,
     });
 
-  // 复制到剪贴板
-    navigator.clipboard.writeText(result).then(() => {
-      const command = commands.value.find(c => c.id === commandId);
-      ElMessage.success(`提示词已复制到剪贴板：${command?.name || commandId}`);
-  }).catch(err => {
-    console.error('Failed to copy to clipboard', err);
-    ElMessage.error('复制到剪贴板失败');
-  });
+    // 将生成的提示词填入输入框
+    formData.value.aiPrompt = result;
+    
+    const command = commands.value.find(c => c.id === commandId);
+    ElMessage.success(`提示词已生成：${command?.name || commandId}`);
   } catch (err: any) {
     console.error('Failed to execute command', err);
     ElMessage.error(`执行命令失败：${err.message || '未知错误'}`);
+  }
+};
+
+const copyAiPrompt = async () => {
+  if (!formData.value.aiPrompt) {
+    ElMessage.warning('提示词为空，无法复制');
+    return;
+  }
+  
+  try {
+    await navigator.clipboard.writeText(formData.value.aiPrompt);
+    ElMessage.success('提示词已复制到剪贴板');
+  } catch (err: any) {
+    console.error('Failed to copy to clipboard', err);
+    ElMessage.error('复制到剪贴板失败');
   }
 };
 </script>
@@ -787,6 +824,22 @@ const executeCommand = async (commandId: string) => {
 .template-description {
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
+}
+
+.ai-prompt-container {
+  position: relative;
+  width: 100%;
+}
+
+.ai-prompt-input {
+  width: 100%;
+}
+
+.copy-button {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 10;
 }
 
 /* 下方区域 */
@@ -927,6 +980,33 @@ const executeCommand = async (commandId: string) => {
   font-size: 16px;
   color: var(--vscode-testing-iconPassed, #4ec9b0);
   flex-shrink: 0;
+}
+
+/* 修复白色背景下文本颜色过浅的问题 */
+:deep(.el-select__popper) {
+  .template-option {
+    .template-name {
+      color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
+    }
+    .template-description {
+      color: #333333 !important; /* 深灰色文本 */
+    }
+  }
+  
+  /* 确保选项文本在白色背景下可见 */
+  .el-select-dropdown__item {
+    color: #000000 !important;
+  }
+  
+  /* 选中状态的文本颜色 */
+  .el-select-dropdown__item.is-selected {
+    color: #409eff !important;
+  }
+  
+  /* hover 状态的文本颜色 */
+  .el-select-dropdown__item:hover {
+    color: #000000 !important;
+  }
 }
 </style>
 

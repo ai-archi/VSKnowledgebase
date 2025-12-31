@@ -697,5 +697,32 @@ const handleCreate = async () => {
   margin-top: 4px;
   font-style: italic;
 }
+
+/* 修复白色背景下文本颜色过浅的问题 */
+:deep(.el-select__popper) {
+  .template-option {
+    .template-name {
+      color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
+    }
+    .template-description {
+      color: #333333 !important; /* 深灰色文本 */
+    }
+  }
+  
+  /* 确保选项文本在白色背景下可见 */
+  .el-select-dropdown__item {
+    color: #000000 !important;
+  }
+  
+  /* 选中状态的文本颜色 */
+  .el-select-dropdown__item.is-selected {
+    color: #409eff !important;
+  }
+  
+  /* hover 状态的文本颜色 */
+  .el-select-dropdown__item:hover {
+    color: #000000 !important;
+  }
+}
 </style>
 
