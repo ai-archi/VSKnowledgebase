@@ -36,9 +36,8 @@
           </template>
           <el-input
             v-model="formData.folderName"
-            placeholder="输入文件夹名称或路径进行搜索（创建时仅支持单个文件夹名称）"
+            placeholder="输入文件夹名称（创建时仅支持单个文件夹名称）"
             clearable
-            @input="handleFolderNameInput"
             :prefix-icon="Folder"
           />
           <div v-if="validationError" class="error-message">
@@ -61,12 +60,24 @@
             :default-checked-keys="[]"
           >
             <template #default="{ node, data }">
-              <span class="tree-node-label">
-                <el-icon v-if="data.type === 'directory'"><Folder /></el-icon>
-                <el-icon v-else><Document /></el-icon>
-                <span class="node-name">{{ data.label }}</span>
-                <span v-if="data.description" class="node-description">{{ data.description }}</span>
-              </span>
+              <el-tooltip
+                :content="getTemplateContent(data.value)"
+                placement="bottom"
+                :show-after="300"
+                :hide-after="0"
+                :raw-content="false"
+                effect="dark"
+                popper-class="template-tooltip"
+                :popper-options="{ strategy: 'fixed' }"
+                @show="loadTemplateContentForNode(data.value)"
+              >
+                <span class="tree-node-label">
+                  <el-icon v-if="data.type === 'directory'"><Folder /></el-icon>
+                  <el-icon v-else><Document /></el-icon>
+                  <span class="node-name">{{ data.label }}</span>
+                  <span v-if="data.description" class="node-description">{{ data.description }}</span>
+                </span>
+              </el-tooltip>
             </template>
           </el-tree-select>
           <div v-if="formData.vaultId && folderTemplates.length === 0" class="template-hint">
@@ -134,6 +145,15 @@
             检索结果 ({{ filteredFiles.length }})
           </h4>
         </div>
+        <div class="search-input-container">
+          <el-input
+            v-model="formData.searchQuery"
+            placeholder="输入关键词搜索相关文件"
+            clearable
+            @input="handleSearchInput"
+            :prefix-icon="Search"
+          />
+        </div>
         <div class="panel-content">
           <div v-if="loadingFiles" class="loading-state">
             <el-icon class="is-loading"><Loading /></el-icon>
@@ -172,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, reactive } from 'vue';
 import {
   ElButton,
   ElButtonGroup,
@@ -186,6 +206,7 @@ import {
   ElTag,
   ElMessage,
   ElTreeSelect,
+  ElTooltip,
 } from 'element-plus';
 import {
   Folder,
@@ -196,6 +217,7 @@ import {
   Close,
   Check,
   Loading,
+  Search,
 } from '@element-plus/icons-vue';
 import { extensionService } from '../services/ExtensionService';
 
@@ -226,6 +248,7 @@ interface FileItem {
 
 interface FormData {
   folderName: string;
+  searchQuery: string; // 文件检索关键词
   vaultId: string;
   templateId: string;
   templatePath: string; // 格式: templateId|subFolderPath，例如: "template-id|domain" 或 "template-id|" (根)
@@ -249,6 +272,7 @@ const emit = defineEmits<Emits>();
 
 const formData = ref<FormData>({
   folderName: '',
+  searchQuery: '',
   vaultId: '',
   templateId: '',
   templatePath: '',
@@ -482,9 +506,18 @@ const selectedVault = computed(() => {
   return vaults.value.find(v => v.id === formData.value.vaultId);
 });
 
-// 文件过滤现在由后端 API 实时处理，这里直接返回结果
+// 文件过滤：使用检索关键词进行前端过滤
 const filteredFiles = computed(() => {
+  if (!formData.value.searchQuery.trim()) {
     return allFiles.value;
+  }
+  const query = formData.value.searchQuery.toLowerCase();
+  return allFiles.value.filter(
+    (file) =>
+      file.name.toLowerCase().includes(query) ||
+      file.title?.toLowerCase().includes(query) ||
+      file.path.toLowerCase().includes(query)
+  );
 });
 
 const canCreate = computed(() => {
@@ -496,11 +529,11 @@ const canCreate = computed(() => {
   );
 });
 
-// 监听文件夹名称变化，自动搜索
+// 监听检索关键词变化，自动搜索
 watch(
-  () => formData.value.folderName,
+  () => formData.value.searchQuery,
   () => {
-    if (formData.value.folderName.trim()) {
+    if (formData.value.searchQuery.trim()) {
       triggerAutoSearch();
     }
   },
@@ -613,9 +646,7 @@ const loadFiles = async (query?: string) => {
   }
 };
 
-const handleFolderNameInput = () => {
-  // 清除之前的验证错误（允许输入路径进行过滤）
-  validationError.value = null;
+const handleSearchInput = () => {
   // 自动触发搜索（带防抖）
   triggerAutoSearch();
 };
@@ -627,7 +658,7 @@ const triggerAutoSearch = () => {
   }
   // 设置新的定时器，300ms 后执行搜索
   searchDebounceTimer.value = window.setTimeout(() => {
-    const query = formData.value.folderName.trim();
+    const query = formData.value.searchQuery.trim();
     if (query) {
       // 使用 VSCode API 实时过滤，传入查询条件
       loadFiles(query);
@@ -833,6 +864,83 @@ const executeCommand = async (commandId: string) => {
     ElMessage.error(`执行命令失败：${err.message || '未知错误'}`);
   }
 };
+
+// 获取模板内容（用于 tooltip 显示）
+const getTemplateContent = (templateValue: string): string => {
+  if (!templateValue) return '悬停查看模板内容';
+  // templateValue 格式: "templateId|subFolderPath"
+  const [templateId] = templateValue.split('|');
+  return templateContents[templateId] || '悬停查看模板内容';
+};
+
+// 加载模板内容（用于树节点）
+const loadTemplateContentForNode = async (templateValue: string) => {
+  if (!templateValue) return;
+  // templateValue 格式: "templateId|subFolderPath"
+  const [templateId] = templateValue.split('|');
+  if (!templateId) return;
+  
+  await loadTemplateContent(templateId);
+};
+
+// 加载模板内容
+const loadTemplateContent = async (templateId: string) => {
+  if (loadingTemplateContents.value.has(templateId) || templateContents[templateId]) {
+    return;
+  }
+  
+  loadingTemplateContents.value.add(templateId);
+  
+  try {
+    // 从模板ID中提取vault信息
+    let templateVaultId: string | undefined = undefined;
+    if (templateId.includes('/')) {
+      const parts = templateId.split('/');
+      if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+        const vaultName = parts[0];
+        const foundVault = vaults.value.find(v => v.name === vaultName);
+        if (foundVault) {
+          templateVaultId = foundVault.id;
+        }
+      }
+    }
+    
+    if (!templateVaultId && formData.value.vaultId) {
+      templateVaultId = formData.value.vaultId;
+    }
+    
+    // 获取模板内容
+    const content = await extensionService.call<any>('template.getContent', {
+      templateId: templateId,
+      vaultId: templateVaultId,
+    });
+    
+    // 格式化内容用于显示
+    let displayContent = '';
+    if (typeof content === 'string') {
+      // 内容模板：显示文本内容（截断前500字符）
+      // 保留原始换行符，使用 CSS white-space: pre-wrap 来显示
+      displayContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
+    } else if (Array.isArray(content)) {
+      // 结构模板：显示结构信息
+      let jsonStr = JSON.stringify(content, null, 2);
+      displayContent = `结构模板，包含 ${content.length} 个项目\n\n${jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : jsonStr}`;
+    } else if (content && typeof content === 'object') {
+      // 对象格式的结构
+      let jsonStr = JSON.stringify(content, null, 2);
+      displayContent = `结构模板\n\n${jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : jsonStr}`;
+    } else {
+      displayContent = '模板内容为空';
+    }
+    
+    templateContents[templateId] = displayContent;
+  } catch (err: any) {
+    console.error(`Failed to load template content for ${templateId}:`, err);
+    templateContents[templateId] = `加载失败: ${err.message || '未知错误'}`;
+  } finally {
+    loadingTemplateContents.value.delete(templateId);
+  }
+};
 </script>
 
 <style scoped>
@@ -994,6 +1102,12 @@ const executeCommand = async (commandId: string) => {
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
 
+.search-input-container {
+  padding: 8px 16px;
+  background: var(--vscode-panel-background, #252526);
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+}
+
 .selected-panel .panel-header {
   border-right: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
@@ -1089,5 +1203,22 @@ const executeCommand = async (commandId: string) => {
   font-size: 16px;
   color: var(--vscode-testing-iconPassed, #4ec9b0);
   flex-shrink: 0;
+}
+
+/* 模板 tooltip 样式 */
+:deep(.template-tooltip) {
+  max-width: 800px !important;
+  min-width: 400px;
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-break: break-word;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+}
+:deep(.template-tooltip .el-tooltip__inner) {
+  white-space: pre-wrap !important;
 }
 </style>

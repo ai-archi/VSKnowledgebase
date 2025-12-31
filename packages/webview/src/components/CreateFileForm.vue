@@ -1,19 +1,7 @@
 <template>
   <div class="create-file-form">
-    <!-- 头部：操作按钮和创建按钮 -->
+    <!-- 头部：创建按钮 -->
     <div class="header-section">
-      <div class="action-buttons-section">
-        <el-button-group>
-          <el-button
-            v-for="cmd in commands"
-            :key="cmd.id"
-            @click="executeCommand(cmd.id)"
-            :disabled="!canCreate"
-          >
-            {{ cmd.name }}
-          </el-button>
-        </el-button-group>
-      </div>
       <div class="create-button-section">
         <el-button
           type="primary"
@@ -32,9 +20,8 @@
         <el-form-item label="文件名">
           <el-input
             v-model="formData.fileName"
-            placeholder="输入文件名（支持模糊搜索）"
+            placeholder="输入文件名"
             clearable
-            @input="handleFileNameInput"
             :prefix-icon="Document"
           />
         </el-form-item>
@@ -53,13 +40,25 @@
                   :label="template.name"
                   :value="template.id"
                 >
-                  <div class="template-option">
-                    <span class="template-name">{{ template.name }}</span>
-                    <span v-if="template.description" class="template-description">{{ template.description }}</span>
-                    <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
-                      {{ template.type === 'structure' ? '结构' : '内容' }}
-                    </el-tag>
-                  </div>
+                  <el-tooltip
+                    :content="getTemplateContent(template.id)"
+                    placement="bottom"
+                    :show-after="300"
+                    :hide-after="0"
+                    raw-content
+                    effect="dark"
+                    popper-class="template-tooltip"
+                    :popper-options="{ strategy: 'fixed' }"
+                    @show="loadTemplateContent(template.id)"
+                  >
+                    <div class="template-option">
+                      <span class="template-name">{{ template.name }}</span>
+                      <span v-if="template.description" class="template-description">{{ template.description }}</span>
+                      <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
+                        {{ template.type === 'structure' ? '结构' : '内容' }}
+                      </el-tag>
+                    </div>
+                  </el-tooltip>
                 </el-option>
               </el-select>
             </el-form-item>
@@ -69,19 +68,33 @@
               v-model="formData.aiPrompt"
               type="textarea"
               :rows="16"
-              placeholder="点击上方AI按钮生成提示词，或手动输入提示词用于指导AI生成内容"
+              placeholder="点击AI按钮生成提示词，或手动输入提示词用于指导AI生成内容"
               clearable
               class="ai-prompt-input"
             />
-            <el-button
-              :icon="DocumentCopy"
-              size="small"
-              @click="copyAiPrompt"
-              :disabled="!formData.aiPrompt"
-              class="copy-button"
-            >
-              复制
-            </el-button>
+            <div class="ai-prompt-buttons-top">
+              <el-button-group>
+                <el-button
+                  v-for="cmd in commands"
+                  :key="cmd.id"
+                  @click="executeCommand(cmd.id)"
+                  :disabled="!canCreate"
+                  size="small"
+                >
+                  {{ cmd.name }}
+                </el-button>
+              </el-button-group>
+            </div>
+            <div class="ai-prompt-buttons-bottom">
+              <el-button
+                :icon="DocumentCopy"
+                size="small"
+                @click="copyAiPrompt"
+                :disabled="!formData.aiPrompt"
+              >
+                复制
+              </el-button>
+            </div>
           </div>
         </el-form-item>
       </el-form>
@@ -140,6 +153,15 @@
             检索结果 ({{ filteredFiles.length }})
           </h4>
         </div>
+        <div class="search-input-container">
+          <el-input
+            v-model="formData.searchQuery"
+            placeholder="输入关键词搜索相关文件"
+            clearable
+            @input="handleSearchInput"
+            :prefix-icon="Search"
+          />
+        </div>
         <div class="panel-content">
           <div v-if="loadingFiles" class="loading-state">
             <el-icon class="is-loading"><Loading /></el-icon>
@@ -178,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, reactive } from 'vue';
 import {
   ElButton,
   ElButtonGroup,
@@ -191,6 +213,7 @@ import {
   ElEmpty,
   ElTag,
   ElMessage,
+  ElTooltip,
 } from 'element-plus';
 import {
   Document,
@@ -202,6 +225,7 @@ import {
   Check,
   Loading,
   DocumentCopy,
+  Search,
 } from '@element-plus/icons-vue';
 import { extensionService } from '../services/ExtensionService';
 
@@ -233,6 +257,7 @@ interface FileItem {
 
 interface FormData {
   fileName: string;
+  searchQuery: string; // 文件检索关键词
   vaultId: string;
   templateId: string;
   aiPrompt: string;
@@ -247,6 +272,7 @@ const emit = defineEmits<Emits>();
 
 const formData = ref<FormData>({
   fileName: '',
+  searchQuery: '',
   vaultId: '',
   templateId: '',
   aiPrompt: '',
@@ -260,6 +286,8 @@ const allFiles = ref<FileItem[]>([]);
 const loadingFiles = ref(false);
 const creating = ref(false);
 const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const templateContents = reactive<Record<string, string>>({});
+const loadingTemplateContents = ref<Set<string>>(new Set());
 
 // 过滤模板：只显示 markdown 模板，排除 mermaid、plantuml、archimate 和任务模板
 const markdownTemplates = computed(() => {
@@ -288,10 +316,10 @@ const markdownTemplates = computed(() => {
 });
 
 const filteredFiles = computed(() => {
-  if (!formData.value.fileName.trim()) {
+  if (!formData.value.searchQuery.trim()) {
     return allFiles.value;
   }
-  const query = formData.value.fileName.toLowerCase();
+  const query = formData.value.searchQuery.toLowerCase();
   return allFiles.value.filter(
     (file) =>
       file.name.toLowerCase().includes(query) ||
@@ -307,12 +335,12 @@ const canCreate = computed(() => {
   );
 });
 
-// 监听表单变化，自动搜索
+// 监听检索关键词变化，自动搜索
 watch(
-  () => [formData.value.fileName],
+  () => [formData.value.searchQuery],
   () => {
-    // 当文件名变化时，自动触发搜索
-    if (formData.value.fileName.trim()) {
+    // 当检索关键词变化时，自动触发搜索
+    if (formData.value.searchQuery.trim()) {
       triggerAutoSearch();
     }
   },
@@ -373,7 +401,7 @@ onMounted(() => {
         const similarTemplates = templates.value.filter(t => {
           // 提取路径部分（去掉vault名称）
           const templatePath = t.id.includes('/') ? t.id.split('/').slice(1).join('/') : t.id;
-          const initialPath = initialTemplateId.includes('/') ? initialTemplateId.split('/').slice(1).join('/') : initialTemplateId;
+          const initialPath = initialTemplateId && initialTemplateId.includes('/') ? initialTemplateId.split('/').slice(1).join('/') : initialTemplateId;
           return templatePath === initialPath;
         });
         
@@ -485,7 +513,7 @@ const loadFiles = async (query?: string) => {
   }
 };
 
-const handleFileNameInput = () => {
+const handleSearchInput = () => {
   // 自动触发搜索（带防抖）
   triggerAutoSearch();
 };
@@ -497,7 +525,7 @@ const triggerAutoSearch = () => {
   }
   // 设置新的定时器，300ms 后执行搜索
   searchDebounceTimer.value = setTimeout(() => {
-    const query = formData.value.fileName.trim();
+    const query = formData.value.searchQuery.trim();
     if (query) {
       // 使用 VSCode API 实时过滤，传入查询条件
       loadFiles(query);
@@ -756,11 +784,58 @@ const copyAiPrompt = async () => {
   }
   
   try {
+    // @ts-ignore - navigator is available in webview context
     await navigator.clipboard.writeText(formData.value.aiPrompt);
     ElMessage.success('提示词已复制到剪贴板');
   } catch (err: any) {
     console.error('Failed to copy to clipboard', err);
     ElMessage.error('复制到剪贴板失败');
+  }
+};
+
+// 获取模板内容（用于 tooltip 显示）
+const getTemplateContent = (templateId: string): string => {
+  return '<div>'+templateContents[templateId]+'</div>' || '悬停查看模板内容';
+};
+
+// 加载模板内容
+const loadTemplateContent = async (templateId: string) => {
+  if (loadingTemplateContents.value.has(templateId) || templateContents[templateId]) {
+    return;
+  }
+  
+  loadingTemplateContents.value.add(templateId);
+  
+  try {
+    // 从模板ID中提取vault信息
+    let templateVaultId: string | undefined = undefined;
+    if (templateId.includes('/')) {
+      const parts = templateId.split('/');
+      if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+        const vaultName = parts[0];
+        const foundVault = vaults.value.find(v => v.name === vaultName);
+        if (foundVault) {
+          templateVaultId = foundVault.id;
+        }
+      }
+    }
+    
+    if (!templateVaultId && formData.value.vaultId) {
+      templateVaultId = formData.value.vaultId;
+    }
+    
+    // 获取模板内容
+    const content = await extensionService.call<any>('template.getContent', {
+      templateId: templateId,
+      vaultId: templateVaultId,
+    });
+    
+    templateContents[templateId] = content;
+  } catch (err: any) {
+    console.error(`Failed to load template content for ${templateId}:`, err);
+    templateContents[templateId] = `加载失败: ${err.message || '未知错误'}`;
+  } finally {
+    loadingTemplateContents.value.delete(templateId);
   }
 };
 </script>
@@ -835,7 +910,14 @@ const copyAiPrompt = async () => {
   width: 100%;
 }
 
-.copy-button {
+.ai-prompt-buttons-top {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+.ai-prompt-buttons-bottom {
   position: absolute;
   bottom: 8px;
   right: 8px;
@@ -876,6 +958,12 @@ const copyAiPrompt = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
+  background: var(--vscode-panel-background, #252526);
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+}
+
+.search-input-container {
+  padding: 8px 16px;
   background: var(--vscode-panel-background, #252526);
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
@@ -983,30 +1071,44 @@ const copyAiPrompt = async () => {
 }
 
 /* 修复白色背景下文本颜色过浅的问题 */
-:deep(.el-select__popper) {
-  .template-option {
-    .template-name {
-      color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
-    }
-    .template-description {
-      color: #333333 !important; /* 深灰色文本 */
-    }
-  }
-  
-  /* 确保选项文本在白色背景下可见 */
-  .el-select-dropdown__item {
-    color: #000000 !important;
-  }
-  
-  /* 选中状态的文本颜色 */
-  .el-select-dropdown__item.is-selected {
-    color: #409eff !important;
-  }
-  
-  /* hover 状态的文本颜色 */
-  .el-select-dropdown__item:hover {
-    color: #000000 !important;
-  }
+:deep(.el-select__popper .template-option .template-name) {
+  color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
+}
+
+:deep(.el-select__popper .template-option .template-description) {
+  color: #333333 !important; /* 深灰色文本 */
+}
+
+/* 确保选项文本在白色背景下可见 */
+:deep(.el-select__popper .el-select-dropdown__item) {
+  color: #000000 !important;
+}
+
+/* 选中状态的文本颜色 */
+:deep(.el-select__popper .el-select-dropdown__item.is-selected) {
+  color: #409eff !important;
+}
+
+/* hover 状态的文本颜色 */
+:deep(.el-select__popper .el-select-dropdown__item:hover) {
+  color: #000000 !important;
+}
+
+/* 模板 tooltip 样式 */
+:deep(.template-tooltip) {
+  max-width: 800px !important;
+  min-width: 400px;
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-break: break-word;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+}
+:deep(.template-tooltip .el-tooltip__inner) {
+  white-space: pre-wrap !important;
 }
 </style>
 

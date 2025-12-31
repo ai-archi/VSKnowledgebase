@@ -32,7 +32,7 @@
         <el-form-item label="任务标题" required>
           <el-input
             v-model="formData.title"
-            placeholder="输入任务标题（支持模糊搜索关联文件）"
+            placeholder="输入任务标题"
             clearable
           />
         </el-form-item>
@@ -78,12 +78,24 @@
                   :label="template.name"
                   :value="template.id"
                 >
-                  <div>
-                    <span>{{ template.name }}</span>
-                    <span v-if="template.description" class="template-description">
-                      {{ template.description }}
-                    </span>
-                  </div>
+                  <el-tooltip
+                    :content="getTemplateContent(template.id)"
+                    placement="bottom"
+                    :show-after="300"
+                    :hide-after="0"
+                    :raw-content="false"
+                    effect="dark"
+                    popper-class="template-tooltip"
+                    :popper-options="{ strategy: 'fixed' }"
+                    @show="loadTemplateContent(template.id)"
+                  >
+                    <div>
+                      <span>{{ template.name }}</span>
+                      <span v-if="template.description" class="template-description">
+                        {{ template.description }}
+                      </span>
+                    </div>
+                  </el-tooltip>
                 </el-option>
               </el-select>
               <div v-if="workflowTemplates.length === 0 && !loadingTemplates" class="template-hint">
@@ -161,6 +173,15 @@
             检索结果 ({{ filteredFiles.length }})
           </h4>
         </div>
+        <div class="search-input-container">
+          <el-input
+            v-model="formData.searchQuery"
+            placeholder="输入关键词搜索相关文件"
+            clearable
+            @input="handleSearchInput"
+            :prefix-icon="Search"
+          />
+        </div>
         <div class="panel-content">
           <div v-if="loadingFiles" class="loading-state">
             <el-icon class="is-loading"><Loading /></el-icon>
@@ -203,7 +224,7 @@
 // @ts-ignore - window is available in webview context
 declare const window: any;
 
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, reactive } from 'vue';
 import { extensionService } from '../services/ExtensionService';
 // 图标已在 create-task-dialog-main.ts 中全局注册，无需导入
 
@@ -234,6 +255,7 @@ interface FileItem {
 
 interface FormData {
   title: string;
+  searchQuery: string; // 文件检索关键词
   vaultId: string;
   workflowTemplate: string;
   priority: 'low' | 'medium' | 'high';
@@ -248,6 +270,7 @@ const emit = defineEmits<Emits>();
 
 const formData = ref<FormData>({
   title: '',
+  searchQuery: '',
   vaultId: '',
   workflowTemplate: '',
   priority: 'medium',
@@ -264,10 +287,10 @@ const creating = ref(false);
 const searchDebounceTimer = ref<number | null>(null);
 
 const filteredFiles = computed(() => {
-  if (!formData.value.title.trim()) {
+  if (!formData.value.searchQuery.trim()) {
     return allFiles.value;
   }
-  const query = formData.value.title.toLowerCase();
+  const query = formData.value.searchQuery.toLowerCase();
   return allFiles.value.filter(
     (file) =>
       file.name.toLowerCase().includes(query) ||
@@ -282,11 +305,11 @@ const canCreate = computed(() => {
   );
 });
 
-// 监听任务标题变化，自动搜索
+// 监听检索关键词变化，自动搜索
 watch(
-  () => formData.value.title,
+  () => formData.value.searchQuery,
   () => {
-    if (formData.value.title.trim()) {
+    if (formData.value.searchQuery.trim()) {
       triggerAutoSearch();
     }
   },
@@ -404,7 +427,7 @@ const triggerAutoSearch = () => {
   }
   // 设置新的定时器，300ms 后执行搜索
   searchDebounceTimer.value = window.setTimeout(() => {
-    const query = formData.value.title.trim();
+    const query = formData.value.searchQuery.trim();
     if (query) {
       // 使用后端 API 实时搜索，传入查询条件
       loadFiles(query);
@@ -413,6 +436,11 @@ const triggerAutoSearch = () => {
       loadFiles();
     }
   }, 300);
+};
+
+const handleSearchInput = () => {
+  // 自动触发搜索（带防抖）
+  triggerAutoSearch();
 };
 
 const loadCommands = async () => {
@@ -475,6 +503,70 @@ const executeCommand = async (commandId: string) => {
     console.log('Execute command:', commandId);
   } catch (err: any) {
     console.error('Failed to execute command', err);
+  }
+};
+
+// 获取模板内容（用于 tooltip 显示）
+const getTemplateContent = (templateId: string): string => {
+  return templateContents[templateId] || '悬停查看模板内容';
+};
+
+// 加载模板内容
+const loadTemplateContent = async (templateId: string) => {
+  if (loadingTemplateContents.value.has(templateId) || templateContents[templateId]) {
+    return;
+  }
+  
+  loadingTemplateContents.value.add(templateId);
+  
+  try {
+    // 从模板ID中提取vault信息
+    let templateVaultId: string | undefined = undefined;
+    if (templateId.includes('/')) {
+      const parts = templateId.split('/');
+      if (!templateId.startsWith('archi-templates/') && parts.length > 1) {
+        const vaultName = parts[0];
+        const foundVault = vaults.value.find(v => v.name === vaultName);
+        if (foundVault) {
+          templateVaultId = foundVault.id;
+        }
+      }
+    }
+    
+    if (!templateVaultId && formData.value.vaultId) {
+      templateVaultId = formData.value.vaultId;
+    }
+    
+    // 获取模板内容（任务模板也是模板文件，可以使用 template.getContent）
+    const content = await extensionService.call<any>('template.getContent', {
+      templateId: templateId,
+      vaultId: templateVaultId,
+    });
+    
+    // 格式化内容用于显示
+    let displayContent = '';
+    if (typeof content === 'string') {
+      // 内容模板：显示文本内容（截断前500字符）
+      // 保留原始换行符，使用 CSS white-space: pre-wrap 来显示
+      displayContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
+    } else if (Array.isArray(content)) {
+      // 结构模板：显示结构信息
+      let jsonStr = JSON.stringify(content, null, 2);
+      displayContent = `结构模板，包含 ${content.length} 个项目\n\n${jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : jsonStr}`;
+    } else if (content && typeof content === 'object') {
+      // 对象格式的结构（任务模板可能是这种格式）
+      let jsonStr = JSON.stringify(content, null, 2);
+      displayContent = `任务模板\n\n${jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : jsonStr}`;
+    } else {
+      displayContent = '模板内容为空';
+    }
+    
+    templateContents[templateId] = displayContent;
+  } catch (err: any) {
+    console.error(`Failed to load template content for ${templateId}:`, err);
+    templateContents[templateId] = `加载失败: ${err.message || '未知错误'}`;
+  } finally {
+    loadingTemplateContents.value.delete(templateId);
   }
 };
 
@@ -584,6 +676,12 @@ const handleCreate = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 8px 12px;
+  background: var(--vscode-panel-background, #1e1e1e);
+  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
+}
+
+.search-input-container {
   padding: 8px 12px;
   background: var(--vscode-panel-background, #1e1e1e);
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
@@ -723,6 +821,23 @@ const handleCreate = async () => {
   .el-select-dropdown__item:hover {
     color: #000000 !important;
   }
+}
+
+/* 模板 tooltip 样式 */
+:deep(.template-tooltip) {
+  max-width: 800px !important;
+  min-width: 400px;
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-break: break-word;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+}
+:deep(.template-tooltip .el-tooltip__inner) {
+  white-space: pre-wrap !important;
 }
 </style>
 

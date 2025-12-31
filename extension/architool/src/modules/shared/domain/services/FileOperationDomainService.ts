@@ -318,6 +318,20 @@ Rel_Serving(appService1, tech1, "部署在")
     const vaultName = artifact.vault.name || '';
     const fileName = artifact.name || '';
 
+    // 确定实际使用的 vault 目录名
+    // 如果 vaultId 对应的目录不存在，尝试使用 vaultName（目录名可能与 name 一致）
+    let actualVaultDir = vaultId;
+    if (workspaceRoot) {
+      const vaultPathById = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultId);
+      if (!fs.existsSync(vaultPathById) && vaultName) {
+        // 如果 vaultId 对应的目录不存在，尝试使用 vaultName
+        const vaultPathByName = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultName);
+        if (fs.existsSync(vaultPathByName)) {
+          actualVaultDir = vaultName;
+        }
+      }
+    }
+
     // ========== vault.xxx - Vault 信息 ==========
     variables['vault'] = {
       id: vaultId,
@@ -326,9 +340,9 @@ Rel_Serving(appService1, tech1, "部署在")
 
     // ========== artifact.xxx - 要创建的文件/Artifact 信息 ==========
     const targetFilePath = artifact.path || fileName;
-    const targetFullRelativePath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${vaultId}/${targetFilePath}`;
+    const targetFullRelativePath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${actualVaultDir}/${targetFilePath}`;
     const targetAbsolutePath = workspaceRoot 
-      ? path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, vaultId, targetFilePath)
+      ? path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, actualVaultDir, targetFilePath)
       : targetFilePath;
 
     // 从 custom 中提取 folderPath 和 diagramType（如果存在）

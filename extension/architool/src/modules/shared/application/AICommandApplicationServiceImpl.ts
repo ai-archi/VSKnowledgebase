@@ -239,6 +239,20 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
         targetPath = fileName;
       }
 
+      // 获取实际要创建文件的 vault 信息（使用传入的 vaultId，而不是命令所在的 vaultId）
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success || !vaultResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.NOT_FOUND,
+            `Vault not found: ${vaultId}`,
+            { vaultId }
+          ),
+        };
+      }
+      const targetVault = vaultResult.value;
+
       // 将 context 中的 templateFile 和 selectedFiles 合并到 artifact 中
       // 其他自定义上下文信息放到 artifact.custom 中
       const custom: Record<string, any> = {};
@@ -251,8 +265,8 @@ export class AICommandApplicationServiceImpl implements AICommandApplicationServ
       const artifact: Artifact = {
         id: command.id,
         vault: {
-          id: command.vaultId,
-          name: command.vaultName,
+          id: targetVault.id,
+          name: targetVault.name,
         },
         nodeType: 'FILE',
         path: targetPath, // 要创建的文件路径
