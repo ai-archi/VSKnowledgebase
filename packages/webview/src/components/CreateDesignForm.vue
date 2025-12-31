@@ -86,14 +86,14 @@
                     popper-class="template-tooltip"
                     :popper-options="{ strategy: 'fixed' }"
                     @show="loadTemplateContent(template.id)"
-                  >
-                    <div class="template-option">
-                      <span class="template-name">{{ template.name }}</span>
-                      <span v-if="template.description" class="template-description">{{ template.description }}</span>
-                      <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
-                        {{ template.type === 'structure' ? '结构' : '内容' }}
-                      </el-tag>
-                    </div>
+                >
+                  <div class="template-option">
+                    <span class="template-name">{{ template.name }}</span>
+                    <span v-if="template.description" class="template-description">{{ template.description }}</span>
+                    <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
+                      {{ template.type === 'structure' ? '结构' : '内容' }}
+                    </el-tag>
+                  </div>
                   </el-tooltip>
                 </el-option>
               </el-select>
@@ -751,7 +751,7 @@ const executeCommand = async (commandId: string) => {
     // 将生成的提示词填入输入框
     formData.value.aiPrompt = result;
     
-    const command = commands.value.find(c => c.id === commandId);
+      const command = commands.value.find(c => c.id === commandId);
     ElMessage.success(`提示词已生成：${command?.name || commandId}`);
   } catch (err: any) {
     console.error('Failed to execute command', err);

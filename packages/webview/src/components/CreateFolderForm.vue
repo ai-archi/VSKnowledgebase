@@ -60,24 +60,12 @@
             :default-checked-keys="[]"
           >
             <template #default="{ node, data }">
-              <el-tooltip
-                :content="getTemplateContent(data.value)"
-                placement="bottom"
-                :show-after="300"
-                :hide-after="0"
-                :raw-content="false"
-                effect="dark"
-                popper-class="template-tooltip"
-                :popper-options="{ strategy: 'fixed' }"
-                @show="loadTemplateContentForNode(data.value)"
-              >
-                <span class="tree-node-label">
-                  <el-icon v-if="data.type === 'directory'"><Folder /></el-icon>
-                  <el-icon v-else><Document /></el-icon>
-                  <span class="node-name">{{ data.label }}</span>
-                  <span v-if="data.description" class="node-description">{{ data.description }}</span>
-                </span>
-              </el-tooltip>
+              <span class="tree-node-label">
+                <el-icon v-if="data.type === 'directory'"><Folder /></el-icon>
+                <el-icon v-else><Document /></el-icon>
+                <span class="node-name">{{ data.label || '未知' }}</span>
+                <span v-if="data.description" class="node-description">{{ data.description }}</span>
+              </span>
             </template>
           </el-tree-select>
           <div v-if="formData.vaultId && folderTemplates.length === 0" class="template-hint">
@@ -981,17 +969,11 @@ const loadTemplateContent = async (templateId: string) => {
   margin-bottom: 20px;
 }
 
-.action-buttons-section {
-  display: flex;
-  align-items: center;
-  flex: 1; /* 占据剩余空间，确保创建按钮在右侧 */
-}
-
 .create-button-section {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-shrink: 0; /* 防止创建按钮被压缩 */
+  flex-shrink: 0;
 }
 
 /* 中间区域 */
@@ -1006,35 +988,18 @@ const loadTemplateContent = async (templateId: string) => {
   margin-top: 4px;
 }
 
-.vault-option,
-.template-option {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.vault-name,
-.template-name {
-  font-weight: 500;
-  color: var(--vscode-foreground, #cccccc);
-}
-
-.vault-description,
-.template-description {
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground, #999999);
-}
-
 .tree-node-label {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: 1;
+  width: 100%;
 }
 
 .node-name {
   font-weight: 500;
   color: var(--vscode-foreground, #cccccc);
+  flex: 1;
 }
 
 .node-description {
@@ -1047,36 +1012,99 @@ const loadTemplateContent = async (templateId: string) => {
   margin-top: 4px;
 }
 
-/* 修复白色背景下文本颜色过浅的问题 */
+/* 修复 el-tree-select 输入框文字颜色问题 */
+:deep(.el-tree-select .el-input__inner) {
+  color: var(--vscode-input-foreground, var(--vscode-foreground, #cccccc)) !important;
+}
+
+:deep(.el-tree-select .el-input__suffix .el-select__caret) {
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+:deep(.el-tree-select .el-select__tags .el-tag) {
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+:deep(.el-tree-select .el-select__tags .el-tag .el-tag__content) {
+  color: var(--vscode-foreground, #cccccc) !important;
+}
+
+/* 修复下拉弹窗中的文字颜色 - 确保在白色背景下可见，所有文字都是黑色 */
 :deep(.el-tree-select__popper) {
-  .tree-node-label {
-    .node-name {
-      color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
-    }
-    .node-description {
-      color: #333333 !important; /* 深灰色文本 */
-    }
-    .el-icon {
-      color: #333333 !important; /* 图标颜色 */
-    }
-  }
-  
-  /* 确保树节点文本在白色背景下可见 */
-  .el-tree-node__label {
-    color: #000000 !important;
-  }
-  
-  /* 选中状态的文本颜色 */
-  .el-tree-node.is-current > .el-tree-node__content .tree-node-label .node-name,
-  .el-tree-node.is-current > .el-tree-node__content .el-tree-node__label {
-    color: #409eff !important;
-  }
-  
-  /* hover 状态的文本颜色 */
-  .el-tree-node__content:hover .tree-node-label .node-name,
-  .el-tree-node__content:hover .el-tree-node__label {
-    color: #000000 !important;
-  }
+  color: #000000 !important;
+  background: #ffffff !important;
+}
+
+/* 确保所有文字元素都是黑色 */
+:deep(.el-tree-select__popper *),
+:deep(.el-tree-select__popper .el-tree *),
+:deep(.el-tree-select__popper .el-tree-node *) {
+  color: #000000 !important;
+}
+
+:deep(.el-tree-select__popper .tree-node-label) {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+  color: #000000 !important;
+}
+
+:deep(.el-tree-select__popper .tree-node-label .node-name) {
+  color: #000000 !important;
+  font-weight: 500 !important;
+  flex: 1 !important;
+}
+
+:deep(.el-tree-select__popper .tree-node-label .node-description) {
+  color: #000000 !important;
+  font-size: 12px !important;
+  margin-left: 8px !important;
+}
+
+:deep(.el-tree-select__popper .tree-node-label .el-icon) {
+  color: #000000 !important;
+  flex-shrink: 0 !important;
+}
+
+/* 确保树节点文本在白色背景下可见 - 所有文字都是黑色 */
+:deep(.el-tree-select__popper .el-tree-node__label) {
+  color: #000000 !important;
+}
+
+:deep(.el-tree-select__popper .el-tree-node__content) {
+  color: #000000 !important;
+}
+
+:deep(.el-tree-select__popper .el-tree-node__content span) {
+  color: #000000 !important;
+}
+
+/* 确保图标文字也是黑色 */
+:deep(.el-tree-select__popper .el-icon) {
+  color: #000000 !important;
+}
+
+/* 确保所有文本节点都是黑色 */
+:deep(.el-tree-select__popper .el-tree-node__content .tree-node-label),
+:deep(.el-tree-select__popper .el-tree-node__content .tree-node-label span),
+:deep(.el-tree-select__popper .el-tree-node__content .tree-node-label .node-name),
+:deep(.el-tree-select__popper .el-tree-node__content .tree-node-label .node-description) {
+  color: #000000 !important;
+}
+
+/* 选中状态的文本颜色 - 保持蓝色以便区分 */
+:deep(.el-tree-select__popper .el-tree-node.is-current > .el-tree-node__content .tree-node-label .node-name),
+:deep(.el-tree-select__popper .el-tree-node.is-current > .el-tree-node__content .el-tree-node__label),
+:deep(.el-tree-select__popper .el-tree-node.is-current > .el-tree-node__content) {
+  color: #409eff !important;
+}
+
+/* hover 状态的文本颜色 - 保持黑色 */
+:deep(.el-tree-select__popper .el-tree-node__content:hover .tree-node-label .node-name),
+:deep(.el-tree-select__popper .el-tree-node__content:hover .el-tree-node__label),
+:deep(.el-tree-select__popper .el-tree-node__content:hover) {
+  color: #000000 !important;
 }
 
 /* 下方区域 */
@@ -1098,13 +1126,13 @@ const loadTemplateContent = async (templateId: string) => {
 }
 
 .selected-panel {
-  flex: 0 0 300px; /* 已选择面板固定宽度 */
+  flex: 0 0 300px;
   min-width: 300px;
   max-width: 400px;
 }
 
 .search-panel {
-  flex: 1 1 auto; /* 检索结果面板占据剩余空间 */
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1121,10 +1149,6 @@ const loadTemplateContent = async (templateId: string) => {
   padding: 8px 16px;
   background: var(--vscode-panel-background, #252526);
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
-}
-
-.selected-panel .panel-header {
-  border-right: 1px solid var(--vscode-panel-border, #3e3e3e);
 }
 
 .panel-header h4 {
@@ -1233,7 +1257,9 @@ const loadTemplateContent = async (templateId: string) => {
   line-height: 1.5;
   padding: 12px;
 }
+
 :deep(.template-tooltip .el-tooltip__inner) {
   white-space: pre-wrap !important;
 }
 </style>
+

@@ -273,15 +273,15 @@ export class WorkspaceFileSystemAdapterImpl implements WorkspaceFileSystemAdapte
         // 使用 fast-glob 的 ignore 选项，在扫描阶段就排除文件（关键优化）
         // 使用 stats: true 获取文件类型，避免额外的 stat 调用
         const entries = await fg([pattern], {
-          cwd: folderUri,
-          dot: true,
+        cwd: folderUri,
+        dot: true,
           onlyFiles: itemType === 'file', // 如果只需要文件，只搜索文件
           absolute: false,
           stats: true, // 获取 stats 以区分文件和文件夹，避免额外的 stat 调用
           caseSensitiveMatch: false,
           deep: searchDepth, // 动态调整搜索深度
           ignore: ignorePatterns, // 关键优化：在扫描阶段就排除文件
-        });
+      });
 
         // 流式处理：逐个检查并收集候选
         for (const entry of entries) {
@@ -317,8 +317,8 @@ export class WorkspaceFileSystemAdapterImpl implements WorkspaceFileSystemAdapte
         if (candidates.length >= maxResults * 2) {
           break;
         }
-      }
-
+        }
+        
       // 阶段 4：cheap filter（快速过滤，O(1)）
       const cheapFiltered = candidates.filter(candidate => this.cheapMatch(candidate.path, tokens));
 
@@ -352,7 +352,7 @@ export class WorkspaceFileSystemAdapterImpl implements WorkspaceFileSystemAdapte
         if (itemType === 'folder' && !isDirectory) {
           continue;
         }
-
+        
         items.push({
           path: entry,
           name: path.basename(entry),

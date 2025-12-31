@@ -88,13 +88,13 @@
                     popper-class="template-tooltip"
                     :popper-options="{ strategy: 'fixed' }"
                     @show="loadTemplateContent(template.id)"
-                  >
-                    <div>
-                      <span>{{ template.name }}</span>
-                      <span v-if="template.description" class="template-description">
-                        {{ template.description }}
-                      </span>
-                    </div>
+                >
+                  <div>
+                    <span>{{ template.name }}</span>
+                    <span v-if="template.description" class="template-description">
+                      {{ template.description }}
+                    </span>
+                  </div>
                   </el-tooltip>
                 </el-option>
               </el-select>

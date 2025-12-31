@@ -6,6 +6,9 @@
 
 <script setup lang="ts">
 import type { Component } from 'vue';
+// 编辑器专用样式：CodeMirror 和 diagram-editor 样式只在编辑器页面加载
+import 'codemirror/lib/codemirror.css';
+import '@/styles/diagram-editor.css';
 
 defineProps<{
   editorComponent: Component;

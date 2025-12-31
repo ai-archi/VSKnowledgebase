@@ -50,14 +50,14 @@
                     popper-class="template-tooltip"
                     :popper-options="{ strategy: 'fixed' }"
                     @show="loadTemplateContent(template.id)"
-                  >
-                    <div class="template-option">
-                      <span class="template-name">{{ template.name }}</span>
-                      <span v-if="template.description" class="template-description">{{ template.description }}</span>
-                      <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
-                        {{ template.type === 'structure' ? '结构' : '内容' }}
-                      </el-tag>
-                    </div>
+                >
+                  <div class="template-option">
+                    <span class="template-name">{{ template.name }}</span>
+                    <span v-if="template.description" class="template-description">{{ template.description }}</span>
+                    <el-tag :type="template.type === 'structure' ? 'success' : 'info'" size="small" style="margin-left: 8px">
+                      {{ template.type === 'structure' ? '结构' : '内容' }}
+                    </el-tag>
+                  </div>
                   </el-tooltip>
                 </el-option>
               </el-select>
@@ -96,7 +96,7 @@
               </el-button>
             </div>
           </div>
-        </el-form-item>
+            </el-form-item>
       </el-form>
     </div>
 
@@ -774,7 +774,7 @@ const executeCommand = async (commandId: string) => {
     // 将生成的提示词填入输入框
     formData.value.aiPrompt = result;
     
-    const command = commands.value.find(c => c.id === commandId);
+      const command = commands.value.find(c => c.id === commandId);
     ElMessage.success(`提示词已生成：${command?.name || commandId}`);
   } catch (err: any) {
     console.error('Failed to execute command', err);
@@ -1077,27 +1077,27 @@ const loadTemplateContent = async (templateId: string) => {
 
 /* 修复白色背景下文本颜色过浅的问题 */
 :deep(.el-select__popper .template-option .template-name) {
-  color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
-}
+      color: #000000 !important; /* 黑色文本，在白色背景下最清晰 */
+    }
 
 :deep(.el-select__popper .template-option .template-description) {
-  color: #333333 !important; /* 深灰色文本 */
-}
-
-/* 确保选项文本在白色背景下可见 */
+      color: #333333 !important; /* 深灰色文本 */
+  }
+  
+  /* 确保选项文本在白色背景下可见 */
 :deep(.el-select__popper .el-select-dropdown__item) {
-  color: #000000 !important;
-}
-
-/* 选中状态的文本颜色 */
+    color: #000000 !important;
+  }
+  
+  /* 选中状态的文本颜色 */
 :deep(.el-select__popper .el-select-dropdown__item.is-selected) {
-  color: #409eff !important;
-}
-
-/* hover 状态的文本颜色 */
+    color: #409eff !important;
+  }
+  
+  /* hover 状态的文本颜色 */
 :deep(.el-select__popper .el-select-dropdown__item:hover) {
-  color: #000000 !important;
-}
+    color: #000000 !important;
+  }
 
 /* 模板 tooltip 样式 */
 :deep(.template-tooltip) {

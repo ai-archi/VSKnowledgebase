@@ -5,11 +5,10 @@
 import { createApp, type App, type Component } from 'vue';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
-// 样式加载顺序：Element Plus -> Element Plus 深色主题 -> CodeMirror -> 图表编辑器样式（最后加载，确保优先级）
+// 样式加载顺序：Element Plus -> Element Plus 深色主题
+// 注意：CodeMirror 和 diagram-editor 样式在 EditorPage.vue 中按需加载
 import 'element-plus/dist/index.css';
 import 'element-plus/theme-chalk/dark/css-vars.css'; // Element Plus 深色主题
-import 'codemirror/lib/codemirror.css';
-import '@/styles/diagram-editor.css';
 
 /**
  * 创建并配置 Vue 应用
