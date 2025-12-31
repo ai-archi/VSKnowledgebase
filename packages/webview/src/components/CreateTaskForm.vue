@@ -176,9 +176,10 @@
         <div class="search-input-container">
           <el-input
             v-model="formData.searchQuery"
-            placeholder="输入关键词搜索相关文件"
+            placeholder="输入关键词搜索相关文件（回车立即搜索）"
             clearable
             @input="handleSearchInput"
+            @keyup.enter="handleSearchEnter"
             :prefix-icon="Search"
           />
         </div>
@@ -420,12 +421,31 @@ const loadFiles = async (query?: string) => {
   }
 };
 
+const handleSearchInput = () => {
+  // 自动触发搜索（带防抖，延迟增加到 800ms 以减少搜索频率）
+  triggerAutoSearch();
+};
+
+const handleSearchEnter = () => {
+  // 回车键立即触发搜索（清除防抖定时器）
+  if (searchDebounceTimer.value !== null) {
+    clearTimeout(searchDebounceTimer.value);
+    searchDebounceTimer.value = null;
+  }
+  const query = formData.value.searchQuery.trim();
+  if (query) {
+    loadFiles(query);
+  } else {
+    loadFiles();
+  }
+};
+
 const triggerAutoSearch = () => {
   // 清除之前的定时器
   if (searchDebounceTimer.value !== null) {
     clearTimeout(searchDebounceTimer.value);
   }
-  // 设置新的定时器，300ms 后执行搜索
+  // 设置新的定时器，800ms 后执行搜索（增加延迟以减少搜索频率）
   searchDebounceTimer.value = window.setTimeout(() => {
     const query = formData.value.searchQuery.trim();
     if (query) {
@@ -435,12 +455,7 @@ const triggerAutoSearch = () => {
       // 如果没有查询条件，加载所有文件
       loadFiles();
     }
-  }, 300);
-};
-
-const handleSearchInput = () => {
-  // 自动触发搜索（带防抖）
-  triggerAutoSearch();
+  }, 800);
 };
 
 const loadCommands = async () => {

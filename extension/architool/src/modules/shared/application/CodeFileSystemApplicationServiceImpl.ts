@@ -31,6 +31,12 @@ export class CodeFileSystemApplicationServiceImpl implements CodeFileSystemAppli
       // 直接传递查询字符串给适配器，由适配器统一处理搜索逻辑
       const query = options?.query?.trim();
 
+      // 如果没有查询条件或查询太短，不执行搜索（避免性能问题）
+      if (!query || query.length < 2) {
+        this.logger.info(`[CodeFileSystemApplicationService] Query too short or empty, skipping search`);
+        return { success: true, value: items };
+      }
+
       // 遍历所有工作区文件夹
       for (const folder of workspaceFolders) {
         try {
@@ -39,7 +45,7 @@ export class CodeFileSystemApplicationServiceImpl implements CodeFileSystemAppli
           const result = await this.workspaceAdapter.findFilesAndFolders(folder.uri, {
             query: query,
             exclude: undefined, // undefined 表示使用 .gitignore
-            maxResults: options?.limit || 10000,
+            maxResults: options?.limit || 100, // 限制结果为100条
           });
 
           if (result.success) {
