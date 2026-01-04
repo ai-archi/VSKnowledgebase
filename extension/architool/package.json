@@ -221,16 +221,6 @@
           "command": "archi.vault.addFromGit",
           "when": "view == architool.documentView",
           "group": "navigation@2"
-        },
-        {
-          "command": "archi.document.expandAll",
-          "when": "view == architool.documentView",
-          "group": "navigation@3"
-        },
-        {
-          "command": "archi.document.collapseAll",
-          "when": "view == architool.documentView",
-          "group": "navigation@4"
         }
       ],
       "view/item/context": [
