@@ -625,6 +625,7 @@ const handleJumpToChapter = () => {
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #cccccc);
   margin-top: 4px;
+  white-space: pre-line;
 }
 
 .array-field {
