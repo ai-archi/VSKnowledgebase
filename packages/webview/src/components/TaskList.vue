@@ -50,28 +50,8 @@
             @click="handleSelect(task)"
           >
             <div class="task-content">
-              <div class="task-title">{{ task.title }}</div>
-              <div class="task-meta">
-                <div class="task-meta-left">
-                  <el-tag
-                    :type="getStatusType(task.status)"
-                    size="small"
-                    @click.stop="handleStatusClick(task)"
-                    style="cursor: pointer;"
-                  >
-                    {{ getStatusText(task.status) }}
-                  </el-tag>
-                  <el-tag
-                    v-if="task.priority"
-                    :type="getPriorityType(task.priority)"
-                    size="small"
-                  >
-                    {{ getPriorityText(task.priority) }}
-                  </el-tag>
-                  <span v-if="task.createdAt" class="created-time">
-                    {{ formatDate(task.createdAt) }}
-                  </span>
-                </div>
+              <div class="task-header">
+                <span class="task-title">{{ task.title }}</span>
                 <el-button
                   type="danger"
                   size="small"
@@ -81,6 +61,26 @@
                 >
                   删除
                 </el-button>
+              </div>
+              <div class="task-meta">
+                <el-tag
+                  :type="getStatusType(task.status)"
+                  size="small"
+                  @click.stop="handleStatusClick(task)"
+                  style="cursor: pointer;"
+                >
+                  {{ getStatusText(task.status) }}
+                </el-tag>
+                <el-tag
+                  v-if="task.priority"
+                  :type="getPriorityType(task.priority)"
+                  size="small"
+                >
+                  {{ getPriorityText(task.priority) }}
+                </el-tag>
+                <span v-if="task.createdAt" class="created-time">
+                  {{ formatDate(task.createdAt) }}
+                </span>
               </div>
             </div>
           </div>
@@ -319,31 +319,37 @@ function formatDate(date: Date | string): string {
 .task-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
 }
 
 .task-title {
   font-size: 14px;
   font-weight: 500;
   color: var(--vscode-foreground, #cccccc);
-  margin-bottom: 8px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .task-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
   flex-wrap: wrap;
-}
-
-.task-meta-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1;
 }
 
 .created-time {
@@ -353,6 +359,14 @@ function formatDate(date: Date | string): string {
 
 .delete-button {
   flex-shrink: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.task-item:hover .delete-button {
+  opacity: 1;
+  visibility: visible;
 }
 
 .loading-container {

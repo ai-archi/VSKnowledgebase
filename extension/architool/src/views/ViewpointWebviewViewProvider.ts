@@ -311,6 +311,11 @@ export class ViewpointWebviewViewProvider {
           result = { success: true };
           break;
 
+        case 'openTaskEditRelationsDialog':
+          await this.openTaskEditRelationsDialog(message.params?.taskId);
+          result = { success: true };
+          break;
+
         case 'generateStepPrompt':
           result = await this.generateStepPrompt(
             message.params.taskId,
@@ -1596,6 +1601,151 @@ export class ViewpointWebviewViewProvider {
               message: `Unhandled method: ${message.method}`,
             },
           });
+        }
+      },
+      null,
+      this.context.subscriptions
+    );
+  }
+
+  /**
+   * 打开任务编辑关联文件对话框
+   */
+  private async openTaskEditRelationsDialog(taskId: string): Promise<void> {
+    const webviewDistPath = this.getWebviewDistPath();
+    const htmlPath = path.join(webviewDistPath, 'index.html');
+
+    if (!fs.existsSync(htmlPath)) {
+      vscode.window.showErrorMessage('编辑任务关联文件弹窗未构建，请先运行: cd packages/webview && pnpm build');
+      return;
+    }
+
+    // 获取任务信息
+    const tasksResult = await this.taskService.listTasks();
+    if (!tasksResult.success || !tasksResult.value) {
+      vscode.window.showErrorMessage('获取任务信息失败');
+      return;
+    }
+
+    const task = tasksResult.value.find(t => t.id === taskId);
+    if (!task) {
+      vscode.window.showErrorMessage(`任务未找到: ${taskId}`);
+      return;
+    }
+
+    // 获取任务的关联文件信息
+    const relatedFiles = await this.getTaskRelatedFilesByTaskId(taskId);
+    const relatedArtifacts: string[] = [];
+    const relatedCodePaths: string[] = [];
+
+    for (const file of relatedFiles) {
+      if (file.type === 'document' || file.type === 'design') {
+        if (file.id) {
+          relatedArtifacts.push(file.id);
+        }
+      } else if (file.type === 'code' && file.path) {
+        relatedCodePaths.push(file.path);
+      }
+    }
+
+    // 创建 webview panel
+    const panel = vscode.window.createWebviewPanel(
+      'taskEditRelationsDialog',
+      `编辑任务关联文件 - ${task.title}`,
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: false,
+        localResourceRoots: [vscode.Uri.file(webviewDistPath)],
+      }
+    );
+
+    // 加载 HTML
+    let html = fs.readFileSync(htmlPath, 'utf-8');
+
+    // 替换资源路径为 webview URI
+    html = html.replace(
+      /(src|href)=["']([^"']+)["']/g,
+      (match: string, attr: string, resourcePath: string) => {
+        if (
+          resourcePath.match(/^(vscode-webview|https?|data|mailto|tel):/i)
+        ) {
+          return match;
+        }
+
+        let normalizedPath = resourcePath;
+        if (normalizedPath.startsWith('./')) {
+          normalizedPath = normalizedPath.substring(2);
+        } else if (normalizedPath.startsWith('/')) {
+          normalizedPath = normalizedPath.substring(1);
+        }
+
+        const resourceFile = path.join(webviewDistPath, normalizedPath);
+
+        if (fs.existsSync(resourceFile)) {
+          const resourceUri = panel.webview.asWebviewUri(
+            vscode.Uri.file(resourceFile)
+          );
+          return `${attr}="${resourceUri}"`;
+        }
+
+        return match;
+      }
+    );
+
+    // 使用统一的 IDE API 注入工具（支持多 IDE）
+    html = injectIDEAPIScript(html, 'vscode', {
+      view: 'edit-relations-dialog',
+      vaultId: task.vaultId,
+      targetId: task.artifactPath,
+      targetType: 'file',
+      displayName: `Task: ${task.title}`,
+      initialRelatedArtifacts: relatedArtifacts,
+      initialRelatedCodePaths: relatedCodePaths,
+      taskId: taskId,
+    });
+
+    panel.webview.html = html;
+
+    // 设置消息处理器
+    panel.webview.onDidReceiveMessage(
+      async (message: any) => {
+        if (message.method === 'close') {
+          panel.dispose();
+        } else if (message.method === 'updateTaskRelatedFiles') {
+          // 处理任务关联文件更新
+          const result = await this.updateTaskRelatedFiles(
+            taskId,
+            message.params?.relatedArtifacts,
+            message.params?.relatedCodePaths
+          );
+          panel.webview.postMessage({
+            id: message.id,
+            method: message.method,
+            result,
+          });
+          // 如果保存成功，通知主视图刷新
+          if (result.success && this.webviewView?.visible) {
+            this.webviewView.webview.postMessage({
+              method: 'taskChanged',
+              params: { taskId },
+            });
+          }
+        } else {
+          // 转发其他消息到 WebviewAdapter
+          try {
+            await this.handleWebviewMessage(panel.webview, message);
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error handling message in task edit relations dialog', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
         }
       },
       null,

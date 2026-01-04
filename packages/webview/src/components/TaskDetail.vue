@@ -80,24 +80,6 @@
   <div v-else class="empty-task">
     <el-empty description="请选择一个任务查看详情" :image-size="100" />
   </div>
-  <!-- 编辑关联文件对话框 -->
-  <el-dialog
-    v-model="editRelationsDialogVisible"
-    title="编辑关联文件"
-    width="80%"
-    :close-on-click-modal="false"
-  >
-    <EditRelationsForm
-      v-if="editRelationsDialogVisible"
-      :target-type="'file'"
-      :target-id="task?.artifactPath"
-      :vault-id="task?.vaultId"
-      :initial-related-artifacts="relatedArtifacts"
-      :initial-related-code-paths="relatedCodePaths"
-      @saved="handleRelationsSaved"
-      @close="editRelationsDialogVisible = false"
-    />
-  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -105,7 +87,6 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { ElEmpty, ElMessage } from 'element-plus';
 import TaskWorkflowDiagram from './TaskWorkflowDiagram.vue';
 import StepDetailArea from './StepDetailArea.vue';
-import EditRelationsForm from './EditRelationsForm.vue';
 import type { Task, RelatedFile } from '@/types';
 import { extensionService } from '@/services/ExtensionService';
 
@@ -135,9 +116,6 @@ const stepDetailAreaRef = ref<InstanceType<typeof StepDetailArea> | null>(null);
 // 关联文件相关
 const relatedFiles = ref<RelatedFile[]>([]);
 const relatedFilesLoading = ref<boolean>(false);
-const relatedArtifacts = ref<string[]>([]);
-const relatedCodePaths = ref<string[]>([]);
-const editRelationsDialogVisible = ref<boolean>(false);
 
 // 计算是否有表单（用于显示生成提示词按钮）
 const hasForm = computed(() => {
@@ -165,8 +143,6 @@ watch(() => props.task?.id, async (newTaskId, oldTaskId) => {
     console.log('[TaskDetail] Task cleared, resetting state');
     resetTaskState();
     relatedFiles.value = [];
-    relatedArtifacts.value = [];
-    relatedCodePaths.value = [];
     return;
   }
   
@@ -561,14 +537,6 @@ async function loadRelatedFiles() {
     });
     console.log('[TaskDetail] loadRelatedFiles: received files', { count: files?.length || 0, files });
     relatedFiles.value = files || [];
-
-    // 分离 artifacts 和 code paths，用于编辑对话框
-    relatedArtifacts.value = files
-      ?.filter(f => f.type === 'document' || f.type === 'design')
-      .map(f => f.id) || [];
-    relatedCodePaths.value = files
-      ?.filter(f => f.type === 'code')
-      .map(f => f.path) || [];
   } catch (error: any) {
     console.error('[TaskDetail] Failed to load related files:', error);
     ElMessage.error(`加载关联文件失败：${error.message || '未知错误'}`);
@@ -604,21 +572,18 @@ async function handleOpenRelatedFile(file: RelatedFile) {
 /**
  * 打开编辑关联文件对话框
  */
-function handleEditRelations() {
+async function handleEditRelations() {
   if (!props.task) return;
-  editRelationsDialogVisible.value = true;
+  try {
+    await extensionService.call('openTaskEditRelationsDialog', {
+      taskId: props.task.id,
+    });
+  } catch (error: any) {
+    console.error('Failed to open task edit relations dialog:', error);
+    ElMessage.error(`打开编辑对话框失败：${error.message || '未知错误'}`);
+  }
 }
 
-/**
- * 关联文件保存后的处理
- */
-async function handleRelationsSaved() {
-  if (!props.task) return;
-  
-  // 重新加载关联文件
-  await loadRelatedFiles();
-  editRelationsDialogVisible.value = false;
-}
 
 async function ensureSolutionFileAndChapter(_stepId: string) {
   if (!props.task) return;

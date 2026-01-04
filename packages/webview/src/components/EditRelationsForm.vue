@@ -240,6 +240,7 @@ interface Props {
   displayName?: string;
   initialRelatedArtifacts?: string[];
   initialRelatedCodePaths?: string[];
+  taskId?: string; // 如果是任务场景，传递 taskId
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -249,12 +250,14 @@ const props = withDefaults(defineProps<Props>(), {
   displayName: '',
   initialRelatedArtifacts: () => [],
   initialRelatedCodePaths: () => [],
+  taskId: undefined,
 });
 
 const displayName = ref<string>('');
 const vaultId = ref<string>('');
 const targetId = ref<string>('');
 const targetType = ref<'artifact' | 'file' | 'folder' | 'vault'>('artifact');
+const taskId = ref<string | undefined>(undefined);
 
 // 统一的搜索和选择
 const searchQuery = ref('');
@@ -342,6 +345,7 @@ onMounted(async () => {
     targetId.value = props.targetId || '';
     targetType.value = props.targetType || 'artifact';
     displayName.value = props.displayName || '';
+    taskId.value = props.taskId;
 
     if (targetType.value === 'vault') {
       // 加载 vault 元数据
@@ -364,13 +368,21 @@ onMounted(async () => {
     targetId.value = initialData.targetId || '';
     targetType.value = initialData.targetType || 'artifact';
     displayName.value = initialData.displayName || '';
+    taskId.value = initialData.taskId || props.taskId;
 
     if (targetType.value === 'vault') {
       // 加载 vault 元数据
       await loadVaultMetadata();
     } else {
-      // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
-      await loadCurrentRelations();
+      // 如果有初始关联数据，直接使用；否则加载当前的关联关系
+      if (initialData.initialRelatedArtifacts && initialData.initialRelatedArtifacts.length > 0 || 
+          initialData.initialRelatedCodePaths && initialData.initialRelatedCodePaths.length > 0) {
+        await loadFiles();
+        await setInitialRelations();
+      } else {
+        // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
+        await loadCurrentRelations();
+      }
     }
   } else {
     // 如果没有初始数据，只加载文件
@@ -403,8 +415,21 @@ const loadVaultMetadata = async () => {
 
 const setInitialRelations = async () => {
   try {
-    const artifactIds = props.initialRelatedArtifacts || [];
-    const codePaths = props.initialRelatedCodePaths || [];
+    // 优先使用 props，如果没有则从 window.initialData 获取
+    let artifactIds: string[] = [];
+    let codePaths: string[] = [];
+    
+    if (props.initialRelatedArtifacts && props.initialRelatedArtifacts.length > 0) {
+      artifactIds = props.initialRelatedArtifacts;
+    } else if ((window as any).initialData?.initialRelatedArtifacts) {
+      artifactIds = (window as any).initialData.initialRelatedArtifacts;
+    }
+    
+    if (props.initialRelatedCodePaths && props.initialRelatedCodePaths.length > 0) {
+      codePaths = props.initialRelatedCodePaths;
+    } else if ((window as any).initialData?.initialRelatedCodePaths) {
+      codePaths = (window as any).initialData.initialRelatedCodePaths;
+    }
 
     // 设置初始选中的文件
     const selected: FileItem[] = [];
@@ -591,20 +616,29 @@ const handleSave = async () => {
         }
       }
 
-      await Promise.all([
-        extensionService.call('artifact.updateRelatedArtifacts', {
-          vaultId: vaultId.value,
-          targetId: targetId.value,
-          targetType: targetType.value,
+      // 如果是任务场景，使用 updateTaskRelatedFiles
+      if (taskId.value) {
+        await extensionService.call('updateTaskRelatedFiles', {
+          taskId: taskId.value,
           relatedArtifacts: artifactIds,
-        }),
-        extensionService.call('artifact.updateRelatedCodePaths', {
-          vaultId: vaultId.value,
-          targetId: targetId.value,
-          targetType: targetType.value,
           relatedCodePaths: codePaths,
-        }),
-      ]);
+        });
+      } else {
+        await Promise.all([
+          extensionService.call('artifact.updateRelatedArtifacts', {
+            vaultId: vaultId.value,
+            targetId: targetId.value,
+            targetType: targetType.value,
+            relatedArtifacts: artifactIds,
+          }),
+          extensionService.call('artifact.updateRelatedCodePaths', {
+            vaultId: vaultId.value,
+            targetId: targetId.value,
+            targetType: targetType.value,
+            relatedCodePaths: codePaths,
+          }),
+        ]);
+      }
 
       ElMessage.success('关联关系已保存');
     }
