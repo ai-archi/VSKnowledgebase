@@ -4,6 +4,11 @@
   "description": "Architecture Management Tool for VSCode",
   "version": "0.0.1",
   "publisher": "architool",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ai-archi/VSKnowledgebase.git"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.100.0"
   },
