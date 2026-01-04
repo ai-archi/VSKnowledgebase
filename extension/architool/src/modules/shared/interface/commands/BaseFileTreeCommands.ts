@@ -630,6 +630,9 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
             hasContentLocation: !!contentLocation
           });
           if (vaultName) {
+            // 显示成功消息
+            vscode.window.showInformationMessage(`文件创建成功: ${filePath}`);
+            
             this.treeViewProvider.refresh();
             // 如果 folderPath 为空字符串，只展开 vault；否则展开到文件夹路径
             const pathToExpand = folderPath && folderPath.trim() !== '' ? folderPath : undefined;
@@ -657,6 +660,18 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           setTimeout(() => {
             panel.dispose();
           }, 100);
+          return;
+        }
+        if (message.method === 'showErrorMessage') {
+          // 显示错误消息
+          const errorMessage = message.params?.message || '未知错误';
+          vscode.window.showErrorMessage(errorMessage);
+          return;
+        }
+        if (message.method === 'showSuccessMessage') {
+          // 显示成功消息
+          const successMessage = message.params?.message || '操作成功';
+          vscode.window.showInformationMessage(successMessage);
           return;
         }
         this.logger.info(`[BaseFileTreeCommands] Forwarding message to WebviewAdapter: ${message.method}`, {

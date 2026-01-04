@@ -281,7 +281,7 @@ function formatDate(date: Date | string): string {
 .category-count {
   font-size: 12px;
   color: var(--vscode-descriptionForeground, #999999);
-  margin-left: auto;
+  margin-left: 4px;
 }
 
 .create-task-button {

@@ -269,7 +269,8 @@ export class WebviewRPC {
               : Promise.resolve({ success: true } as any),
           ]);
           
-          // 检查更新结果
+          // 检查更新结果，如果有失败则抛出错误
+          const errors: string[] = [];
           for (let i = 0; i < updateResults.length; i++) {
             const updateResult = updateResults[i];
             if (!updateResult.success) {
@@ -282,6 +283,9 @@ export class WebviewRPC {
               
               const errorMessage = errorDetails.message || 'Unknown error';
               const errorCode = errorDetails.code || 'UNKNOWN';
+              const relationType = i === 0 ? '关联文档' : '关联代码路径';
+              errors.push(`${relationType}保存失败: ${errorMessage}`);
+              
               this.logger.error(`[WebviewRPC] Failed to update ${i === 0 ? 'relatedArtifacts' : 'relatedCodePaths'}`, {
                 artifactId: artifact.id,
                 errorMessage,
@@ -296,6 +300,11 @@ export class WebviewRPC {
                 count: i === 0 ? params.relatedArtifacts?.length : params.relatedCodePaths?.length
               });
             }
+          }
+          
+          // 如果有错误，抛出异常通知前端
+          if (errors.length > 0) {
+            throw new Error(`文件创建成功，但保存关联关系失败：${errors.join('; ')}`);
           }
         } else if (result.success) {
           this.logger.info('[WebviewRPC] No related artifacts or code paths to save', {

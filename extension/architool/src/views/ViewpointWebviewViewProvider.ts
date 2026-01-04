@@ -1731,8 +1731,303 @@ export class ViewpointWebviewViewProvider {
               params: { taskId },
             });
           }
+        } else if (message.method === 'vault.list') {
+          // 获取 Vault 列表
+          const vaultsResult = await this.vaultService.listVaults();
+          panel.webview.postMessage({
+            id: message.id,
+            method: message.method,
+            result: vaultsResult.success ? vaultsResult.value : [],
+          });
+        } else if (message.method === 'document.list') {
+          // 获取文档列表（支持查询）
+          const params = message.params || {};
+          const result = await this.artifactService.listFilesAndFolders(params.vaultId, {
+            query: params.query,
+          });
+          if (!result.success) {
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: result.error.message,
+              },
+            });
+          } else {
+            // 获取 vault 信息并添加到返回结果中
+            let vaultInfo: { id: string; name: string } | undefined;
+            if (params.vaultId) {
+              const vaultResult = await this.vaultService.getVault(params.vaultId);
+              if (vaultResult.success && vaultResult.value) {
+                vaultInfo = { id: vaultResult.value.id, name: vaultResult.value.name };
+              }
+            }
+
+            const items = result.value.map((item: any) => ({
+              ...item,
+              vault: vaultInfo,
+            }));
+
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: items,
+            });
+          }
+        } else if (message.method === 'workspace.listFiles') {
+          // 获取工作区文件列表（支持查询，包含文件和文件夹）
+          try {
+            const params = message.params || {};
+            const query = params.query?.trim().toLowerCase() || '';
+            
+            // 获取工作区文件夹
+            const workspaceFolders = this.ideAdapter.getWorkspaceFolders();
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: [],
+              });
+              return;
+            }
+
+            // 递归遍历文件夹，获取所有文件和文件夹
+            const allItems: any[] = [];
+            const maxResults = 10000;
+            const excludePatterns = ['node_modules', '.git', '.architool'];
+            
+            // 递归遍历函数
+            const traverseDirectory = async (dirPath: string, basePath: string, relativeBase: string): Promise<void> => {
+              try {
+                const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+                
+                for (const entry of entries) {
+                  // 检查是否应该排除
+                  if (excludePatterns.includes(entry.name)) {
+                    continue;
+                  }
+                  
+                  const fullPath = path.join(dirPath, entry.name);
+                  const relativePath = path.relative(basePath, fullPath).replace(/\\/g, '/');
+                  
+                  // 如果有关键词，进行过滤
+                  if (query && !relativePath.toLowerCase().includes(query)) {
+                    // 如果是文件夹，仍然需要递归检查子项
+                    if (entry.isDirectory()) {
+                      await traverseDirectory(fullPath, basePath, relativePath);
+                    }
+                    continue;
+                  }
+                  
+                  // 检查是否超过最大结果数
+                  if (allItems.length >= maxResults) {
+                    return;
+                  }
+                  
+                  const fileName = entry.name;
+                  const itemType = entry.isDirectory() ? 'folder' : 'file';
+                  
+                  allItems.push({
+                    id: relativePath,
+                    path: relativePath,
+                    name: fileName,
+                    title: itemType === 'file' ? fileName.replace(/\.[^/.]+$/, '') : fileName,
+                    type: itemType,
+                  });
+                  
+                  // 如果是文件夹，递归遍历
+                  if (entry.isDirectory()) {
+                    await traverseDirectory(fullPath, basePath, relativePath);
+                  }
+                }
+              } catch (error: any) {
+                // 忽略权限错误等
+                this.logger.debug(`Failed to traverse directory: ${dirPath}`, error);
+              }
+            };
+
+            // 遍历所有工作区文件夹
+            for (const folder of workspaceFolders) {
+              try {
+                const folderPath = folder.uri.fsPath;
+                await traverseDirectory(folderPath, folderPath, '');
+              } catch (error: any) {
+                this.logger.warn(`Failed to list files in workspace folder: ${folder.uri}`, error);
+              }
+            }
+
+            // 排序：文件夹在前，文件在后，都按路径排序
+            allItems.sort((a, b) => {
+              if (a.type === 'folder' && b.type === 'file') return -1;
+              if (a.type === 'file' && b.type === 'folder') return 1;
+              return a.path.localeCompare(b.path);
+            });
+
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              result: allItems,
+            });
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Failed to list workspace files', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
+        } else if (message.method === 'artifact.getRelatedArtifacts') {
+          // 获取关联的文档
+          try {
+            const params = message.params || {};
+            const result = await this.artifactService.getRelatedArtifacts(
+              params.vaultId,
+              params.targetId,
+              params.targetType
+            );
+            if (!result.success) {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                error: {
+                  code: -1,
+                  message: result.error.message,
+                },
+              });
+            } else {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: result.value || [],
+              });
+            }
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error getting related artifacts', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
+        } else if (message.method === 'artifact.getRelatedCodePaths') {
+          // 获取关联的代码路径
+          try {
+            const params = message.params || {};
+            const result = await this.artifactService.getRelatedCodePaths(
+              params.vaultId,
+              params.targetId,
+              params.targetType
+            );
+            if (!result.success) {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                error: {
+                  code: -1,
+                  message: result.error.message,
+                },
+              });
+            } else {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: result.value || [],
+              });
+            }
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error getting related code paths', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
+        } else if (message.method === 'artifact.updateRelatedArtifacts') {
+          // 更新关联的文档
+          try {
+            const params = message.params || {};
+            const result = await this.artifactService.updateRelatedArtifacts(
+              params.vaultId,
+              params.targetId,
+              params.targetType,
+              params.relatedArtifacts || []
+            );
+            if (!result.success) {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                error: {
+                  code: -1,
+                  message: result.error.message,
+                },
+              });
+            } else {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: result.value,
+              });
+            }
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error updating related artifacts', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
+        } else if (message.method === 'artifact.updateRelatedCodePaths') {
+          // 更新关联的代码路径
+          try {
+            const params = message.params || {};
+            const result = await this.artifactService.updateRelatedCodePaths(
+              params.vaultId,
+              params.targetId,
+              params.targetType,
+              params.relatedCodePaths || []
+            );
+            if (!result.success) {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                error: {
+                  code: -1,
+                  message: result.error.message,
+                },
+              });
+            } else {
+              panel.webview.postMessage({
+                id: message.id,
+                method: message.method,
+                result: result.value,
+              });
+            }
+          } catch (error: any) {
+            this.logger.error('[ViewpointWebviewViewProvider] Error updating related code paths', error);
+            panel.webview.postMessage({
+              id: message.id,
+              method: message.method,
+              error: {
+                code: -1,
+                message: error.message,
+              },
+            });
+          }
         } else {
-          // 转发其他消息到 WebviewAdapter
+          // 未处理的消息，转发到主消息处理器
           try {
             await this.handleWebviewMessage(panel.webview, message);
           } catch (error: any) {

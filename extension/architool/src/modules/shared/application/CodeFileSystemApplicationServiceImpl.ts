@@ -31,6 +31,26 @@ export class CodeFileSystemApplicationServiceImpl implements CodeFileSystemAppli
       // 直接传递查询字符串给适配器，由适配器统一处理搜索逻辑
       const query = options?.query?.trim();
 
+      // 特殊处理：如果查询是 '*'，表示获取所有文件（用于编辑关联关系等场景）
+      if (query === '*') {
+        this.logger.info(`[CodeFileSystemApplicationService] Query is '*', loading all files`);
+        // 遍历所有工作区文件夹，获取所有文件
+        for (const folder of workspaceFolders) {
+          try {
+            // 使用适配器查找所有文件和文件夹（不应用查询过滤）
+            const result = await this.workspaceAdapter.findFilesAndFolders(folder.uri, {
+              maxResults: 10000, // 设置较大的上限
+            });
+            if (result.success && result.value) {
+              items.push(...result.value);
+            }
+          } catch (err: any) {
+            this.logger.warn(`[CodeFileSystemApplicationService] Failed to list files in folder ${folder.uri}`, err);
+          }
+        }
+        return { success: true, value: items };
+      }
+
       // 如果没有查询条件或查询太短，不执行搜索（避免性能问题）
       if (!query || query.length < 2) {
         this.logger.info(`[CodeFileSystemApplicationService] Query too short or empty, skipping search`);

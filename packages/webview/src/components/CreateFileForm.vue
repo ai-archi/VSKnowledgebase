@@ -655,33 +655,60 @@ const handleCreate = async () => {
     
     console.log('[CreateFileForm] Request params for document.create:', JSON.stringify(requestParams, null, 2));
     
-    const result = await extensionService.call('document.create', requestParams);
+    let result;
+    try {
+      result = await extensionService.call('document.create', requestParams);
+    } catch (err: any) {
+      // 如果创建失败或保存关联关系失败，都会抛出错误
+      console.error('[CreateFileForm] document.create failed', {
+        error: err,
+        message: err.message,
+        stack: err.stack,
+        requestParams
+      });
+      throw err; // 重新抛出，让 catch 块处理
+    }
 
     console.log('[CreateFileForm] Document created successfully', result);
     console.log('[CreateFileForm] Full result object:', JSON.stringify(result, null, 2));
     console.log('[CreateFileForm] contentLocation from result:', result?.contentLocation);
     console.log('[CreateFileForm] Has contentLocation:', !!result?.contentLocation);
+    console.log('[CreateFileForm] Related files saved:', {
+      relatedArtifactsCount: relatedArtifacts.length,
+      relatedCodePathsCount: relatedCodePaths.length,
+      hasRelatedArtifacts: relatedArtifacts.length > 0,
+      hasRelatedCodePaths: relatedCodePaths.length > 0
+    });
     
     if (!result?.contentLocation) {
       console.error('[CreateFileForm] WARNING: contentLocation is missing in result!', result);
     }
     
-    ElMessage.success('文件创建成功');
+    // 在 webview 中显示成功消息（如果 ElMessage 可用）
+    try {
+      const successMsg = relatedArtifacts.length > 0 || relatedCodePaths.length > 0
+        ? `文件创建成功，已保存 ${relatedArtifacts.length} 个关联文档和 ${relatedCodePaths.length} 个关联代码路径`
+        : '文件创建成功';
+      ElMessage.success(successMsg);
+    } catch (e) {
+      // ElMessage 可能不可用，忽略错误
+    }
+    
     emit('created', result);
     
     // 通知后端刷新和展开
-      const vault = vaults.value.find(v => v.id === formData.value.vaultId);
+    const vault = vaults.value.find(v => v.id === formData.value.vaultId);
     // 重用上面定义的 folderPath，如果为 undefined 则使用空字符串
     const folderPathForMessage = folderPath || '';
-      const messageParams = {
-        vaultName: vault?.name,
+    const messageParams = {
+      vaultName: vault?.name,
       folderPath: folderPathForMessage,
-        filePath: filePath,
-        contentLocation: result?.contentLocation,
-      };
-      console.log('[CreateFileForm] Sending fileCreated message with params:', messageParams);
+      filePath: filePath,
+      contentLocation: result?.contentLocation,
+    };
+    console.log('[CreateFileForm] Sending fileCreated message with params:', messageParams);
     extensionService.postEvent('fileCreated', messageParams);
-      // 注意：不需要单独发送 close 消息，后端会在处理完 fileCreated 后自动关闭
+    // 注意：不需要单独发送 close 消息，后端会在处理完 fileCreated 后自动关闭
   } catch (err: any) {
     console.error('[CreateFileForm] Failed to create document', {
       error: err,
@@ -690,7 +717,16 @@ const handleCreate = async () => {
       vaultId: formData.value.vaultId,
       fileName: formData.value.fileName
     });
-    ElMessage.error(`创建文件失败: ${err.message || '未知错误'}`);
+    
+    // 在 webview 中显示错误消息（如果 ElMessage 可用）
+    try {
+      ElMessage.error(`创建文件失败: ${err.message || '未知错误'}`);
+    } catch (e) {
+      // ElMessage 可能不可用，通过后端显示错误消息
+      extensionService.postEvent('showErrorMessage', { 
+        message: `创建文件失败: ${err.message || '未知错误'}` 
+      });
+    }
   } finally {
     creating.value = false;
   }

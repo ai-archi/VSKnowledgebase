@@ -354,10 +354,11 @@ onMounted(async () => {
       // 如果有初始关联数据，直接使用；否则加载当前的关联关系
       if (props.initialRelatedArtifacts && props.initialRelatedArtifacts.length > 0 || 
           props.initialRelatedCodePaths && props.initialRelatedCodePaths.length > 0) {
+        // 只加载文档文件（用于匹配关联的文档），代码文件直接从 codePaths 创建
         await loadFiles();
         await setInitialRelations();
       } else {
-        // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
+        // 加载当前的关联关系（内部会先加载文档文件，然后加载关联关系并设置选中状态）
         await loadCurrentRelations();
       }
     }
@@ -377,10 +378,11 @@ onMounted(async () => {
       // 如果有初始关联数据，直接使用；否则加载当前的关联关系
       if (initialData.initialRelatedArtifacts && initialData.initialRelatedArtifacts.length > 0 || 
           initialData.initialRelatedCodePaths && initialData.initialRelatedCodePaths.length > 0) {
+        // 只加载文档文件（用于匹配关联的文档），代码文件直接从 codePaths 创建
         await loadFiles();
         await setInitialRelations();
       } else {
-        // 加载当前的关联关系（内部会先加载文件，然后加载关联关系并设置选中状态）
+        // 加载当前的关联关系（内部会先加载文档文件，然后加载关联关系并设置选中状态）
         await loadCurrentRelations();
       }
     }
@@ -433,6 +435,8 @@ const setInitialRelations = async () => {
 
     // 设置初始选中的文件
     const selected: FileItem[] = [];
+    
+    // 1. 处理关联的文档：需要从 allFiles 中匹配（因为需要文档的完整信息）
     for (const file of allFiles.value) {
       const fileKey = getFileKey(file);
       
@@ -443,8 +447,41 @@ const setInitialRelations = async () => {
       } else if (!file.isCodeFile && artifactIds.includes(file.path)) {
         selected.push(file);
         initialSelectedFileKeys.value.add(fileKey);
-      } else if (file.isCodeFile && codePaths.includes(file.path)) {
-        selected.push(file);
+      }
+    }
+    
+    // 2. 处理关联的代码文件：直接从 codePaths 创建 FileItem，不需要从 listFiles 匹配
+    // 这样可以避免依赖 listFiles 返回结果，即使它返回空数组也能正确回显
+    for (const codePath of codePaths) {
+      // 检查是否已经在 selected 中（可能通过 allFiles 匹配到了）
+      const alreadySelected = selected.some(f => {
+        if (f.isCodeFile) {
+          const archidocsPath = vaultId.value ? `archidocs/${vaultId.value}/${f.path}` : f.path;
+          return f.path === codePath || archidocsPath === codePath;
+        }
+        return false;
+      });
+      
+      if (!alreadySelected) {
+        // 从 codePath 中提取相对路径（去掉 archidocs/vaultId/ 前缀）
+        let relativePath = codePath;
+        if (codePath.startsWith('archidocs/')) {
+          // 格式：archidocs/vaultId/path
+          const parts = codePath.split('/');
+          if (parts.length >= 3 && parts[0] === 'archidocs') {
+            relativePath = parts.slice(2).join('/');
+          }
+        }
+        
+        const fileItem: FileItem = {
+          path: relativePath,
+          name: relativePath.split('/').pop() || relativePath,
+          type: 'file',
+          isCodeFile: true,
+        };
+        
+        selected.push(fileItem);
+        const fileKey = getFileKey(fileItem);
         initialSelectedFileKeys.value.add(fileKey);
       }
     }
@@ -458,7 +495,7 @@ const setInitialRelations = async () => {
 
 const loadCurrentRelations = async () => {
   try {
-    // 先加载所有文件
+    // 先加载文档文件（用于匹配关联的文档）
     await loadFiles();
 
     // 然后获取当前的关联关系
@@ -480,8 +517,11 @@ const loadCurrentRelations = async () => {
 
     // 设置初始选中的文件
     const selected: FileItem[] = [];
+    
+    // 1. 处理关联的文档：从 allFiles 中匹配
     for (const file of allFiles.value) {
       const fileKey = getFileKey(file);
+      
       // 检查是否是关联的文档（通过ID或path匹配）
       if (file.id && artifactIds.includes(file.id)) {
         selected.push(file);
@@ -489,8 +529,40 @@ const loadCurrentRelations = async () => {
       } else if (!file.isCodeFile && artifactIds.includes(file.path)) {
         selected.push(file);
         initialSelectedFileKeys.value.add(fileKey);
-      } else if (file.isCodeFile && codePaths.includes(file.path)) {
-        selected.push(file);
+      }
+    }
+    
+    // 2. 处理关联的代码文件：直接从 codePaths 创建 FileItem，不需要从 listFiles 匹配
+    for (const codePath of codePaths) {
+      // 检查是否已经在 selected 中（可能通过 allFiles 匹配到了）
+      const alreadySelected = selected.some(f => {
+        if (f.isCodeFile) {
+          const archidocsPath = vaultId.value ? `archidocs/${vaultId.value}/${f.path}` : f.path;
+          return f.path === codePath || archidocsPath === codePath;
+        }
+        return false;
+      });
+      
+      if (!alreadySelected) {
+        // 从 codePath 中提取相对路径（去掉 archidocs/vaultId/ 前缀）
+        let relativePath = codePath;
+        if (codePath.startsWith('archidocs/')) {
+          // 格式：archidocs/vaultId/path
+          const parts = codePath.split('/');
+          if (parts.length >= 3 && parts[0] === 'archidocs') {
+            relativePath = parts.slice(2).join('/');
+          }
+        }
+        
+        const fileItem: FileItem = {
+          path: relativePath,
+          name: relativePath.split('/').pop() || relativePath,
+          type: 'file',
+          isCodeFile: true,
+        };
+        
+        selected.push(fileItem);
+        const fileKey = getFileKey(fileItem);
         initialSelectedFileKeys.value.add(fileKey);
       }
     }
@@ -527,16 +599,21 @@ const loadFiles = async (query?: string) => {
     }
     
     // 加载 workspace 的代码文件
-    try {
-      const workspaceResult = await extensionService.call<FileItem[]>('workspace.listFiles', {
-        query: query,
-      });
-      if (workspaceResult) {
-        // 标记为代码文件
-        allResults.push(...workspaceResult.map(f => ({ ...f, isCodeFile: true })));
+    // 注意：只在有查询条件时才调用 listFiles（用于搜索功能）
+    // 回显已选择的文件不需要调用 listFiles，直接从 relatedCodePaths 创建 FileItem
+    if (query && query !== '*') {
+      try {
+        const workspaceResult = await extensionService.call<FileItem[]>('workspace.listFiles', {
+          query: query,
+        });
+        if (workspaceResult) {
+          // 标记为代码文件
+          const codeFiles = workspaceResult.map(f => ({ ...f, isCodeFile: true }));
+          allResults.push(...codeFiles);
+        }
+      } catch (err: any) {
+        console.error('Failed to load workspace files', err);
       }
-    } catch (err: any) {
-      console.error('Failed to load workspace files', err);
     }
     
     allFiles.value = allResults;

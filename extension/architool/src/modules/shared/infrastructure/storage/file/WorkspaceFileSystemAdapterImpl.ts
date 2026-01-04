@@ -235,6 +235,54 @@ export class WorkspaceFileSystemAdapterImpl implements WorkspaceFileSystemAdapte
       const maxResults = options?.maxResults || 100;
       const query = options?.query?.trim();
       
+      // 特殊处理：如果查询是 '*'，表示获取所有文件（用于编辑关联关系等场景）
+      if (query === '*') {
+        // 构建 ignore 实例
+        const { instance: ig, ignorePatterns } = await this.buildIgnoreInstance(folderUri, options);
+        
+        // 使用 fast-glob 获取所有文件和文件夹
+        const allItems: WorkspaceFileItem[] = [];
+        const globPatterns = ['**/*', '**/'];
+        
+        for (const pattern of globPatterns) {
+          const entries = await fg(pattern, {
+            cwd: folderUri,
+            ignore: ignorePatterns,
+            onlyFiles: pattern === '**/*',
+            onlyDirectories: pattern === '**/',
+            absolute: false,
+            deep: 10, // 限制深度
+          });
+          
+          for (const entry of entries.slice(0, maxResults)) {
+            const fullPath = path.join(folderUri, entry);
+            const stat = fs.statSync(fullPath);
+            const relativePath = path.relative(folderUri, fullPath).replace(/\\/g, '/');
+            
+            // 使用 ignore 实例再次过滤（双重保险）
+            if (ig.ignores(relativePath)) {
+              continue;
+            }
+            
+            allItems.push({
+              path: relativePath,
+              name: path.basename(entry),
+              type: stat.isDirectory() ? 'folder' : 'file',
+            });
+            
+            if (allItems.length >= maxResults) {
+              break;
+            }
+          }
+          
+          if (allItems.length >= maxResults) {
+            break;
+          }
+        }
+        
+        return { success: true, value: allItems };
+      }
+      
       // 如果没有查询条件或查询太短，不执行搜索
       if (!query || query.length < 2) {
         return { success: true, value: [] };
