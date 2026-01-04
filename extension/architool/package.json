@@ -23,14 +23,12 @@
       ]
     },
     "views": {
-      "explorer": [
+      "architool": [
         {
           "id": "architool.documentView",
           "name": "Documents",
           "when": "true"
-        }
-      ],
-      "architool": [
+        },
         {
           "id": "architool.viewpointView",
           "name": "Viewpoints",
