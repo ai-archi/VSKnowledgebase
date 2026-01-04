@@ -7,6 +7,7 @@
           <h3>任务详情</h3>
           <div class="header-actions">
             <el-button size="small" @click="handleOpenSolution">打开方案</el-button>
+            <el-button size="small" @click="handleEditRelations">编辑</el-button>
             <el-button
               type="primary"
               size="small"
@@ -74,18 +75,6 @@
           </div>
         </div>
       </div>
-      <!-- 关联文件区域 -->
-      <div class="related-files-section">
-        <div class="related-files-header">
-          <h3>关联文件</h3>
-          <el-button size="small" @click="handleEditRelations">编辑</el-button>
-        </div>
-        <RelatedFiles
-          :files="relatedFiles"
-          :loading="relatedFilesLoading"
-          @open="handleOpenRelatedFile"
-        />
-      </div>
     </div>
   </div>
   <div v-else class="empty-task">
@@ -116,7 +105,6 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { ElEmpty, ElMessage } from 'element-plus';
 import TaskWorkflowDiagram from './TaskWorkflowDiagram.vue';
 import StepDetailArea from './StepDetailArea.vue';
-import RelatedFiles from './RelatedFiles.vue';
 import EditRelationsForm from './EditRelationsForm.vue';
 import type { Task, RelatedFile } from '@/types';
 import { extensionService } from '@/services/ExtensionService';
@@ -834,26 +822,6 @@ async function ensureSolutionFileAndChapter(_stepId: string) {
   justify-content: center;
   height: 100%;
   color: var(--vscode-descriptionForeground, #999999);
-}
-
-.related-files-section {
-  border-top: 1px solid var(--vscode-panel-border, #3e3e3e);
-  background: var(--vscode-panel-background, #1e1e1e);
-}
-
-.related-files-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
-}
-
-.related-files-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--vscode-foreground, #cccccc);
 }
 </style>
 
