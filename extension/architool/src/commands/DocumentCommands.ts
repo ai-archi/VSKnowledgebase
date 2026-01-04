@@ -10,6 +10,7 @@ import { WebviewAdapter } from '../core/vscode-api/WebviewAdapter';
 import { BaseFileTreeCommands } from '../modules/shared/interface/commands/BaseFileTreeCommands';
 import { FileTreeDomainService } from '../modules/shared/domain/services/FileTreeDomainService';
 import { FileOperationDomainService } from '../modules/shared/domain/services/FileOperationDomainService';
+import { ARCHITOOL_PATHS } from '../core/constants/Paths';
 
 export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
   constructor(
@@ -263,6 +264,24 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
           await this.editRelations(item);
         },
       },
+      {
+        command: 'archi.document.copyPath',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.copyPath(item);
+        },
+      },
+      {
+        command: 'archi.document.copyRelativePath',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.copyRelativePath(item);
+        },
+      },
+      {
+        command: 'archi.document.copyName',
+        callback: async (item?: DocumentTreeItem) => {
+          await this.copyName(item);
+        },
+      },
     ]);
   }
 
@@ -505,6 +524,152 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     } catch (error: any) {
       this.logger.error('Failed to show edit metadata dialog', error);
       vscode.window.showErrorMessage(`Failed to show edit metadata dialog: ${error.message}`);
+    }
+  }
+
+  /**
+   * 复制完整路径
+   */
+  private async copyPath(item?: DocumentTreeItem): Promise<void> {
+    try {
+      if (!item) {
+        const selection = this.treeView.selection;
+        if (selection.length === 0) {
+          vscode.window.showErrorMessage('Please select an item to copy path');
+          return;
+        }
+        item = selection[0] as DocumentTreeItem;
+      }
+
+      let fullPath: string;
+
+      // 优先使用 artifact.contentLocation（如果存在），这是最准确的完整路径
+      if (item.artifact?.contentLocation) {
+        fullPath = item.artifact.contentLocation;
+      } else {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+          vscode.window.showErrorMessage('No workspace folder found');
+          return;
+        }
+
+        const workspaceRoot = workspaceFolder.uri.fsPath;
+
+        if (item.filePath) {
+          // 文件节点
+          if (!item.vaultId) {
+            vscode.window.showErrorMessage('Vault ID not found');
+            return;
+          }
+          const vaultPath = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, item.vaultId);
+          fullPath = path.join(vaultPath, item.filePath);
+        } else if (item.folderPath !== undefined) {
+          // 文件夹节点
+          if (!item.vaultId) {
+            vscode.window.showErrorMessage('Vault ID not found');
+            return;
+          }
+          const vaultPath = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, item.vaultId);
+          fullPath = path.join(vaultPath, item.folderPath);
+        } else if (item.vaultName) {
+          // Vault 节点
+          if (!item.vaultId) {
+            vscode.window.showErrorMessage('Vault ID not found');
+            return;
+          }
+          fullPath = path.join(workspaceRoot, ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR, item.vaultId);
+        } else {
+          vscode.window.showErrorMessage('Unable to determine item type');
+          return;
+        }
+      }
+
+      await vscode.env.clipboard.writeText(fullPath);
+      vscode.window.showInformationMessage('Path copied to clipboard');
+    } catch (error: any) {
+      this.logger.error('Failed to copy path', error);
+      vscode.window.showErrorMessage(`Failed to copy path: ${error.message}`);
+    }
+  }
+
+  /**
+   * 复制相对路径（包含 archidocs 前缀）
+   */
+  private async copyRelativePath(item?: DocumentTreeItem): Promise<void> {
+    try {
+      if (!item) {
+        const selection = this.treeView.selection;
+        if (selection.length === 0) {
+          vscode.window.showErrorMessage('Please select an item to copy relative path');
+          return;
+        }
+        item = selection[0] as DocumentTreeItem;
+      }
+
+      if (!item.vaultId) {
+        vscode.window.showErrorMessage('Vault ID not found');
+        return;
+      }
+
+      let relativePath: string;
+
+      if (item.filePath) {
+        // 文件节点：archidocs/vaultId/filePath
+        relativePath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${item.vaultId}/${item.filePath}`;
+      } else if (item.folderPath !== undefined) {
+        // 文件夹节点：archidocs/vaultId/folderPath
+        relativePath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${item.vaultId}/${item.folderPath}`;
+      } else if (item.vaultName) {
+        // Vault 节点：archidocs/vaultId
+        relativePath = `${ARCHITOOL_PATHS.WORKSPACE_ROOT_DIR}/${item.vaultId}`;
+      } else {
+        vscode.window.showErrorMessage('Unable to determine item type');
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(relativePath);
+      vscode.window.showInformationMessage('Relative path copied to clipboard');
+    } catch (error: any) {
+      this.logger.error('Failed to copy relative path', error);
+      vscode.window.showErrorMessage(`Failed to copy relative path: ${error.message}`);
+    }
+  }
+
+  /**
+   * 复制文件名（含后缀）
+   */
+  private async copyName(item?: DocumentTreeItem): Promise<void> {
+    try {
+      if (!item) {
+        const selection = this.treeView.selection;
+        if (selection.length === 0) {
+          vscode.window.showErrorMessage('Please select an item to copy name');
+          return;
+        }
+        item = selection[0] as DocumentTreeItem;
+      }
+
+      let name: string;
+
+      if (item.filePath) {
+        // 文件节点：文件名（含后缀）
+        name = path.basename(item.filePath);
+      } else if (item.folderPath !== undefined) {
+        // 文件夹节点：文件夹名
+        name = path.basename(item.folderPath) || item.folderPath;
+      } else if (item.vaultName) {
+        // Vault 节点：vault 名称
+        name = item.vaultName;
+      } else {
+        vscode.window.showErrorMessage('Unable to determine item type');
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(name);
+      vscode.window.showInformationMessage('Name copied to clipboard');
+    } catch (error: any) {
+      this.logger.error('Failed to copy name', error);
+      vscode.window.showErrorMessage(`Failed to copy name: ${error.message}`);
     }
   }
 }

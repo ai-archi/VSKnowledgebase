@@ -193,6 +193,18 @@
       {
         "command": "archi.artifact.list",
         "title": "List Artifacts"
+      },
+      {
+        "command": "archi.document.copyPath",
+        "title": "Copy Path"
+      },
+      {
+        "command": "archi.document.copyRelativePath",
+        "title": "Copy Relative Path"
+      },
+      {
+        "command": "archi.document.copyName",
+        "title": "Copy Name"
       }
     ],
     "menus": {
@@ -313,6 +325,21 @@
           "command": "archi.document.delete",
           "when": "view == architool.documentView && viewItem == folder",
           "group": "2_actions"
+        },
+        {
+          "command": "archi.document.copyPath",
+          "when": "view == architool.documentView && (viewItem == document || viewItem == folder || viewItem == vault || viewItem == vault-git)",
+          "group": "3_copy"
+        },
+        {
+          "command": "archi.document.copyRelativePath",
+          "when": "view == architool.documentView && (viewItem == document || viewItem == folder || viewItem == vault || viewItem == vault-git)",
+          "group": "3_copy"
+        },
+        {
+          "command": "archi.document.copyName",
+          "when": "view == architool.documentView && (viewItem == document || viewItem == folder || viewItem == vault || viewItem == vault-git)",
+          "group": "3_copy"
         }
       ]
     }
