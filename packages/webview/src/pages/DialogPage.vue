@@ -40,7 +40,7 @@ const handleClose = () => {
   display: flex;
   flex-direction: column;
   background: var(--vscode-editor-background, #1e1e1e);
-  overflow: hidden;
+  overflow-y: auto;
 }
 </style>
 

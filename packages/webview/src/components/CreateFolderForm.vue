@@ -955,7 +955,7 @@ const loadTemplateContent = async (templateId: string) => {
   box-sizing: border-box;
   background: var(--vscode-editor-background, #1e1e1e);
   color: var(--vscode-editor-foreground, #cccccc);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* 头部区域 */

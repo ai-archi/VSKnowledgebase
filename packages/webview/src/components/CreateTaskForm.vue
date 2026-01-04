@@ -64,11 +64,10 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="流程模板">
+            <el-form-item label="流程模板" required>
               <el-select
                 v-model="formData.workflowTemplate"
-                placeholder="选择流程模板（可选）"
-                clearable
+                placeholder="请选择流程模板"
                 style="width: 100%"
                 :loading="loadingTemplates"
               >
@@ -290,7 +289,8 @@ const filteredFiles = computed(() => {
 const canCreate = computed(() => {
   return (
     formData.value.title.trim() !== '' &&
-    formData.value.vaultId !== ''
+    formData.value.vaultId !== '' &&
+    formData.value.workflowTemplate !== ''
   );
 });
 
@@ -522,7 +522,7 @@ const handleCreate = async () => {
           vaultId: formData.value.vaultId,
           priority: formData.value.priority,
           relatedFiles: selectedFiles.value.map(f => f.id || f.path),
-          workflowTemplate: formData.value.workflowTemplate || 'default',
+          workflowTemplate: formData.value.workflowTemplate,
     });
 
     if (task) {
@@ -549,7 +549,7 @@ const handleCreate = async () => {
   flex-direction: column;
   background: var(--vscode-editor-background, #1e1e1e);
   color: var(--vscode-editor-foreground, #cccccc);
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .header-section {
