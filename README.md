@@ -1,13 +1,24 @@
 # ArchiTool
 
-**ArchiTool** 是一个 VS Code 扩展，用于架构管理和知识库管理。它提供了完整的架构文档管理、设计图编辑、以及通过 MCP (Model Context Protocol) 为 AI 助手提供知识库访问能力。
+**ArchiTool** 是一个 VS Code 扩展，用于架构管理和知识库管理。它基于**知识伴随**（Knowledge Companion）的理念，让知识库与代码开发过程紧密结合，实现文档与代码的双向关联，帮助开发者在编码过程中随时查阅和更新架构知识。
+
+## 💡 知识伴随理念
+
+ArchiTool 遵循**知识伴随**的核心理念，让知识库成为开发过程中的自然组成部分：
+
+- **代码与文档双向关联**：通过 `relatedCodePaths` 配置，文档可以关联到代码文件或目录，代码变更时可以快速定位相关文档
+- **开发过程中的知识查阅**：在编写代码时，可以快速查看相关的架构文档、设计图和业务说明
+- **知识库伴随代码演进**：文档和代码同步维护，知识库随项目发展而持续更新
+- **多维度知识组织**：通过视点视图，从不同维度（类型、分类、标签）组织知识，便于快速定位
+- **团队知识共享**：通过 Git Vault 实现知识库的版本控制和团队协作
 
 ## 📋 目录
 
+- [知识伴随理念](#知识伴随理念)
 - [功能特性](#功能特性)
 - [快速开始](#快速开始)
-- [MCP 集成](#mcp-集成)
 - [项目结构](#项目结构)
+- [技术架构](#技术架构)
 - [开发指南](#开发指南)
 - [相关文档](#相关文档)
 
@@ -17,28 +28,47 @@
 
 1. **知识库管理**
    - 支持多个 Vault（知识库）
+   - **Vault 类型**：
+     - Document Vault - 文档知识库，用于存储架构文档和设计图
+     - AI Enhancement Vault - AI增强和模板知识库，用于存储模板和AI增强功能
    - 支持本地 Vault 和 Git Vault
+   - Git Vault 支持同步、更新和 Fork 操作
    - 文档、设计图、开发文档的统一管理
 
 2. **设计图编辑**
-   - **Mermaid 图表**：支持流程图、序列图、类图等
-   - **PlantUML 图表**：支持 UML 各种图表类型
-   - 可视化编辑和预览
+   - **Mermaid 图表**：支持流程图、序列图、类图、甘特图等
+   - **PlantUML 图表**：支持 UML 各种图表类型（类图、时序图、用例图等）
+   - **Archimate 视图**：支持企业架构视图类型
+   - 可视化编辑和实时预览
+   - 自定义编辑器界面，提供代码编辑和预览双视图
 
 3. **文档管理**
    - Markdown 文档支持
-   - 文档分类和标签
+   - 文档分类和标签管理
    - 文档关联（文档间链接、代码关联）
+   - 元数据编辑（Edit Metadata）
+   - 路径操作（Copy Path, Copy Relative Path, Copy Name）
+   - **代码关联配置**（`relatedCodePaths`，支持通配符匹配）
+     - 实现文档与代码的双向关联
+     - 在代码编辑器中快速查看关联文档
+     - 支持通配符匹配（如 `src/auth/*` 匹配整个目录）
 
-4. **视点视图**
+4. **视点视图**（知识伴随的核心功能）
    - 多维度查看架构文档
    - 按类型、分类、标签组织
-   - 代码与文档的关联视图
+   - **代码与文档的关联视图**：查看当前代码文件关联的所有文档和设计图
+   - 在开发过程中快速定位相关知识
+   - 支持按代码路径、文档类型、标签等维度筛选
 
-5. **MCP 集成** ⭐
-   - 通过 MCP 协议为 AI 助手提供知识库访问
-   - 支持全文搜索、代码关联查询
-   - 与 Claude Desktop、Cursor 等 AI 工具集成
+5. **模板系统**
+   - 结构模板（Structure Template）- 用于创建文档结构
+   - 内容模板（Content Template）- 用于创建文档内容
+   - 从模板创建文档/设计图
+
+6. **Git Vault 支持**
+   - 从 Git 仓库添加 Vault
+   - 同步和更新功能
+   - Fork Vault 功能
 
 ### VS Code 视图
 
@@ -62,180 +92,85 @@
 1. **创建 Vault**
    - 点击侧边栏 "Documents" 视图的 "+" 按钮
    - 选择 "Add Local Vault" 创建本地知识库
+     - 选择 Vault 类型：Document Vault 或 AI Enhancement Vault
+     - 输入 Vault 名称
    - 或选择 "Add Vault from Git" 从 Git 仓库导入
+     - 输入 Git 仓库 URL
+     - 配置远程端点信息
 
 2. **添加文档**
-   - 在 Vault 上右键，选择 "Add File" 创建文档
-   - 或选择 "Add Diagram" 创建设计图（Mermaid/PlantUML）
+   - 在 Vault 上右键，选择 "Add File" 创建 Markdown 文档
+   - 或选择 "Add Mermaid Design" / "Add PlantUML Design" 创建设计图
+   - 或选择 "Add Folder" 创建文件夹组织文档
 
-3. **编辑设计图**
+3. **从模板创建**
+   - 在创建文档或设计图时，可以选择使用模板
+   - 结构模板：用于创建预定义的文档结构
+   - 内容模板：用于创建包含模板内容的文档
+   - 支持模板变量替换
+
+4. **编辑设计图**
    - 双击 `.mmd` 文件打开 Mermaid 编辑器
    - 双击 `.puml` 文件打开 PlantUML 编辑器
+   - 编辑器提供代码编辑和实时预览功能
 
-4. **关联代码**
-   - 在文档元数据中配置 `relatedCodePaths`
-   - 支持通配符匹配（如 `src/auth/*`）
+5. **配置元数据和代码关联**（实现知识伴随的关键步骤）
+   - 右键文档，选择 "Edit Metadata" 编辑元数据
+   - 在元数据中配置 `relatedCodePaths` 关联代码路径
+     - 示例：`["src/auth/*", "src/models/user.ts"]`
+     - 支持通配符匹配（如 `src/auth/*` 匹配 `src/auth/login.ts`）
+     - 支持多个路径配置，实现一个文档关联多个代码位置
+   - 配置文档分类、标签等信息
+   - **知识伴随效果**：配置后，在编辑关联的代码文件时，可以通过视点视图快速查看相关文档
 
-## 🔧 MCP 集成
+6. **Git Vault 操作**
+   - 右键 Git Vault，选择 "Sync Vault" 同步到远程
+   - 选择 "Update from Remote" 从远程更新
+   - 选择 "Fork Vault" 创建 Vault 副本
 
+7. **路径操作**
+   - 右键文档/文件夹，选择 "Copy Path" 复制完整路径
+   - 选择 "Copy Relative Path" 复制相对路径
+   - 选择 "Copy Name" 复制名称
 
+### 知识伴随使用场景
 
-ArchiTool 通过 MCP 提供以下 3 个核心功能：
+**场景 1：开发新功能时查阅架构文档**
+- 打开代码文件 `src/auth/login.ts`
+- 在 Viewpoints 视图中自动显示关联的架构文档和设计图
+- 快速了解业务背景、技术方案和设计决策
 
-| 功能 | 使用场景 | 状态 |
-|------|---------|------|
-| `search_knowledge_base` | 全文搜索（90%） | ✅ 已实现 |
-| `get_documents_for_code` | 代码关联查询（8%） | ✅ 已实现 |
-| `list_entries` | 列表浏览（2%） | ✅ 已实现 |
+**场景 2：代码重构时更新文档**
+- 修改代码后，通过代码关联快速定位相关文档
+- 更新文档以反映代码变更
+- 保持文档与代码的一致性
 
-#### 1. `search_knowledge_base` ⭐⭐⭐⭐⭐
-
-全文搜索知识库条目，覆盖 90% 的使用场景。
-
-**使用示例**：
-- 基本搜索：`search({ query: "用户登录", limit: 10 })`
-- 按标签过滤：`search({ query: "", tags: ["requirement"] })`
-- 指定 vault：`search({ query: "架构", vaultName: "demo-vault-document" })`
-
-**返回**：完整的 Artifact 数组，包含基本信息、完整内容（`body` 字段）和元数据。
-
-#### 2. `get_documents_for_code` ⭐⭐⭐⭐⭐
-
-根据代码路径查找关联的文档/设计图，覆盖 8% 的使用场景。
-
-**使用示例**：
-- 查看文件关联文档：`getDocumentsForCode({ codePath: "src/auth/login.ts" })`
-- 查看目录关联文档：`getDocumentsForCode({ codePath: "src/auth" })`
-
-**说明**：支持通配符匹配（如 `src/auth/*` 匹配 `src/auth/login.ts`），自动返回所有匹配的文档和设计图。
-
-#### 3. `list_entries` ⭐⭐
-
-列出知识库条目（按类型和分类过滤），使用频率较低（约 2%）。
-
-**使用示例**：
-- 列出所有设计图：`listEntries({ viewType: "design", limit: 20 })`
-- 获取 vault 列表：`listEntries({ limit: 1 })`
-
-### 不支持的功能
-
-以下功能已明确移除，不在 MCP 接口中提供：
-
-- `getEntry` - 单个查询（`search` 已覆盖）
-- `createEntry` - 写操作（AI 不需要）
-- `updateEntry` - 写操作（AI 不需要）
-- `deleteEntry` - 写操作（AI 不需要）
-- `listLinks` - 使用频率低
-- `createLink` - 写操作（AI 不需要）
-
-### 内容返回策略
-
-- **默认行为**：返回完整内容（`body` 字段），AI 可直接使用
-- **大文件处理**：超过 1MB 的文件不加载内容，但提供 `contentSize` 字段
-- **可选控制**：通过 `includeContent: false` 只返回元数据
-
-### 使用配置
-
-**自动启动**：MCP Server 在扩展激活时自动启动，无需手动配置。
-
-**在扩展代码中使用**：
-
-通过依赖注入获取 `MCPTools` 实例：
-```typescript
-const mcpTools = container.get<MCPTools>(TYPES.MCPTools);
-const results = await mcpTools.search({ query: "用户登录" });
-```
-
-**验证运行状态**：检查扩展日志中的 `MCP Server initialized successfully` 消息。
-
-### 使用场景示例
-
-#### 场景 1：AI 助手搜索文档
-
-AI 助手搜索"登录"相关的文档，返回结果包含完整内容，可直接使用。
-
-#### 场景 2：查看代码关联的文档
-
-用户打开 `src/auth/login.ts` 时，AI 自动获取相关文档和设计图，帮助理解代码的业务背景。
-
-#### 场景 3：浏览特定类型的文档
-
-列出所有设计图或特定分类的文档，用于浏览和筛选。
-
-### Cursor 配置
-
-在 Cursor 的 MCP 配置文件中添加 ArchiTool 服务器配置。
-
-**配置文件位置**：
-- macOS: `~/Library/Application Support/Cursor/User/globalStorage/mcp.json`
-- Windows: `%APPDATA%\Cursor\User\globalStorage\mcp.json`
-- Linux: `~/.config/Cursor/User/globalStorage/mcp.json`
-
-**MCP Server 脚本路径**：
-
-扩展激活时会自动将 MCP Server 复制到固定位置，无需查找扩展安装目录。
-
-**固定路径**：
-- macOS/Linux: `~/.architool/mcp-server/mcp-server.js`
-- Windows: `%USERPROFILE%\.architool\mcp-server\mcp-server.js`
-
-**配置示例**：
-
-**macOS/Linux**：
-```json
-{
-  "mcpServers": {
-    "architool": {
-      "command": "node",
-      "args": [
-        "~/.architool/mcp-server/mcp-server.js"
-      ]
-    }
-  }
-}
-```
-
-**Windows**：
-```json
-{
-  "mcpServers": {
-    "architool": {
-      "command": "node",
-      "args": [
-        "%USERPROFILE%\\.architool\\mcp-server\\mcp-server.js"
-      ]
-    }
-  }
-}
-```
-
-**注意**：
-- 路径使用 `~` 或 `%USERPROFILE%` 会自动展开为用户主目录
-- 扩展激活时会自动复制 MCP Server 到该位置
-- 如果扩展更新，MCP Server 会自动更新（通过文件时间戳比较）
-
+**场景 3：团队协作中的知识共享**
+- 使用 Git Vault 同步团队知识库
+- 新成员通过代码关联快速了解项目架构
+- 知识库随代码演进持续更新
 
 ## 📁 项目结构
 
 ```
 VSKnowledgebase/
-├── apps/
-│   ├── extension/          # VS Code 扩展主程序
+├── extension/
+│   ├── architool/          # VS Code 扩展主程序
 │   │   ├── src/
 │   │   │   ├── modules/
-│   │   │   │   ├── mcp/    # MCP 相关实现
-│   │   │   │   │   ├── MCPTools.ts        # MCP 工具接口和实现
-│   │   │   │   │   ├── MCPResources.ts    # MCP 资源接口和实现
-│   │   │   │   │   └── MCPServerStarter.ts # MCP Server 启动器
-│   │   │   │   ├── editor/ # 编辑器实现
-│   │   │   │   ├── shared/ # 共享业务逻辑
-│   │   │   │   └── ...
-│   │   │   └── main.ts     # 扩展入口
+│   │   │   │   ├── document/   # 文档管理模块
+│   │   │   │   ├── editor/     # 编辑器模块（Mermaid/PlantUML）
+│   │   │   │   ├── template/   # 模板管理模块
+│   │   │   │   ├── task/       # 任务管理模块
+│   │   │   │   └── shared/     # 共享业务逻辑
+│   │   │   ├── commands/       # 命令实现
+│   │   │   ├── views/          # 视图实现
+│   │   │   └── extension.ts   # 扩展入口
 │   │   └── package.json
-│   └── webview/            # Webview 前端
+│   └── architool-intellij/ # IntelliJ IDEA 插件（开发中）
 ├── packages/
-│   └── architool-mcp-server/   # MCP Server
-├── MCP_FEATURES_PLAN.md    # MCP 功能方案文档
+│   ├── webview/            # Webview 前端（Vue 3 + Element Plus）
+│   └── vault-assistant/    # 模板和 AI 增强功能包
 └── README.md               # 本文档
 ```
 
@@ -245,10 +180,89 @@ VSKnowledgebase/
   - 每个 Vault 一个子目录
   - 包含 artifacts、metadata、templates 等
 
-- **`extension/architool/src/modules/mcp/`**：MCP 实现
-  - `MCPTools.ts`：核心工具接口（3 个方法）
-  - `MCPResources.ts`：资源访问接口（可选）
-  - `MCPServerStarter.ts`：服务器启动器
+- **`extension/architool/src/modules/`**：核心业务模块
+  - `document/` - 文档管理模块
+  - `editor/` - 编辑器模块（Mermaid/PlantUML）
+  - `template/` - 模板管理模块
+  - `task/` - 任务管理模块
+  - `shared/` - 共享业务逻辑（Vault、Artifact、文件操作等）
+
+- **`packages/webview/`**：Webview 前端
+  - Vue 3 + Element Plus + Pinia
+  - 支持多视图（Viewpoints、编辑器等）
+
+- **`packages/vault-assistant/`**：模板和 AI 增强功能
+  - `archi-templates/` - 模板内容
+  - `archi-ai-enhancements/` - AI 增强命令
+
+## 🏗️ 技术架构
+
+### 技术栈
+
+- **前端（Webview）**：
+  - Vue 3 - 渐进式 JavaScript 框架
+  - Element Plus - Vue 3 组件库
+  - Pinia - 状态管理
+  - Mermaid - 图表渲染
+  - CodeMirror - 代码编辑器
+  - Vite - 构建工具
+
+- **后端（扩展）**：
+  - TypeScript - 类型安全的 JavaScript
+  - Node.js - 运行时环境
+  - Inversify - 依赖注入容器
+  - Webpack - 模块打包工具
+
+- **架构设计**：
+  - DDD（领域驱动设计）- 分层架构
+    - Application Layer - 应用服务层
+    - Domain Layer - 领域模型层
+    - Infrastructure Layer - 基础设施层
+    - Interface Layer - 接口层（命令、视图等）
+
+- **数据存储**：
+  - SQLite - 元数据和索引存储（支持快速查询代码关联）
+  - 文件系统 - 文档和设计图存储
+  - YAML - 元数据配置文件（存储代码关联信息）
+
+- **知识伴随实现**：
+  - 代码关联索引：通过 SQLite 存储代码路径与文档的关联关系
+  - 实时查询：在代码编辑器中快速查询关联文档
+  - 双向关联：支持从代码查看文档，从文档查看关联代码
+  - 通配符匹配：支持目录级别的代码关联，提高关联效率
+
+### 架构图
+
+```mermaid
+graph TB
+    subgraph "VS Code Extension"
+        A[Extension Entry] --> B[Commands]
+        A --> C[Views]
+        A --> D[Custom Editors]
+        B --> E[Application Services]
+        C --> E
+        D --> E
+        E --> F[Domain Services]
+        E --> G[Repositories]
+        F --> H[Domain Entities]
+        G --> I[Infrastructure]
+    end
+    
+    subgraph "Webview"
+        J[Vue App] --> K[Components]
+        J --> L[Services]
+        J --> M[Store]
+        L --> N[Extension RPC]
+    end
+    
+    subgraph "Data Layer"
+        I --> O[File System]
+        I --> P[SQLite]
+        I --> Q[Git]
+    end
+    
+    N -.->|RPC| E
+```
 
 ## 🛠️ 开发指南
 
@@ -298,6 +312,11 @@ pnpm run build:extension
 pnpm run build:webview
 ```
 
+**构建流程说明**：
+1. `build:webview` - 构建 Webview 前端（Vue 3 + Vite）
+2. `build:extension` - 编译扩展 TypeScript 代码（Webpack）
+3. `copy:vendor` - 复制 PlantUML JAR 文件到扩展目录
+
 **注意**：`build` 命令只构建项目，**不会生成 `.vsix` 文件**。要生成 `.vsix` 文件，请使用 [打包发布](#打包发布) 章节中的 `package` 命令。
 
 #### 运行测试
@@ -330,7 +349,7 @@ pnpm run package:quick
 **打包流程**：
 1. 构建所有子包（webview）
 2. 编译 TypeScript 代码
-3. 重新编译 `better-sqlite3`（为 Electron 环境，可能需要 2-5 分钟）
+3. 复制 PlantUML 等 vendor 文件
 4. 使用 `vsce` 打包生成 `.vsix` 文件
 
 **输出位置**：`extension/architool/architool-{version}.vsix`
@@ -354,8 +373,8 @@ code --install-extension extension/architool/architool-0.1.0.vsix
 - ✅ 确保已执行 `pnpm install`
 
 **注意事项**：
-- ⚠️ `better-sqlite3` 需要为 VSCode 的 Electron 环境重新编译，首次打包会自动执行
 - ⚠️ 生成的 `.vsix` 文件可能较大（包含所有依赖和构建产物）
+- ⚠️ 打包前确保已执行 `pnpm install` 安装所有依赖
 
 ### 代码规范
 
@@ -374,24 +393,21 @@ pnpm run typecheck
 
 ## 📚 相关文档
 
-- [MCP 功能方案文档](./MCP_FEATURES_PLAN.md) - 详细的 MCP 功能设计和实施计划
-- [Mermaid 编辑器集成方案](./MERMAID_EDITOR_INTEGRATION_PLAN.md) - Mermaid 编辑器集成文档
+- [IDE 适配器架构文档](./IDE_ADAPTER_ARCHITECTURE.md) - IDE 适配器架构设计
 
 ## 🔮 未来计划
 
-### MCP 功能增强
+### 功能增强
 
-- [ ] 实现标准 MCP 协议（stdio 传输层）
-- [ ] 支持与 Claude Desktop 集成
-- [ ] 支持与 Cursor 等 AI 工具集成
-- [ ] 自动工具注册和 schema 生成
-- [ ] 搜索结果的排序和相关性评分
-- [ ] 批量查询支持
-- [ ] 缓存机制优化
+- [ ] 完善 IntelliJ IDEA 插件支持
+- [ ] 增强模板系统功能
+- [ ] 优化文档搜索和索引性能
+- [ ] 支持更多图表类型和编辑器功能
+- [ ] 改进代码关联和文档同步机制
 
 ## 📝 许可证
 
-[待添加]
+本项目采用 [MIT 许可证](LICENSE)。
 
 ## 👥 贡献
 
@@ -399,11 +415,11 @@ pnpm run typecheck
 
 ## 📧 联系方式
 
-[待添加]
+- GitHub: [VSKnowledgebase](https://github.com/ai-archi/VSKnowledgebase)
 
 ---
 
-**文档版本**：v1.0  
-**最后更新**：2024-12-19  
+**文档版本**：v2.0  
+**最后更新**：2025-01-XX  
 **维护者**：ArchiTool Team
 
