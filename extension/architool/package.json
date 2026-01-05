@@ -98,7 +98,8 @@
       },
       {
         "command": "archi.document.refresh",
-        "title": "Refresh Document View"
+        "title": "Refresh Document View",
+        "icon": "$(refresh)"
       },
       {
         "command": "archi.document.expandAll",
@@ -221,6 +222,11 @@
           "command": "archi.vault.addFromGit",
           "when": "view == architool.documentView",
           "group": "navigation@2"
+        },
+        {
+          "command": "archi.document.refresh",
+          "when": "view == architool.documentView",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [

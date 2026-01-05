@@ -245,6 +245,7 @@ import {
   ElIcon,
   ElEmpty,
   ElMessage,
+  ElMessageBox,
   ElSelect,
   ElOption,
   ElOptionGroup,
@@ -709,6 +710,24 @@ const executeCommand = async (commandId: string) => {
   if (!canCreate.value) {
     ElMessage.warning('请先输入设计图名称');
     return;
+  }
+
+  // 如果输入框中已有内容，显示二次确认
+  if (formData.value.aiPrompt && formData.value.aiPrompt.trim()) {
+    try {
+      await ElMessageBox.confirm(
+        '提示词输入框中已有内容，生成新的提示词将覆盖现有内容。是否继续？',
+        '确认覆盖',
+        {
+          confirmButtonText: '确认覆盖',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      );
+    } catch {
+      // 用户取消操作
+      return;
+    }
   }
 
   try {

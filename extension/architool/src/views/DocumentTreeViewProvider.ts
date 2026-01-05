@@ -85,10 +85,32 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
   }
 
   /**
-   * 过滤节点：显示所有节点，包括 archi-* 目录
+   * 过滤节点：排除 archi-tasks 目录，其他节点正常显示
    */
   protected shouldIncludeNode(node: FileTreeNode, dirPath: string): boolean {
-    // 显示所有节点，不再排除 archi-* 目录
+    // 排除 archi-tasks 目录本身
+    if (node.isDirectory && node.name === 'archi-tasks') {
+      return false;
+    }
+    
+    // 如果当前目录路径以 archi-tasks 开头或包含 /archi-tasks/，排除所有子节点
+    // 这样可以确保 archi-tasks 目录下的所有内容都不显示
+    if (dirPath) {
+      // 检查是否是 archi-tasks 目录本身或其子目录
+      if (dirPath === 'archi-tasks' || dirPath.startsWith('archi-tasks/')) {
+        return false;
+      }
+    }
+    
+    // 如果节点路径包含 archi-tasks，也排除（额外安全检查）
+    if (node.path) {
+      // 检查路径中是否包含 archi-tasks（作为目录名）
+      const pathParts = node.path.split(/[/\\]/);
+      if (pathParts.includes('archi-tasks')) {
+        return false;
+      }
+    }
+    
     return true;
   }
 
