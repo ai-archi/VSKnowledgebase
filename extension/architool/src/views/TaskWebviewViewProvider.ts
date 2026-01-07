@@ -123,18 +123,18 @@ export class TaskWebviewViewProvider {
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Viewpoints - Error</title>
+            <title>Tasks - Error</title>
             <style>
               body {
                 font-family: var(--vscode-font-family);
-                padding: 20px;
+                padding: 5px;
                 color: var(--vscode-foreground);
                 background-color: var(--vscode-editor-background);
               }
               .error-container {
                 max-width: 600px;
                 margin: 0 auto;
-                padding: 20px;
+                padding: 5px;
                 border: 1px solid var(--vscode-input-border);
                 border-radius: 4px;
                 background-color: var(--vscode-input-background);
@@ -2068,14 +2068,12 @@ export class TaskWebviewViewProvider {
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>Tasks</title>
             </head>
-            <body>
-              <div style="padding: 20px; text-align: center;">
-                <h2>Webview 未构建</h2>
-                <p>请先运行 <code>cd packages/webview && pnpm build</code> 构建 webview</p>
-                <p style="font-size: 12px; color: var(--vscode-descriptionForeground);">
-                  预期路径: ${htmlPath}
-                </p>
-              </div>
+            <body style="padding: 5px;">
+              <h2>Webview 未构建</h2>
+              <p>请先运行 <code>cd packages/webview && pnpm build</code> 构建 webview</p>
+              <p style="font-size: 12px; color: var(--vscode-descriptionForeground);">
+                预期路径: ${htmlPath}
+              </p>
             </body>
           </html>
         `;

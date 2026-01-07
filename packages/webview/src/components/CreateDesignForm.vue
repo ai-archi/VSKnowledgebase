@@ -858,12 +858,11 @@ const loadTemplateContent = async (templateId: string) => {
 .create-design-form {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100%;
   padding: 20px;
   box-sizing: border-box;
   background: var(--vscode-editor-background, #1e1e1e);
   color: var(--vscode-editor-foreground, #cccccc);
-  overflow-y: auto;
 }
 
 /* 头部区域 */
@@ -949,11 +948,11 @@ const loadTemplateContent = async (templateId: string) => {
 
 /* 下方区域 */
 .bottom-section {
-  flex: 1;
-  min-height: 0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: row;
   gap: 16px;
+  min-height: 300px;
 }
 
 .file-panel {

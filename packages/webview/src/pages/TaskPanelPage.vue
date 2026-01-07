@@ -1,5 +1,5 @@
 <template>
-  <div class="viewpoint-panel">
+  <div class="task-panel">
     <!-- 关联文件区 -->
     <RelatedFiles
       v-if="relatedFiles.length > 0 || loadingRelatedFiles"
@@ -79,7 +79,7 @@ async function loadTasks() {
 }
 
 async function handleSelectTask(task: Task) {
-  console.log('[ViewpointPanelPage] Task selected', {
+  console.log('[TaskPanelPage] Task selected', {
     taskId: task.id,
     taskTitle: task.title,
     stepsCount: (task as any).steps?.length || 0
@@ -184,12 +184,12 @@ watch(tasks, (newTasks, oldTasks) => {
 
 // 监听后端事件
 extensionService.on('taskChanged', async () => {
-  console.log('[ViewpointPanelPage] Task changed event received, reloading tasks');
+  console.log('[TaskPanelPage] Task changed event received, reloading tasks');
   await loadTasks();
 });
 
 extensionService.on('fileChanged', async () => {
-  console.log('[ViewpointPanelPage] File changed event received, reloading related files');
+  console.log('[TaskPanelPage] File changed event received, reloading related files');
   await loadRelatedFiles();
 });
 
@@ -203,7 +203,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.viewpoint-panel {
+.task-panel {
   width: 100%;
   height: 100vh;
   display: flex;

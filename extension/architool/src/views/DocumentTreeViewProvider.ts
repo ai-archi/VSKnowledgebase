@@ -33,7 +33,7 @@ export class DocumentTreeItem extends BaseArtifactTreeItem {
       this.tooltip = artifact.path;
       const uri = ideAdapter ? ideAdapter.UriFile(artifact.contentLocation) : vscode.Uri.file(artifact.contentLocation) as any;
       this.command = {
-        command: 'vscode.open',
+        command: 'archi.document.open',
         title: 'Open Document',
         arguments: [uri],
       } as Command;
@@ -365,6 +365,25 @@ export class DocumentTreeViewProvider extends BaseArtifactTreeViewProvider<Docum
     placeholderItem.tooltip = `点击创建此文件: ${filePath}${expectedFile.description ? `\n${expectedFile.description}` : ''}`;
 
     return placeholderItem;
+  }
+
+  /**
+   * 增强文件项，修改打开命令以支持 markdown preview
+   */
+  protected async enhanceFileItem(
+    item: DocumentTreeItem,
+    node: FileTreeNode,
+    vaultRef: { id: string; name: string }
+  ): Promise<void> {
+    // 修改命令以使用自定义命令，支持 markdown preview
+    if (item.command && item.command.arguments && item.command.arguments.length > 0) {
+      const uri = item.command.arguments[0] as vscode.Uri;
+      item.command = {
+        command: 'archi.document.open',
+        title: 'Open Document',
+        arguments: [uri],
+      };
+    }
   }
 
   /**

@@ -35,8 +35,8 @@
           "when": "true"
         },
         {
-          "id": "architool.viewpointView",
-          "name": "Viewpoints",
+          "id": "architool.taskView",
+          "name": "Tasks",
           "type": "webview",
           "when": "true"
         }
@@ -144,7 +144,7 @@
       },
       {
         "command": "archi.viewpoint.create",
-        "title": "Create Viewpoint"
+        "title": "Create Task"
       },
       {
         "command": "archi.template.refresh",

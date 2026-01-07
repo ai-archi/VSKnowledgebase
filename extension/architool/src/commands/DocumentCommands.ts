@@ -193,6 +193,12 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     // 注册文档特定命令
     commandAdapter.registerCommands([
       {
+        command: 'archi.document.open',
+        callback: async (uri: vscode.Uri) => {
+          await this.openDocument(uri);
+        },
+      },
+      {
         command: 'archi.document.createFromPlaceholder',
         callback: async (item?: DocumentTreeItem) => {
           await this.createFromPlaceholder(item);
@@ -283,6 +289,44 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
         },
       },
     ]);
+  }
+
+  /**
+   * 打开文档
+   * 对于 markdown 文件，默认使用 preview 模式
+   */
+  private async openDocument(uri: vscode.Uri): Promise<void> {
+    try {
+      const ext = path.extname(uri.fsPath).toLowerCase();
+      
+      // 如果是 markdown 文件，使用 preview 模式打开
+      if (ext === '.md' || ext === '.markdown') {
+        this.logger.info('Opening markdown file with preview mode', { uri: uri.fsPath });
+        // 使用 VS Code 内置的 markdown.showPreview 命令打开预览
+        // 这会打开一个侧边预览窗口
+        await vscode.commands.executeCommand('markdown.showPreview', uri);
+      } else {
+        // 其他文件类型使用默认编辑器打开
+        this.logger.info('Opening file with default editor', { uri: uri.fsPath });
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { 
+          preview: false,
+          viewColumn: vscode.ViewColumn.Active 
+        });
+      }
+    } catch (error: any) {
+      this.logger.error('Failed to open document', { error: error.message, uri: uri.fsPath });
+      // 如果打开预览失败，回退到默认编辑器
+      try {
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { 
+          preview: false,
+          viewColumn: vscode.ViewColumn.Active 
+        });
+      } catch (fallbackError: any) {
+        vscode.window.showErrorMessage(`Failed to open document: ${error.message}`);
+      }
+    }
   }
 
   /**

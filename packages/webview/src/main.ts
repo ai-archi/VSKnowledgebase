@@ -9,9 +9,9 @@ import { getView, getDefaultView } from '@/views';
  * 从多种来源获取视图名称
  * 支持以下方式（按优先级）：
  * 1. window.initialData.view（后端注入，优先级最高）
- * 2. URL 参数: ?view=viewpoint-panel
- * 3. URL 路径: /viewpoint-panel.html（从文件名提取）
- * 4. Hash: #viewpoint-panel
+ * 2. URL 参数: ?view=task-panel
+ * 3. URL 路径: /task-panel.html（从文件名提取）
+ * 4. Hash: #task-panel
  */
 function getViewNameFromUrl(): string | null {
   // 方式1: window.initialData.view（后端注入，优先级最高）

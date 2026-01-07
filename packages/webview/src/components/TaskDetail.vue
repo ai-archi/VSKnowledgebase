@@ -487,7 +487,7 @@ async function handleCompleteTask() {
       // 等待一下，确保后端文件已保存
       await new Promise(resolve => setTimeout(resolve, 100));
       // 后端会通过 notifyTaskChanged 通知前端刷新任务列表
-      // 这里不需要额外操作，ViewpointPanelPage 会监听 taskChanged 事件
+      // 这里不需要额外操作，TaskPanelPage 会监听 taskChanged 事件
     }
   } catch (error: any) {
     console.error('Failed to complete task:', error);
@@ -612,7 +612,7 @@ async function ensureSolutionFileAndChapter(_stepId: string) {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 20px;
+  padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--vscode-panel-background, #1e1e1e);

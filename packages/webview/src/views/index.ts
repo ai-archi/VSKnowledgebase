@@ -3,7 +3,7 @@
  * 统一管理所有视图组件
  */
 import type { Component } from 'vue';
-import ViewpointPanelPage from '@/pages/ViewpointPanelPage.vue';
+import TaskPanelPage from '@/pages/TaskPanelPage.vue';
 import CreateTaskDialogPage from '@/pages/CreateTaskDialogPage.vue';
 import CreateFileDialogPage from '@/pages/CreateFileDialogPage.vue';
 import CreateFolderDialogPage from '@/pages/CreateFolderDialogPage.vue';
@@ -25,10 +25,10 @@ export interface ViewConfig {
  * value: 视图配置
  */
 export const views: Record<string, ViewConfig> = {
-  'viewpoint-panel': {
-    name: 'viewpoint-panel',
-    component: ViewpointPanelPage,
-    title: 'Viewpoints',
+  'task-panel': {
+    name: 'task-panel',
+    component: TaskPanelPage,
+    title: 'Tasks',
   },
   'create-task-dialog': {
     name: 'create-task-dialog',
@@ -80,9 +80,9 @@ export function getView(viewName: string): ViewConfig | undefined {
 }
 
 /**
- * 获取默认视图（viewpoint-panel）
+ * 获取默认视图（task-panel）
  */
 export function getDefaultView(): ViewConfig {
-  return views['viewpoint-panel'];
+  return views['task-panel'];
 }
 

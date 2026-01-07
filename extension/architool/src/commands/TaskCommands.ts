@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TaskWebviewViewProvider, TaskRelatedArtifactsService, AIApplicationService } from '../views/ViewpointWebviewViewProvider';
+import { TaskWebviewViewProvider, TaskRelatedArtifactsService, AIApplicationService } from '../views/TaskWebviewViewProvider';
 import { TaskApplicationService } from '../modules/task/application/TaskApplicationService';
 import { VaultApplicationService } from '../modules/shared/application/VaultApplicationService';
 import { ArtifactApplicationService } from '../modules/shared/application/ArtifactApplicationService';

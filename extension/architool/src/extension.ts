@@ -10,7 +10,7 @@ import { Container } from 'inversify';
 import { CommandAdapter } from './core/vscode-api/CommandAdapter';
 import { VaultCommands } from './commands/VaultCommands';
 import { DocumentCommands } from './commands/DocumentCommands';
-import { ViewpointCommands } from './commands/ViewpointCommands';
+import { TaskCommands } from './commands/TaskCommands';
 import { AICommands } from './commands/AICommands';
 import { LookupCommands } from './commands/LookupCommands';
 import { DocumentTreeViewProvider } from './views/DocumentTreeViewProvider';
@@ -225,18 +225,18 @@ function initializeOtherCommands(
 		);
 		vaultCommands.register(commandAdapter);
 
-		// 视点命令
-		// 注意：ViewpointApplicationService, TaskApplicationService, AIApplicationService 可能不存在
+		// 任务命令
+		// 注意：TaskRelatedArtifactsService, TaskApplicationService, AIApplicationService 可能不存在
 		// 创建一个简单的适配器，使用 artifactService 来实现 getRelatedArtifacts
-		let viewpointService: any;
+		let taskRelatedArtifactsService: any;
 		let taskService: any;
 		let aiService: any;
 		try {
-			viewpointService = container.get(TYPES.ViewpointApplicationService);
+			taskRelatedArtifactsService = container.get(TYPES.ViewpointApplicationService);
 		} catch (error) {
-			logger.warn('ViewpointApplicationService not found in container, creating adapter');
+			logger.warn('TaskRelatedArtifactsService not found in container, creating adapter');
 			// 创建一个简单的适配器，使用 artifactService.findArtifactsByCodePath
-			viewpointService = {
+			taskRelatedArtifactsService = {
 				getRelatedArtifacts: async (codePath: string) => {
 					const result = await artifactService.findArtifactsByCodePath(codePath);
 					return {
@@ -264,8 +264,8 @@ function initializeOtherCommands(
 		// 获取 IDE 适配器（如果还没有获取）
 		const ideAdapterForViewpoint = container.get<IDEAdapter>(TYPES.IDEAdapter);
 		
-		const viewpointCommands = new ViewpointCommands(
-			viewpointService,
+		const taskCommands = new TaskCommands(
+			taskRelatedArtifactsService,
 			vaultService,
 			artifactService,
 			taskService,
@@ -275,7 +275,7 @@ function initializeOtherCommands(
 			context,
 			ideAdapterForViewpoint
 		);
-		viewpointCommands.registerCommands(context);
+		taskCommands.registerCommands(context);
 
 		// AI 命令
 		const aiCommands = new AICommands();

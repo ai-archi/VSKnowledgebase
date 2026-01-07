@@ -314,8 +314,8 @@ onMounted(async () => {
     }
   }
   await loadVaults();
-  // 加载所有文件（不传查询条件）
-  loadFiles();
+  // 不在页面打开时自动加载文件，只在用户输入搜索关键词时触发
+  // loadFiles();
   loadCommands();
   // 加载所有模板（明确传 null，确保从所有 vault 加载）
   loadTaskTemplates(null);
@@ -544,12 +544,11 @@ const handleCreate = async () => {
 <style scoped>
 .create-task-form {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--vscode-editor-background, #1e1e1e);
   color: var(--vscode-editor-foreground, #cccccc);
-  overflow-y: auto;
 }
 
 .header-section {
@@ -578,17 +577,15 @@ const handleCreate = async () => {
   padding: 16px;
   border-bottom: 1px solid var(--vscode-panel-border, #3e3e3e);
   flex-shrink: 0;
-  overflow-y: auto;
 }
 
 .bottom-section {
-  flex: 1;
-  min-height: 0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: row;
   gap: 16px;
   padding: 16px;
-  overflow: hidden;
+  min-height: 300px;
 }
 
 .file-panel {
