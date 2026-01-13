@@ -1466,7 +1466,7 @@ export class TaskWebviewViewProvider {
             // 递归遍历文件夹，获取所有文件和文件夹
             const allItems: any[] = [];
             const maxResults = 10000;
-            const excludePatterns = ['node_modules', '.git', '.architool'];
+            const excludePatterns = ['node_modules', '.git', '.architool', '.cursor', '.vscode', '.dart_tool', '.idea'];
             
             // 递归遍历函数
             const traverseDirectory = async (dirPath: string, basePath: string, relativeBase: string): Promise<void> => {
@@ -1795,7 +1795,7 @@ export class TaskWebviewViewProvider {
             // 递归遍历文件夹，获取所有文件和文件夹
             const allItems: any[] = [];
             const maxResults = 10000;
-            const excludePatterns = ['node_modules', '.git', '.architool'];
+            const excludePatterns = ['node_modules', '.git', '.architool', '.cursor', '.vscode', '.dart_tool', '.idea'];
             
             // 递归遍历函数
             const traverseDirectory = async (dirPath: string, basePath: string, relativeBase: string): Promise<void> => {

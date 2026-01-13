@@ -127,6 +127,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "archi.document.rename",
+        "title": "Rename",
+        "icon": "$(edit)"
+      },
+      {
         "command": "archi.document.create",
         "title": "Create Document"
       },
@@ -291,6 +296,11 @@
           "group": "1_actions"
         },
         {
+          "command": "archi.document.rename",
+          "when": "view == architool.documentView && viewItem == document",
+          "group": "1_actions"
+        },
+        {
           "command": "archi.document.delete",
           "when": "view == architool.documentView && viewItem == document",
           "group": "2_actions"
@@ -317,6 +327,11 @@
         },
         {
           "command": "archi.document.editRelations",
+          "when": "view == architool.documentView && viewItem == folder",
+          "group": "1_actions"
+        },
+        {
+          "command": "archi.document.rename",
           "when": "view == architool.documentView && viewItem == folder",
           "group": "1_actions"
         },

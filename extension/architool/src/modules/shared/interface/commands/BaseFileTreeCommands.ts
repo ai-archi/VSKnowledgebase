@@ -80,6 +80,12 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
           await this.deleteItem(item);
         },
       },
+      {
+        command: this.getRenameCommandName(),
+        callback: async (item?: T) => {
+          await this.renameItem(item);
+        },
+      },
     ];
 
     // 注册通用命令
@@ -959,6 +965,28 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
   }
 
   /**
+   * 重命名项
+   */
+  protected async renameItem(item?: T): Promise<void> {
+    try {
+      if (!item) {
+        const selection = this.treeView.selection;
+        if (selection.length === 0) {
+          vscode.window.showErrorMessage('Please select an item to rename');
+          return;
+        }
+        item = selection[0] as T;
+      }
+
+      // 调用子类实现的重命名逻辑
+      await this.handleRename(item);
+    } catch (error: any) {
+      this.logger.error('Failed to rename item', error);
+      vscode.window.showErrorMessage(`Failed to rename: ${error.message}`);
+    }
+  }
+
+  /**
    * 获取 Webview 分发路径
    */
   protected getWebviewDistPath(): string {
@@ -1089,9 +1117,19 @@ export abstract class BaseFileTreeCommands<T extends BaseArtifactTreeItem> {
   protected abstract getDeleteCommandName(): string;
 
   /**
+   * 获取重命名命令名称
+   */
+  protected abstract getRenameCommandName(): string;
+
+  /**
    * 处理删除操作
    */
   protected abstract handleDelete(item: T): Promise<void>;
+
+  /**
+   * 处理重命名操作
+   */
+  protected abstract handleRename(item: T): Promise<void>;
 
   // ==================== 可选方法（子类可以覆盖） ====================
 

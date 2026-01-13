@@ -81,6 +81,33 @@
               {{ field.title }}
             </el-checkbox>
             
+            <!-- 文件/文件夹选择 -->
+            <div v-else-if="field.type === 'file' || field.type === 'folder'" class="file-folder-field">
+              <div v-if="getFileFolderValue(field, key).length > 0" class="selected-items">
+                <el-tag
+                  v-for="(item, index) in getFileFolderValue(field, key)"
+                  :key="index"
+                  closable
+                  @close="removeFileFolderItem(key, index)"
+                  style="margin-right: 8px; margin-bottom: 8px"
+                >
+                  <el-icon style="margin-right: 4px">
+                    <Folder v-if="item.type === 'folder'" />
+                    <Document v-else />
+                  </el-icon>
+                  {{ item.path || item }}
+                </el-tag>
+              </div>
+              <el-button
+                type="primary"
+                size="small"
+                @click="openFileFolderPicker(field, key)"
+              >
+                <el-icon><Plus /></el-icon>
+                选择{{ field.type === 'file' ? '文件' : field.type === 'folder' ? '文件夹' : '文件/文件夹' }}
+              </el-button>
+            </div>
+            
             <!-- 数组类型 -->
             <div v-else-if="field.type === 'array'" class="array-field">
               <div
@@ -146,20 +173,33 @@
         <p>此步骤无需配置，可直接执行。</p>
       </div>
     </div>
+    
+    <!-- 文件/文件夹选择弹窗 -->
+    <FileFolderPickerDialog
+      v-model="fileFolderPickerVisible"
+      :allow-file="currentPickerFieldConfig?.type === 'file'"
+      :allow-folder="currentPickerFieldConfig?.type === 'folder'"
+      :multiple="currentPickerFieldConfig?.multiple !== false"
+      :title="currentPickerFieldConfig ? `选择${currentPickerFieldConfig.title}` : ''"
+      @confirm="handleFileFolderPickerConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, watch, ref, toRaw } from 'vue';
-import { Plus, Delete } from '@element-plus/icons-vue';
+import { Plus, Delete, Folder, Document } from '@element-plus/icons-vue';
+import FileFolderPickerDialog from './FileFolderPickerDialog.vue';
 
 // Icons are used in template via :icon binding
 // Explicitly reference to avoid linter warnings
 const PlusIcon = Plus;
 const DeleteIcon = Delete;
+const FolderIcon = Folder;
+const DocumentIcon = Document;
 
 interface FormField {
-  type: 'string' | 'textarea' | 'number' | 'enum' | 'boolean' | 'checkbox' | 'array';
+  type: 'string' | 'textarea' | 'number' | 'enum' | 'boolean' | 'checkbox' | 'array' | 'file' | 'folder';
   title: string;
   description?: string;
   placeholder?: string;
@@ -175,6 +215,7 @@ interface FormField {
     properties?: Record<string, FormField>;
   };
   itemPlaceholder?: string;
+  multiple?: boolean; // 是否支持多选（用于 file/folder 类型）
 }
 
 interface Props {
@@ -214,6 +255,9 @@ const getDefaultValue = (field: FormField): any => {
   switch (field.type) {
     case 'array':
       return [];
+    case 'file':
+    case 'folder':
+      return field.multiple !== false ? [] : null; // 默认支持多选
     case 'boolean':
     case 'checkbox':
       return false;
@@ -641,6 +685,24 @@ const handleJumpToChapter = () => {
   border: 1px solid var(--vscode-panel-border, #3e3e3e);
   border-radius: 4px;
   background: var(--vscode-input-background, #2d2d2d);
+}
+
+.file-folder-field {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selected-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  background: var(--vscode-input-background, #2d2d2d);
+  border: 1px solid var(--vscode-panel-border, #3e3e3e);
+  border-radius: 4px;
+  min-height: 40px;
 }
 
 h4 {

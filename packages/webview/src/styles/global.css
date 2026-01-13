@@ -1,0 +1,17 @@
+/* 全局样式 - 确保所有页面都应用基础样式 */
+
+/* 重置 body 和 html 的 padding 和 margin */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 确保 #app 容器也没有 padding */
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}

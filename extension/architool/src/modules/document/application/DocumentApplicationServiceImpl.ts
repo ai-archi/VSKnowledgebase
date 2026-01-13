@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as yaml from 'js-yaml';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 
 @injectable()
 export class DocumentApplicationServiceImpl implements DocumentApplicationService {
@@ -424,6 +425,126 @@ export class DocumentApplicationServiceImpl implements DocumentApplicationServic
 
     // Get updated artifact
     return this.artifactService.getArtifact(vaultId, path);
+  }
+
+  async renameDocument(vaultId: string, oldPath: string, newPath: string): Promise<Result<Artifact, ArtifactError>> {
+    try {
+      const vaultResult = await this.vaultService.getVault(vaultId);
+      if (!vaultResult.success) {
+        return {
+          success: false,
+          error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `Vault not found: ${vaultId}`),
+        };
+      }
+
+      const vault: VaultReference = {
+        id: vaultResult.value.id,
+        name: vaultResult.value.name,
+      };
+
+      // 检查旧路径是否存在
+      const existsResult = await this.artifactService.exists(vault, oldPath);
+      if (!existsResult.success || !existsResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(ArtifactErrorCode.NOT_FOUND, `File or folder not found: ${oldPath}`),
+        };
+      }
+
+      // 检查新路径是否已存在
+      const newExistsResult = await this.artifactService.exists(vault, newPath);
+      if (newExistsResult.success && newExistsResult.value) {
+        return {
+          success: false,
+          error: new ArtifactError(ArtifactErrorCode.INVALID_INPUT, `Target path already exists: ${newPath}`),
+        };
+      }
+
+      // 检查是文件还是文件夹
+      const isDirResult = await this.artifactService.isDirectory(vault, oldPath);
+      if (!isDirResult.success) {
+        return {
+          success: false,
+          error: isDirResult.error,
+        };
+      }
+
+      const isDirectory = isDirResult.value;
+      const oldFullPath = this.artifactService.getFullPath(vault, oldPath);
+      const newFullPath = this.artifactService.getFullPath(vault, newPath);
+
+      // 确保新路径的父目录存在
+      const newDir = path.dirname(newFullPath);
+      if (!fs.existsSync(newDir)) {
+        fs.mkdirSync(newDir, { recursive: true });
+      }
+
+      // 使用 fs.rename 重命名文件或文件夹
+      fs.renameSync(oldFullPath, newFullPath);
+
+      // 如果是文件夹，需要更新文件夹元数据
+      if (isDirectory) {
+        // 读取旧文件夹的元数据
+        const oldMetadata = await this.readFolderMetadata(vaultId, oldPath);
+        if (oldMetadata) {
+          // 更新元数据中的路径信息
+          const newMetadata: FolderMetadata = {
+            ...oldMetadata,
+            id: path.basename(newPath),
+            folderPath: newPath,
+          };
+
+          // 删除旧的元数据文件
+          const architoolRoot = this.configManager.getArchitoolRoot();
+          const vaultPath = path.join(architoolRoot, vaultId);
+          const oldMetadataRepo = new YamlFolderMetadataRepository(vaultPath);
+          await oldMetadataRepo.deleteMetadata(oldMetadata.id);
+
+          // 写入新的元数据文件
+          const newMetadataRepo = new YamlFolderMetadataRepository(vaultPath);
+          await newMetadataRepo.writeMetadata(newMetadata);
+        }
+      }
+
+      // 获取重命名后的 artifact
+      const artifactResult = await this.artifactService.getArtifact(vaultId, newPath);
+      if (!artifactResult.success) {
+        // 如果获取失败，至少重命名操作已经成功
+        this.logger.warn('Failed to get renamed artifact', { vaultId, newPath, error: artifactResult.error });
+        return {
+          success: false,
+          error: new ArtifactError(
+            ArtifactErrorCode.OPERATION_FAILED,
+            `File renamed but failed to get artifact: ${artifactResult.error.message}`
+          ),
+        };
+      }
+
+      this.logger.info('Document renamed successfully', {
+        vaultId,
+        oldPath,
+        newPath,
+        isDirectory,
+      });
+
+      return { success: true, value: artifactResult.value };
+    } catch (error: any) {
+      this.logger.error('Failed to rename document', {
+        vaultId,
+        oldPath,
+        newPath,
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: new ArtifactError(
+          ArtifactErrorCode.OPERATION_FAILED,
+          `Failed to rename: ${error.message}`,
+          { vaultId, oldPath, newPath },
+          error
+        ),
+      };
+    }
   }
 
   async deleteDocument(vaultId: string, path: string): Promise<Result<void, ArtifactError>> {

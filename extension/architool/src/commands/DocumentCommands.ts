@@ -89,6 +89,10 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
     return 'archi.document.delete';
   }
 
+  protected getRenameCommandName(): string {
+    return 'archi.document.rename';
+  }
+
   protected async handleDelete(item: DocumentTreeItem): Promise<void> {
     // 先判断是否是文件或文件夹（优先级高于 vault）
     if (item.artifact || item.filePath || item.folderPath !== undefined) {
@@ -184,6 +188,91 @@ export class DocumentCommands extends BaseFileTreeCommands<DocumentTreeItem> {
       }
     } else {
       vscode.window.showErrorMessage('Please select a vault, folder, or document to delete');
+    }
+  }
+
+  protected async handleRename(item: DocumentTreeItem): Promise<void> {
+    // 先判断是否是文件或文件夹（vault 不能重命名）
+    if (!item.artifact && !item.filePath && item.folderPath === undefined) {
+      vscode.window.showErrorMessage('Cannot rename vault');
+      return;
+    }
+
+    // 检查是否是占位文件
+    const isPlaceholderFile = item.contextValue === 'placeholder-file';
+    if (isPlaceholderFile) {
+      vscode.window.showErrorMessage('Cannot rename placeholder file');
+      return;
+    }
+
+    // 获取当前路径和名称
+    let currentPath: string;
+    let vaultId: string;
+    let currentName: string;
+    let isFolder = false;
+
+    if (item.artifact) {
+      currentPath = item.artifact.path;
+      vaultId = item.artifact.vault.id;
+      currentName = item.artifact.title || path.basename(currentPath);
+    } else if (item.filePath) {
+      currentPath = item.filePath;
+      vaultId = item.vaultId!;
+      currentName = path.basename(currentPath);
+    } else if (item.folderPath !== undefined) {
+      currentPath = item.folderPath;
+      vaultId = item.vaultId!;
+      currentName = path.basename(item.folderPath) || item.folderPath;
+      isFolder = true;
+    } else {
+      vscode.window.showErrorMessage('Unable to determine item to rename');
+      return;
+    }
+
+    // 显示输入框让用户输入新名称
+    const newName = await vscode.window.showInputBox({
+      prompt: `Enter new name for ${isFolder ? 'folder' : 'file'}`,
+      value: currentName,
+      validateInput: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'Name cannot be empty';
+        }
+        // 检查是否包含非法字符
+        if (/[<>:"/\\|?*]/.test(value)) {
+          return 'Name contains invalid characters';
+        }
+        return null;
+      },
+    });
+
+    if (!newName || newName.trim() === currentName) {
+      return;
+    }
+
+    // 构建新路径（vault 路径使用 / 作为分隔符）
+    // 规范化路径：确保使用 / 作为分隔符
+    const normalizedPath = currentPath.replace(/\\/g, '/');
+    const lastSlashIndex = normalizedPath.lastIndexOf('/');
+    const dir = lastSlashIndex === -1 ? '' : normalizedPath.substring(0, lastSlashIndex);
+    const ext = isFolder ? '' : path.extname(currentPath);
+    const newPath = dir === '' 
+      ? `${newName.trim()}${ext}`
+      : `${dir}/${newName.trim()}${ext}`;
+
+    // 执行重命名
+    const result = await this.documentService.renameDocument(vaultId, currentPath, newPath);
+    if (result.success) {
+      vscode.window.showInformationMessage(`${isFolder ? 'Folder' : 'File'} renamed successfully`);
+      this.treeViewProvider.refresh();
+      
+      // 展开相关节点
+      if (item.vaultName) {
+        const folderPath = dir === '' ? undefined : dir;
+        await this.expandNode(item.vaultName, folderPath);
+        this.treeViewProvider.refresh();
+      }
+    } else {
+      vscode.window.showErrorMessage(`Failed to rename: ${result.error.message}`);
     }
   }
 

@@ -5,6 +5,8 @@
 import { createApp, type App, type Component } from 'vue';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+// 全局样式 - 确保 body padding 为 0
+import '@/styles/global.css';
 // 样式加载顺序：Element Plus -> Element Plus 深色主题
 // 注意：CodeMirror 和 diagram-editor 样式在 EditorPage.vue 中按需加载
 import 'element-plus/dist/index.css';
