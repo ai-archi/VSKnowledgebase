@@ -202,6 +202,7 @@ async function createWorkflowNodes() {
           fill: colorInfo.textColor,
           fontSize: 11,
           fontWeight: status === 'in-progress' ? 'bold' : 'normal',
+          opacity: 1, // 文字保持完全不透明，确保可见（不受节点透明度影响）
         },
       },
       stepKey: step.key,
@@ -305,12 +306,12 @@ function getStatusColor(status: string): { fill: string; stroke: string; strokeW
       };
     case 'pending':
     default:
-      // 待执行：灰色系，降低对比度
+      // 待执行：灰色系，确保文字可见
       return {
         fill: '#3c3c3c',
         stroke: '#5c5c5c',
         strokeWidth: 1,
-        textColor: '#999999',
+        textColor: '#cccccc', // 使用更亮的文字颜色，确保在灰色背景上可见
       };
   }
 }
